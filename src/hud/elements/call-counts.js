@@ -12,6 +12,7 @@
 // WSL terminals may also lack emoji support.
 import { isWSL } from '../../platform/index.js';
 import { DEFAULT_HUD_LABELS } from '../types.js';
+import { paint, AURORA } from '../colors.js';
 function shouldUseAscii(format = 'auto') {
     if (format === 'ascii')
         return true;
@@ -24,7 +25,7 @@ function getIcons(format = 'auto', labels = DEFAULT_HUD_LABELS) {
     return {
         tool: useAscii ? `${labels.tool}:` : '\u{1F527}',
         agent: useAscii ? `${labels.agent}:` : '\u{1F916}',
-        skill: useAscii ? `${labels.skill}:` : '\u26A1',
+        skill: useAscii ? `${labels.skill}:` : '⚡',
     };
 }
 /**
@@ -40,14 +41,16 @@ function getIcons(format = 'auto', labels = DEFAULT_HUD_LABELS) {
 export function renderCallCounts(toolCalls, agentInvocations, skillUsages, format = 'auto', labels = DEFAULT_HUD_LABELS) {
     const parts = [];
     const icons = getIcons(format, labels);
+    // Counts sit quietly in muted slate so they recede into the Aurora field.
+    const count = (n) => paint(AURORA.label, String(n));
     if (toolCalls > 0) {
-        parts.push(`${icons.tool}${toolCalls}`);
+        parts.push(`${icons.tool}${count(toolCalls)}`);
     }
     if (agentInvocations > 0) {
-        parts.push(`${icons.agent}${agentInvocations}`);
+        parts.push(`${icons.agent}${count(agentInvocations)}`);
     }
     if (skillUsages > 0) {
-        parts.push(`${icons.skill}${skillUsages}`);
+        parts.push(`${icons.skill}${count(skillUsages)}`);
     }
     return parts.length > 0 ? parts.join(' ') : null;
 }

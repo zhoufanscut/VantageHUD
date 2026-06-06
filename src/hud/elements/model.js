@@ -3,7 +3,7 @@
  *
  * Renders the current model name with thinking effort folded in.
  */
-import { brightBlue, brightCyan } from '../colors.js';
+import { paint, getModelTierRgb, AURORA } from '../colors.js';
 import { truncateToWidth } from '../../utils/string-width.js';
 /**
  * Extract version from a model ID string.
@@ -65,7 +65,8 @@ export function renderModel(modelId, format = 'versioned', effortLevel = null) {
     const name = formatModelName(modelId, format);
     if (!name)
         return null;
-    const model = brightBlue(name.toLowerCase());
-    return effortLevel ? `${model} ${brightCyan(effortLevel)}` : model;
+    // Gentle, in-family tier tint (opus/sonnet/haiku) + muted steel-blue effort.
+    const model = paint(getModelTierRgb(modelId), name.toLowerCase());
+    return effortLevel ? `${model} ${paint(AURORA.effort, effortLevel)}` : model;
 }
 //# sourceMappingURL=model.js.map

@@ -4,7 +4,7 @@
  * Renders elapsed time since the last user prompt submission.
  * Recorded by the keyword-detector hook on UserPromptSubmit.
  */
-import { dim } from '../colors.js';
+import { paint, auroraFaint, AURORA } from '../colors.js';
 /**
  * Format elapsed milliseconds as human-readable duration.
  * < 60s  → 13s
@@ -33,12 +33,12 @@ export function renderPromptTime(promptTime, now) {
     if (now) {
         const elapsed = now.getTime() - promptTime.getTime();
         if (elapsed >= 0) {
-            return `${dim('⏱')}${formatElapsed(elapsed)}`;
+            return `${auroraFaint('⏱')}${paint(AURORA.label, formatElapsed(elapsed))}`;
         }
     }
     const hours = String(promptTime.getHours()).padStart(2, '0');
     const minutes = String(promptTime.getMinutes()).padStart(2, '0');
     const seconds = String(promptTime.getSeconds()).padStart(2, '0');
-    return `${dim('prompt:')}${hours}:${minutes}:${seconds}`;
+    return `${auroraFaint('prompt:')}${paint(AURORA.label, `${hours}:${minutes}:${seconds}`)}`;
 }
 //# sourceMappingURL=prompt-time.js.map

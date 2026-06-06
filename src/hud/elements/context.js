@@ -4,10 +4,7 @@
  * Renders context window usage display.
  */
 import { DEFAULT_HUD_LABELS } from '../types.js';
-import { RESET } from '../colors.js';
-const GREEN = '\x1b[32m';
-const YELLOW = '\x1b[33m';
-const RED = '\x1b[31m';
+import { RESET, fg, gradientColor, auroraLabel } from '../colors.js';
 const DIM = '\x1b[2m';
 const CONTEXT_DISPLAY_HYSTERESIS = 2;
 const CONTEXT_DISPLAY_STATE_TTL_MS = 5_000;
@@ -31,16 +28,17 @@ function getContextSeverity(safePercent, thresholds) {
     return 'normal';
 }
 function getContextDisplayStyle(safePercent, thresholds) {
+    // Aurora colors only: the color glides continuously along the teal→amber→rose
+    // gradient; the textual suffix stays threshold-based and unchanged from before.
     const severity = getContextSeverity(safePercent, thresholds);
+    const color = fg(gradientColor(safePercent));
     switch (severity) {
         case 'critical':
-            return { color: RED, suffix: ' CRITICAL' };
+            return { color, suffix: ' CRITICAL' };
         case 'compact':
-            return { color: YELLOW, suffix: ' COMPRESS?' };
-        case 'warning':
-            return { color: YELLOW, suffix: '' };
+            return { color, suffix: ' COMPRESS?' };
         default:
-            return { color: GREEN, suffix: '' };
+            return { color, suffix: '' };
     }
 }
 /**
@@ -98,7 +96,7 @@ export function getStableContextDisplayPercent(percent, thresholds, displayScope
 export function renderContext(percent, thresholds, displayScope, labels = DEFAULT_HUD_LABELS) {
     const safePercent = getStableContextDisplayPercent(percent, thresholds, displayScope);
     const { color, suffix } = getContextDisplayStyle(safePercent, thresholds);
-    return `${labels.context}:${color}${safePercent}%${suffix}${RESET}`;
+    return `${auroraLabel(`${labels.context}:`)}${color}${safePercent}%${suffix}${RESET}`;
 }
 /**
  * Render context window with visual bar.
@@ -111,6 +109,6 @@ export function renderContextWithBar(percent, thresholds, barWidth = 10, display
     const empty = barWidth - filled;
     const { color, suffix } = getContextDisplayStyle(safePercent, thresholds);
     const bar = `${color}${'█'.repeat(filled)}${DIM}${'░'.repeat(empty)}${RESET}`;
-    return `${labels.context}:[${bar}]${color}${safePercent}%${suffix}${RESET}`;
+    return `${auroraLabel(`${labels.context}:`)}[${bar}]${color}${safePercent}%${suffix}${RESET}`;
 }
 //# sourceMappingURL=context.js.map

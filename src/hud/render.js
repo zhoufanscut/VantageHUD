@@ -4,7 +4,7 @@
  * Composes statusline output from render context.
  */
 import { DEFAULT_HUD_CONFIG, DEFAULT_ELEMENT_ORDER, DEFAULT_HUD_LABELS } from "./types.js";
-import { bold, dim } from "./colors.js";
+import { bold, paint, AURORA } from "./colors.js";
 import { stringWidth, getCharWidth } from "../utils/string-width.js";
 import { renderAgentsByFormat, renderAgentsMultiLine, } from "./elements/agents.js";
 import { renderTodosWithCurrent } from "./elements/todos.js";
@@ -32,7 +32,8 @@ import { renderLastTool } from "./elements/last-tool.js";
  */
 const ANSI_REGEX = /\x1b\[[0-9;]*[a-zA-Z]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/;
 const PLAIN_SEPARATOR = " | ";
-const DIM_SEPARATOR = dim(PLAIN_SEPARATOR);
+// Aurora colors only: keep the " | " separator, tint it Aurora's hairline slate.
+const DIM_SEPARATOR = paint(AURORA.sep, PLAIN_SEPARATOR);
 function buildMainElementOrder(elementOrder) {
     if (!Array.isArray(elementOrder) || elementOrder.length === 0) {
         return DEFAULT_ELEMENT_ORDER.main;
@@ -237,7 +238,8 @@ export async function render(context, config) {
         const shortCwd = home && (context.cwd === home || context.cwd.startsWith(home + "/"))
             ? "~" + context.cwd.slice(home.length)
             : context.cwd;
-        rendered.set("pathLabel", bold(shortCwd));
+        // Aurora colors only: same bold path text, tinted soft slate.
+        rendered.set("pathLabel", `\x1b[1m${paint(AURORA.text, shortCwd)}`);
     }
     // Determine effective enterprise mode before rendering limits: only real
     // enterprise accounts replace token-window limits with enterprise cost.
@@ -426,8 +428,8 @@ export async function render(context, config) {
     const detailLines = collectDetailLines(effectiveLayout.detail);
     // Compose output
     const outputLines = [];
-    const gitInfoLine = gitElements.length > 0 ? gitElements.join(dim(PLAIN_SEPARATOR)) : null;
-    const headerLine = elements.length > 0 ? elements.join(dim(PLAIN_SEPARATOR)) : null;
+    const gitInfoLine = gitElements.length > 0 ? gitElements.join(DIM_SEPARATOR) : null;
+    const headerLine = elements.length > 0 ? elements.join(DIM_SEPARATOR) : null;
     const gitPosition = config.elements.gitInfoPosition ?? "above";
     if (gitPosition === "above") {
         if (gitInfoLine) {

@@ -4,10 +4,11 @@
  * Renders a prominent warning banner when context usage exceeds the configured
  * threshold. Supports an autoCompact mode that queues a /compact request.
  */
-import { RESET } from '../colors.js';
-const YELLOW = '\x1b[33m';
-const RED = '\x1b[31m';
+import { RESET, fg, AURORA } from '../colors.js';
 const BOLD = '\x1b[1m';
+// Aurora colors only: muted amber (caution) / muted rose (critical) replace yellow/red.
+const AMBER = fg(AURORA.gradMid);
+const ROSE = fg(AURORA.gradHigh);
 /**
  * Render a context limit warning banner.
  *
@@ -23,7 +24,7 @@ export function renderContextLimitWarning(contextPercent, threshold, autoCompact
         return null;
     }
     const isCritical = safePercent >= 90;
-    const color = isCritical ? RED : YELLOW;
+    const color = isCritical ? ROSE : AMBER;
     const icon = isCritical ? '!!' : '!';
     const action = autoCompact ? '(auto-compact queued)' : 'run /compact';
     return `${color}${BOLD}[${icon}] ctx ${safePercent}% >= ${threshold}% threshold - ${action}${RESET}`;
@@ -39,7 +40,7 @@ export function renderPayloadLimitWarning(payloadEstimate) {
         return null;
     }
     const isCritical = payloadEstimate.pressure === 'critical';
-    const color = isCritical ? RED : YELLOW;
+    const color = isCritical ? ROSE : AMBER;
     const icon = isCritical ? '!!' : '!';
     const action = isCritical
         ? 'compact may fail; consider new session'
