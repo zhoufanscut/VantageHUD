@@ -1,8 +1,10 @@
 # claude-statusline
 
 A self-contained [Claude Code](https://claude.com/claude-code) statusline (HUD).
-It renders the working folder, model, context %, rate limits, git info, session
-time, and more, from the JSON that Claude Code pipes to the `statusLine` command.
+From the JSON Claude Code pipes to the `statusLine` command it renders the
+working folder, the model (`⚡ opus 4.8`), the thinking effort
+(`max|xhigh|high|medium|low`), context %, rate limits, git info, session time,
+and more.
 
 - **No dependencies.** Pure Node built-ins — no `node_modules`, no native code.
 - **Portable.** Clone anywhere, on macOS or Linux, with any Node `>=14`.
@@ -19,42 +21,70 @@ src/              # the renderer (ESM, Node built-ins only)
 cache/            # per-session render cache (gitignored)
 ```
 
-## Install on a new machine
+## Setup
 
-1. Have Node installed (`node --version`, any `>=14`).
-2. Clone this folder anywhere, e.g.:
-   ```sh
-   git clone <your-repo-url> ~/.claude/hud
-   ```
-3. Point Claude Code's statusline at it. In `~/.claude/settings.json`:
-   ```json
-   {
-     "statusLine": {
-       "type": "command",
-       "command": "sh ~/.claude/hud/statusline.sh ~/.claude/hud/statusline.mjs"
-     }
-   }
-   ```
-   If you cloned elsewhere, use that absolute path instead. `$CLAUDE_CONFIG_DIR`
-   is honored if set.
-4. Start (or restart) Claude Code — the bar renders from the first frame.
+### 1. Prerequisites
+- Claude Code installed (this is its statusline).
+- Node `>=14` on the machine (`node --version`). No `npm install` needed.
+
+### 2. Get the folder
+Clone it anywhere — `~/.claude/hud` is the conventional spot:
+```sh
+git clone <your-repo-url> ~/.claude/hud
+```
+(The scripts keep their executable bit through `git clone`, so there's nothing
+to `chmod`.)
+
+### 3. Wire it into Claude Code
+Add a `statusLine` entry to **`~/.claude/settings.json`**. This is a **merge** —
+keep your existing keys (`model`, `permissions`, …) and just add this one:
+
+```jsonc
+{
+  // ...your existing settings...
+  "statusLine": {
+    "type": "command",
+    "command": "sh ${CLAUDE_CONFIG_DIR:-$HOME/.claude}/hud/statusline.sh ${CLAUDE_CONFIG_DIR:-$HOME/.claude}/hud/statusline.mjs"
+  }
+}
+```
+
+- If you cloned somewhere other than `~/.claude/hud`, put that absolute path in
+  the command instead.
+- `${CLAUDE_CONFIG_DIR:-$HOME/.claude}` makes it work even with a custom config
+  dir; a plain `~/.claude/hud/...` path is fine too.
+- Prefer a tool? Merge it with `jq`:
+  ```sh
+  f=~/.claude/settings.json; tmp=$(mktemp)
+  jq '.statusLine = {type:"command", command:"sh ~/.claude/hud/statusline.sh ~/.claude/hud/statusline.mjs"}' "$f" > "$tmp" && mv "$tmp" "$f"
+  ```
+
+### 4. (Re)start Claude Code
+A new session renders the bar from the first frame. An already-open session
+needs a restart to pick up the `settings.json` change.
+
+## Verify it works
+From inside the folder, feed it a sample payload:
+```sh
+cd ~/.claude/hud
+echo '{"session_id":"t","cwd":"'"$HOME"'/example","effort":{"level":"high"},"model":{"id":"claude-opus-4-8","display_name":"Opus 4.8"}}' \
+  | HUD_SYNC_REFRESH=1 sh statusline.sh statusline.mjs
+```
+Expected: a single line containing `⚡ opus 4.8 | effort:high` (the leading
+path is your working directory).
 
 ## Behind a proxy
-
 ```sh
 export HTTPS_PROXY=http://proxy.example.com:8080
 ```
 The launcher tunnels the HUD's HTTPS calls through it automatically.
 
-## Quick test
-
+## Update
 ```sh
-echo '{"session_id":"t","cwd":"'"$HOME"'/example","model":{"id":"claude-opus-4-8","display_name":"Opus 4.8"}}' \
-  | HUD_SYNC_REFRESH=1 sh statusline.sh statusline.mjs
+git -C ~/.claude/hud pull
 ```
 
 ## Notes
-
 - The working-folder path shows `~` in place of `$HOME` to stay compact.
 - Per-session render cache lives in `cache/` and is safe to delete anytime.
 - Optional env: `HUD_CACHE_DIR`, `HUD_SYNC_REFRESH=1` (synchronous render),
