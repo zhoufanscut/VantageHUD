@@ -69,7 +69,7 @@ export function resolveHudLabels(locale, labels) {
 export const DEFAULT_ELEMENT_ORDER = {
     line1: ['hostname', 'cwd', 'gitRepo', 'gitBranch', 'gitStatus', 'apiKeySource', 'profile'],
     main: [
-        'pathLabel', 'model', 'effort', 'enterpriseCost', 'rateLimits', 'customBuckets', 'permission', 'thinking',
+        'pathLabel', 'model', 'effort', 'enterpriseCost', 'rateLimits', 'customBuckets', 'permission',
         'promptTime', 'session', 'tokens', 'ralph', 'autopilot', 'prd',
         'skills', 'lastSkill', 'contextBar', 'agents', 'background',
         'callCounts', 'lastTool', 'sessionSummary',

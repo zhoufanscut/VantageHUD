@@ -4,7 +4,7 @@
  * Composes statusline output from render context.
  */
 import { DEFAULT_HUD_CONFIG, DEFAULT_ELEMENT_ORDER, DEFAULT_HUD_LABELS } from "./types.js";
-import { bold, dim, cyan, yellow, magenta, red } from "./colors.js";
+import { bold, dim, cyan } from "./colors.js";
 import { stringWidth, getCharWidth } from "../utils/string-width.js";
 import { renderRalph } from "./elements/ralph.js";
 import { renderAgentsByFormat, renderAgentsMultiLine, } from "./elements/agents.js";
@@ -15,7 +15,6 @@ import { renderBackground } from "./elements/background.js";
 import { renderPrd } from "./elements/prd.js";
 import { renderRateLimits, renderRateLimitsWithBar, renderRateLimitsError, renderCustomBuckets, } from "./elements/limits.js";
 import { renderPermission } from "./elements/permission.js";
-import { renderThinking } from "./elements/thinking.js";
 import { renderSession } from "./elements/session.js";
 import { renderTokenUsage } from "./elements/token-usage.js";
 import { renderEnterpriseCost } from "./elements/enterprise-cost.js";
@@ -225,13 +224,7 @@ export async function render(context, config) {
     }
     // Thinking effort level (max|xhigh|high|medium|low), shown right after the model.
     if (enabledElements.effort !== false && context.effortLevel) {
-        const lvl = context.effortLevel;
-        const paint = lvl === "max" ? magenta
-            : lvl === "xhigh" ? red
-                : lvl === "high" ? yellow
-                    : lvl === "medium" ? cyan
-                        : dim;
-        rendered.set("effort", dim("effort:") + paint(lvl));
+        rendered.set("effort", dim("effort:") + cyan(context.effortLevel));
     }
 
     if (enabledElements.apiKeySource && context.apiKeySource) {
@@ -290,11 +283,6 @@ export async function render(context, config) {
         const permission = renderPermission(context.pendingPermission);
         if (permission)
             rendered.set("permission", permission);
-    }
-    if (enabledElements.thinking && context.thinkingState) {
-        const thinking = renderThinking(context.thinkingState, enabledElements.thinkingFormat, hudLabels);
-        if (thinking)
-            rendered.set("thinking", thinking);
     }
     if (enabledElements.promptTime) {
         const prompt = renderPromptTime(context.promptTime, new Date());

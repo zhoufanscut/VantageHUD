@@ -5,7 +5,6 @@
  */
 import { cyan } from '../colors.js';
 import { truncateToWidth } from '../../utils/string-width.js';
-import { DEFAULT_HUD_LABELS } from '../types.js';
 /**
  * Extract version from a model ID string.
  * E.g., 'claude-opus-4-7-20260416' -> '4.7'
@@ -62,10 +61,10 @@ export function formatModelName(modelId, format = 'short') {
 /**
  * Render model element.
  */
-export function renderModel(modelId, format = 'versioned', labels = DEFAULT_HUD_LABELS) {
+export function renderModel(modelId, format = 'versioned') {
     const name = formatModelName(modelId, format);
     if (!name)
         return null;
-    return cyan(`${labels.model}: ${name}`);
+    return cyan(`⚡ ${name.toLowerCase()}`);
 }
 //# sourceMappingURL=model.js.map
