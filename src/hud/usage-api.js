@@ -80,6 +80,24 @@ export function isMinimaxHost(urlString) {
     }
 }
 /**
+ * Check if a URL points to Anthropic's own API (exact host or subdomain).
+ *
+ * The OAuth usage endpoint (api.anthropic.com/api/oauth/usage) describes the
+ * Claude *subscription* tied to the local OAuth token, regardless of where
+ * ANTHROPIC_BASE_URL sends model traffic. So it is only meaningful when traffic
+ * actually goes to Anthropic — base URL unset or an *.anthropic.com host.
+ */
+export function isAnthropicHost(urlString) {
+    try {
+        const url = new URL(urlString);
+        const hostname = url.hostname.toLowerCase();
+        return hostname === 'anthropic.com' || hostname.endsWith('.anthropic.com');
+    }
+    catch {
+        return false;
+    }
+}
+/**
  * Get the legacy (pre-split) cache file path
  */
 function getLegacyCachePath() {
@@ -988,6 +1006,16 @@ export async function getUsage() {
     const isZai = baseUrl != null && isZaiHost(baseUrl);
     const minimaxApiKey = process.env.MINIMAX_API_KEY || authToken;
     const currentSource = isMinimax ? 'minimax' : isZai && authToken ? 'zai' : 'anthropic';
+    // Custom gateway guard: when ANTHROPIC_BASE_URL points to a third-party provider
+    // that is neither Anthropic nor a recognized usage provider (z.ai / MiniMax are
+    // already captured by currentSource above), there is no usage endpoint to query.
+    // Querying Anthropic's OAuth usage here would surface the local Claude
+    // subscription's limits, which do not describe the active provider — so report no
+    // credentials and let the HUD render nothing. Runs before any cache read so a
+    // stale 'anthropic' cache from a prior Claude session cannot leak through.
+    if (currentSource === 'anthropic' && baseUrl != null && !isAnthropicHost(baseUrl)) {
+        return { rateLimits: null, error: 'no_credentials' };
+    }
     const pollIntervalMs = getUsagePollIntervalMs();
     // Migrate legacy single-file cache to provider-specific file (one-shot, best-effort)
     migrateLegacyCache(currentSource);
