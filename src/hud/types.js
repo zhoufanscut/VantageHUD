@@ -3,14 +3,12 @@
  *
  * Type definitions for the HUD state, configuration, and rendering.
  */
-import { DEFAULT_MISSION_BOARD_CONFIG } from './mission-board.js';
 export const DEFAULT_HUD_LABELS = {
     context: 'ctx',
     tokens: 'tok',
     tool: 'T',
     agent: 'A',
     skill: 'S',
-    ralph: 'ralph',
     background: 'bg',
     thinking: 'thinking',
     model: 'Model',
@@ -28,7 +26,6 @@ export const HUD_LOCALE_LABELS = {
         tool: '工具',
         agent: '智能体',
         skill: '技能',
-        ralph: '循环',
         background: '后台',
         thinking: '思考',
         model: '模型',
@@ -69,12 +66,12 @@ export function resolveHudLabels(locale, labels) {
 export const DEFAULT_ELEMENT_ORDER = {
     line1: ['hostname', 'cwd', 'gitRepo', 'gitBranch', 'gitStatus', 'apiKeySource', 'profile'],
     main: [
-        'pathLabel', 'model', 'effort', 'enterpriseCost', 'rateLimits', 'customBuckets', 'permission',
-        'promptTime', 'session', 'tokens', 'ralph', 'autopilot', 'prd',
-        'skills', 'lastSkill', 'contextBar', 'agents', 'background',
+        'pathLabel', 'model', 'enterpriseCost', 'rateLimits', 'customBuckets', 'permission',
+        'promptTime', 'session', 'tokens',
+        'lastSkill', 'contextBar', 'agents', 'background',
         'callCounts', 'lastTool', 'sessionSummary',
     ],
-    detail: ['missionBoard', 'agents', 'contextWarning', 'payloadWarning', 'todos'],
+    detail: ['agents', 'contextWarning', 'payloadWarning', 'todos'],
 };
 export const DEFAULT_HUD_USAGE_POLL_INTERVAL_MS = 90 * 1000;
 export const DEFAULT_HUD_CONFIG = {
@@ -94,10 +91,6 @@ export const DEFAULT_HUD_CONFIG = {
         pathLabel: true,
         updateNotification: true, // Preserve existing update prompt behavior by default
         rateLimits: true, // Show rate limits by default
-        ralph: true,
-        autopilot: true,
-        prdStory: true,
-        activeSkills: true,
         contextBar: true,
         agents: true,
         agentsFormat: 'multiline', // Multi-line for rich agent visualization
@@ -111,7 +104,6 @@ export const DEFAULT_HUD_CONFIG = {
         apiKeySource: false, // Disabled by default
         hostname: false,
         profile: true, // Show profile name when CLAUDE_CONFIG_DIR is set
-        missionBoard: false, // Opt-in mission board for whole-run progress tracking
         promptTime: true, // Show last prompt time by default
         sessionHealth: true,
         showSessionDuration: true,
@@ -129,14 +121,12 @@ export const DEFAULT_HUD_CONFIG = {
         contextWarning: 70,
         contextCompactSuggestion: 80,
         contextCritical: 85,
-        ralphWarning: 7,
     },
     staleTaskThresholdMinutes: 10,
     contextLimitWarning: {
         threshold: 80,
         autoCompact: false,
     },
-    missionBoard: DEFAULT_MISSION_BOARD_CONFIG,
     usageApiPollIntervalMs: DEFAULT_HUD_USAGE_POLL_INTERVAL_MS,
     wrapMode: 'truncate',
 };
@@ -154,10 +144,6 @@ export const PRESET_CONFIGS = {
         pathLabel: true,
         updateNotification: true,
         rateLimits: true,
-        ralph: true,
-        autopilot: true,
-        prdStory: false,
-        activeSkills: true,
         lastSkill: true,
         contextBar: false,
         agents: true,
@@ -171,7 +157,6 @@ export const PRESET_CONFIGS = {
         apiKeySource: false,
         hostname: false,
         profile: true,
-        missionBoard: false,
         promptTime: false,
         sessionHealth: false,
         showSessionDuration: true,
@@ -197,10 +182,6 @@ export const PRESET_CONFIGS = {
         pathLabel: true,
         updateNotification: true,
         rateLimits: true,
-        ralph: true,
-        autopilot: true,
-        prdStory: true,
-        activeSkills: true,
         lastSkill: true,
         contextBar: true,
         agents: true,
@@ -214,7 +195,6 @@ export const PRESET_CONFIGS = {
         apiKeySource: false,
         hostname: false,
         profile: true,
-        missionBoard: false,
         promptTime: true,
         sessionHealth: true,
         showSessionDuration: true,
@@ -240,10 +220,6 @@ export const PRESET_CONFIGS = {
         pathLabel: true,
         updateNotification: true,
         rateLimits: true,
-        ralph: true,
-        autopilot: true,
-        prdStory: true,
-        activeSkills: true,
         lastSkill: true,
         contextBar: true,
         agents: true,
@@ -257,7 +233,6 @@ export const PRESET_CONFIGS = {
         apiKeySource: true,
         hostname: false,
         profile: true,
-        missionBoard: false,
         promptTime: true,
         sessionHealth: true,
         showSessionDuration: true,
@@ -283,10 +258,6 @@ export const PRESET_CONFIGS = {
         pathLabel: true,
         updateNotification: true,
         rateLimits: false,
-        ralph: true,
-        autopilot: true,
-        prdStory: false,
-        activeSkills: true,
         lastSkill: true,
         contextBar: true,
         agents: true,
@@ -300,7 +271,6 @@ export const PRESET_CONFIGS = {
         apiKeySource: false,
         hostname: false,
         profile: true,
-        missionBoard: false,
         promptTime: true,
         sessionHealth: true,
         showSessionDuration: true,
@@ -326,10 +296,6 @@ export const PRESET_CONFIGS = {
         pathLabel: true,
         updateNotification: true,
         rateLimits: true,
-        ralph: true,
-        autopilot: true,
-        prdStory: true,
-        activeSkills: true,
         lastSkill: true,
         contextBar: true,
         agents: true,
@@ -343,7 +309,6 @@ export const PRESET_CONFIGS = {
         apiKeySource: true,
         hostname: false,
         profile: true,
-        missionBoard: false,
         promptTime: true,
         sessionHealth: true,
         showSessionDuration: true,

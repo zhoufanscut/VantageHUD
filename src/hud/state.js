@@ -2,7 +2,6 @@
  * HUD - State Management
  *
  * Manages HUD state file for background task tracking.
- * Follows patterns from ultrawork-state.
  */
 import { existsSync, readFileSync, mkdirSync, unlinkSync } from "fs";
 import { join } from "path";
@@ -10,7 +9,6 @@ import { getClaudeConfigDir } from "../utils/config-dir.js";
 import { validateWorkingDirectory, getStateRoot, ensureSessionStateDir, resolveSessionStatePath, } from "../lib/worktree-paths.js";
 import { atomicWriteFileSync, atomicWriteJsonSync, } from "../lib/atomic-write.js";
 import { DEFAULT_HUD_CONFIG, PRESET_CONFIGS, isHudLocale, resolveHudLabels, sanitizeHudLabels, } from "./types.js";
-import { DEFAULT_MISSION_BOARD_CONFIG } from "./mission-board.js";
 import { cleanupStaleBackgroundTasks, markOrphanedTasksAsStale, } from "./background-cleanup.js";
 // ============================================================================
 // Path Helpers
@@ -73,12 +71,6 @@ function mergeThresholds(primary, secondary) {
     };
 }
 function mergeContextLimitWarning(primary, secondary) {
-    return {
-        ...(primary ?? {}),
-        ...(secondary ?? {}),
-    };
-}
-function mergeMissionBoardConfig(primary, secondary) {
     return {
         ...(primary ?? {}),
         ...(secondary ?? {}),
@@ -247,7 +239,6 @@ export function readHudConfig() {
                     elements: mergeElements(legacyConfig?.elements, settings.statusline.elements),
                     thresholds: mergeThresholds(legacyConfig?.thresholds, settings.statusline.thresholds),
                     contextLimitWarning: mergeContextLimitWarning(legacyConfig?.contextLimitWarning, settings.statusline.contextLimitWarning),
-                    missionBoard: mergeMissionBoardConfig(legacyConfig?.missionBoard, settings.statusline.missionBoard),
                     locale: isHudLocale(settings.statusline.locale)
                         ? settings.statusline.locale
                         : legacyConfig?.locale,
@@ -273,16 +264,6 @@ export function readHudConfig() {
 function mergeWithDefaults(config) {
     const preset = config.preset ?? DEFAULT_HUD_CONFIG.preset;
     const presetElements = PRESET_CONFIGS[preset] ?? {};
-    const missionBoardEnabled = config.missionBoard?.enabled ??
-        config.elements?.missionBoard ??
-        DEFAULT_HUD_CONFIG.missionBoard?.enabled ??
-        false;
-    const missionBoard = {
-        ...DEFAULT_MISSION_BOARD_CONFIG,
-        ...DEFAULT_HUD_CONFIG.missionBoard,
-        ...config.missionBoard,
-        enabled: missionBoardEnabled,
-    };
     const locale = isHudLocale(config.locale)
         ? config.locale
         : DEFAULT_HUD_CONFIG.locale;
@@ -305,7 +286,6 @@ function mergeWithDefaults(config) {
             ...DEFAULT_HUD_CONFIG.contextLimitWarning,
             ...config.contextLimitWarning,
         },
-        missionBoard,
         usageApiPollIntervalMs: config.usageApiPollIntervalMs ??
             DEFAULT_HUD_CONFIG.usageApiPollIntervalMs,
         ...(config.elementOrder !== undefined
@@ -337,7 +317,6 @@ export function writeHudConfig(config) {
             elements: mergeElementsForWrite(legacyConfig?.elements, config.elements),
             thresholds: mergeThresholds(legacyConfig?.thresholds, config.thresholds),
             contextLimitWarning: mergeContextLimitWarning(legacyConfig?.contextLimitWarning, config.contextLimitWarning),
-            missionBoard: mergeMissionBoardConfig(legacyConfig?.missionBoard, config.missionBoard),
             locale: isHudLocale(config.locale) ? config.locale : legacyConfig?.locale,
             labels: {
                 ...sanitizeHudLabels(legacyConfig?.labels),

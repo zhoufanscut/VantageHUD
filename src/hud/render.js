@@ -4,22 +4,19 @@
  * Composes statusline output from render context.
  */
 import { DEFAULT_HUD_CONFIG, DEFAULT_ELEMENT_ORDER, DEFAULT_HUD_LABELS } from "./types.js";
-import { bold, dim, cyan } from "./colors.js";
+import { bold, dim } from "./colors.js";
 import { stringWidth, getCharWidth } from "../utils/string-width.js";
-import { renderRalph } from "./elements/ralph.js";
 import { renderAgentsByFormat, renderAgentsMultiLine, } from "./elements/agents.js";
 import { renderTodosWithCurrent } from "./elements/todos.js";
-import { renderSkills, renderLastSkill } from "./elements/skills.js";
+import { renderLastSkill } from "./elements/skills.js";
 import { renderContext, renderContextWithBar } from "./elements/context.js";
 import { renderBackground } from "./elements/background.js";
-import { renderPrd } from "./elements/prd.js";
 import { renderRateLimits, renderRateLimitsWithBar, renderRateLimitsError, renderCustomBuckets, } from "./elements/limits.js";
 import { renderPermission } from "./elements/permission.js";
 import { renderSession } from "./elements/session.js";
 import { renderTokenUsage } from "./elements/token-usage.js";
 import { renderEnterpriseCost } from "./elements/enterprise-cost.js";
 import { renderPromptTime } from "./elements/prompt-time.js";
-import { renderAutopilot } from "./elements/autopilot.js";
 import { renderCwd } from "./elements/cwd.js";
 import { renderHostname } from "./elements/hostname.js";
 import { renderGitRepo, renderGitBranch, renderGitStatus } from "./elements/git.js";
@@ -27,7 +24,6 @@ import { renderModel } from "./elements/model.js";
 import { renderApiKeySource } from "./elements/api-key-source.js";
 import { renderCallCounts } from "./elements/call-counts.js";
 import { renderContextLimitWarning, renderPayloadLimitWarning, } from "./elements/context-warning.js";
-import { renderMissionBoard } from "./mission-board.js";
 import { renderSessionSummary } from "./elements/session-summary.js";
 import { renderLastTool } from "./elements/last-tool.js";
 /**
@@ -218,13 +214,11 @@ export async function render(context, config) {
         ? context.modelId ?? context.modelName
         : context.modelName;
     if (enabledElements.model && modelSource) {
-        const modelElement = renderModel(modelSource, enabledElements.modelFormat, hudLabels);
+        // Effort level (max|xhigh|high|medium|low) is folded into the model element.
+        const effortLevel = enabledElements.effort !== false ? context.effortLevel : null;
+        const modelElement = renderModel(modelSource, enabledElements.modelFormat, effortLevel);
         if (modelElement)
             rendered.set("model", modelElement);
-    }
-    // Thinking effort level (max|xhigh|high|medium|low), shown right after the model.
-    if (enabledElements.effort !== false && context.effortLevel) {
-        rendered.set("effort", dim("effort:") + cyan(context.effortLevel));
     }
 
     if (enabledElements.apiKeySource && context.apiKeySource) {
@@ -315,27 +309,7 @@ export async function render(context, config) {
         if (tokenUsage)
             rendered.set("tokens", tokenUsage);
     }
-    if (enabledElements.ralph && context.ralph) {
-        const ralph = renderRalph(context.ralph, config.thresholds, hudLabels);
-        if (ralph)
-            rendered.set("ralph", ralph);
-    }
-    if (enabledElements.autopilot && context.autopilot) {
-        const autopilot = renderAutopilot(context.autopilot, config.thresholds);
-        if (autopilot)
-            rendered.set("autopilot", autopilot);
-    }
-    if (enabledElements.prdStory && context.prd) {
-        const prd = renderPrd(context.prd);
-        if (prd)
-            rendered.set("prd", prd);
-    }
-    if (enabledElements.activeSkills) {
-        const skills = renderSkills(context.ultrawork, context.ralph, (enabledElements.lastSkill ?? true) ? context.lastSkill : null);
-        if (skills)
-            rendered.set("skills", skills);
-    }
-    if ((enabledElements.lastSkill ?? true) && !enabledElements.activeSkills) {
+    if (enabledElements.lastSkill ?? true) {
         const lastSkillElement = renderLastSkill(context.lastSkill);
         if (lastSkillElement)
             rendered.set("lastSkill", lastSkillElement);
@@ -387,12 +361,6 @@ export async function render(context, config) {
             rendered.set("sessionSummary", summary);
     }
     // -- detail-group elements --
-    if (context.missionBoard &&
-        (config.missionBoard?.enabled ?? config.elements.missionBoard ?? false)) {
-        const mbLines = renderMissionBoard(context.missionBoard, config.missionBoard);
-        if (mbLines.length > 0)
-            renderedDetail.set("missionBoard", mbLines);
-    }
     const ctxWarning = renderContextLimitWarning(context.contextPercent, config.contextLimitWarning.threshold, config.contextLimitWarning.autoCompact);
     if (ctxWarning)
         renderedDetail.set("contextWarning", [ctxWarning]);
@@ -454,7 +422,7 @@ export async function render(context, config) {
     const elements = collectInline(effectiveLayout.main);
     // Detail lines from the detail group layout order.
     // Elements like 'agents' appear in both main (inline) and detail (detail lines),
-    // preserving legacy ordering: missionBoard, agents detail, contextWarning, todos.
+    // preserving legacy ordering: agents detail, contextWarning, todos.
     const detailLines = collectDetailLines(effectiveLayout.detail);
     // Compose output
     const outputLines = [];

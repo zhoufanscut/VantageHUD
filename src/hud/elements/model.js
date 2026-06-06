@@ -1,9 +1,9 @@
 /**
  * HUD - Model Element
  *
- * Renders the current model name.
+ * Renders the current model name with thinking effort folded in.
  */
-import { cyan } from '../colors.js';
+import { brightBlue, brightCyan } from '../colors.js';
 import { truncateToWidth } from '../../utils/string-width.js';
 /**
  * Extract version from a model ID string.
@@ -61,10 +61,11 @@ export function formatModelName(modelId, format = 'short') {
 /**
  * Render model element.
  */
-export function renderModel(modelId, format = 'versioned') {
+export function renderModel(modelId, format = 'versioned', effortLevel = null) {
     const name = formatModelName(modelId, format);
     if (!name)
         return null;
-    return cyan(`⚡ ${name.toLowerCase()}`);
+    const model = brightBlue(name.toLowerCase());
+    return effortLevel ? `${model} ${brightCyan(effortLevel)}` : model;
 }
 //# sourceMappingURL=model.js.map

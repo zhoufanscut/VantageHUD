@@ -19,18 +19,6 @@ export const StatePaths = {
     ROOT: '.claude-statusline',
     STATE: '.claude-statusline/state',
     SESSIONS: '.claude-statusline/state/sessions',
-    PLANS: '.claude-statusline/plans',
-    RESEARCH: '.claude-statusline/research',
-    NOTEPAD: '.claude-statusline/notepad.md',
-    PROJECT_MEMORY: '.claude-statusline/project-memory.json',
-    DRAFTS: '.claude-statusline/drafts',
-    NOTEPADS: '.claude-statusline/notepads',
-    LOGS: '.claude-statusline/logs',
-    SCIENTIST: '.claude-statusline/scientist',
-    AUTOPILOT: '.claude-statusline/autopilot',
-    SKILLS: '.claude-statusline/skills',
-    SHARED_MEMORY: '.claude-statusline/state/shared-memory',
-    DEEPINIT_MANIFEST: '.claude-statusline/deepinit-manifest.json',
 };
 /**
  * LRU cache for worktree root lookups to avoid repeated git subprocess calls.
@@ -199,7 +187,7 @@ export function getStateRoot(worktreeRoot) {
  * Resolve a relative path under .claude-statusline/ to an absolute path.
  * Validates the path is within the hud boundary.
  *
- * @param relativePath - Path relative to .claude-statusline/ (e.g., "state/ralph.json")
+ * @param relativePath - Path relative to .claude-statusline/ (e.g., "state/session.json")
  * @param worktreeRoot - Optional worktree root (auto-detected if not provided)
  * @returns Absolute path
  * @throws Error if path would escape hud boundary
@@ -219,9 +207,9 @@ export function resolveStatePath(relativePath, worktreeRoot) {
  * Resolve a state file path.
  *
  * State files follow the naming convention: {mode}-state.json
- * Examples: ralph-state.json, ultrawork-state.json, autopilot-state.json
+ * Examples: session-state.json, mode-state.json
  *
- * @param stateName - State name (e.g., "ralph", "ultrawork", or "ralph-state")
+ * @param stateName - State name (e.g., "session", "mode", or "session-state")
  * @param worktreeRoot - Optional worktree root
  * @returns Absolute path to state file
  */
@@ -312,7 +300,7 @@ export function isPathUnderStateRoot(absolutePath, worktreeRoot) {
  */
 export function ensureAllStateDirs(worktreeRoot) {
     const stateRoot = getStateRoot(worktreeRoot);
-    const subdirs = ['', 'state', 'plans', 'research', 'logs', 'notepads', 'drafts'];
+    const subdirs = ['', 'state'];
     for (const subdir of subdirs) {
         const fullPath = subdir ? join(stateRoot, subdir) : stateRoot;
         if (!existsSync(fullPath)) {
@@ -437,7 +425,7 @@ export function isValidTranscriptPath(transcriptPath) {
  * Resolve a session-scoped state file path.
  * Path: {stateRoot}/state/sessions/{sessionId}/{mode}-state.json
  *
- * @param stateName - State name (e.g., "ralph", "ultrawork")
+ * @param stateName - State name (e.g., "session", "mode")
  * @param sessionId - Session identifier
  * @param worktreeRoot - Optional worktree root
  * @returns Absolute path to session-scoped state file

@@ -8,12 +8,10 @@
 import { readStdin, writeStdinCache, readStdinCache, getContextPercent, getModelId, getModelName, getEffortLevel, getRateLimitsFromStdin, stabilizeContextPercent, } from "./stdin.js";
 import { parseTranscript } from "./transcript.js";
 import { readHudState, readHudConfig, getRunningTasks, writeHudState, initializeHUDState, } from "./state.js";
-import { readRalphStateForHud, readUltraworkStateForHud, readPrdStateForHud, readAutopilotStateForHud, } from "./state-readers.js";
 import { getUsage, getSubscriptionInfo } from "./usage-api.js";
 import { executeCustomProvider } from "./custom-rate-provider.js";
 import { render } from "./render.js";
 import { detectApiKeySource } from "./elements/api-key-source.js";
-import { refreshMissionBoardState } from "./mission-board.js";
 import { sanitizeOutput } from "./sanitize.js";
 import { estimatePayloadFromTranscriptPath } from "./payload-estimate.js";
 // removed unused version.js / auto-update.js imports
@@ -238,11 +236,6 @@ async function main(watchMode = false, skipInit = false) {
         if (!skipInit) {
             await initializeHUDState(cwd, currentSessionId ?? undefined);
         }
-        // Read HUD state files
-        const ralph = readRalphStateForHud(cwd, currentSessionId ?? undefined);
-        const ultrawork = readUltraworkStateForHud(cwd, currentSessionId ?? undefined);
-        const prd = readPrdStateForHud(cwd);
-        const autopilot = readAutopilotStateForHud(cwd, currentSessionId ?? undefined);
         // Read HUD state for background tasks
         const hudState = readHudState(cwd, currentSessionId ?? undefined);
         const _backgroundTasks = hudState?.backgroundTasks || [];
@@ -302,10 +295,6 @@ async function main(watchMode = false, skipInit = false) {
                 spawnSessionSummaryScript(resolvedTranscriptPath, stateDir, currentSessionId);
             }
         }
-        const missionBoardEnabled = config.missionBoard?.enabled ?? config.elements.missionBoard ?? false;
-        const missionBoard = missionBoardEnabled
-            ? await refreshMissionBoardState(cwd, config.missionBoard)
-            : null;
         const contextPercent = getContextPercent(stdin);
         const payloadEstimate = estimatePayloadFromTranscriptPath(resolvedTranscriptPath);
         // Read subscription info for enterprise detection (best-effort).
@@ -325,15 +314,10 @@ async function main(watchMode = false, skipInit = false) {
             modelName: getModelName(stdin),
             modelId: getModelId(stdin),
             effortLevel: getEffortLevel(stdin),
-            ralph,
-            ultrawork,
-            prd,
-            autopilot,
             activeAgents: transcriptData.agents.filter((a) => a.status === "running"),
             todos: transcriptData.todos,
             backgroundTasks: getRunningTasks(hudState),
             cwd,
-            missionBoard,
             lastSkill: transcriptData.lastActivatedSkill || null,
             rateLimitsResult,
             customBuckets,

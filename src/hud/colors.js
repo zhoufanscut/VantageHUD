@@ -71,18 +71,6 @@ export function getContextColor(percent) {
     return GREEN;
 }
 /**
- * Get color code based on ralph iteration.
- */
-export function getRalphColor(iteration, maxIterations) {
-    const warningThreshold = Math.floor(maxIterations * 0.7);
-    const criticalThreshold = Math.floor(maxIterations * 0.9);
-    if (iteration >= criticalThreshold)
-        return RED;
-    if (iteration >= warningThreshold)
-        return YELLOW;
-    return GREEN;
-}
-/**
  * Get color for todo progress.
  */
 export function getTodoColor(completed, total) {
