@@ -1,0 +1,10 @@
+# Runtime render cache (regenerated per session, scoped per machine)
+cache/
+
+# Logs / scratch
+*.log
+*.tmp
+
+# Per-project runtime state (written into the cwd, never the repo)
+.claude-statusline/
+.omc/

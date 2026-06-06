@@ -1,0 +1,10 @@
+{
+  "name": "claude-statusline",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Self-contained Claude Code statusline (HUD) — no external dependencies.",
+  "engines": {
+    "node": ">=14"
+  }
+}
