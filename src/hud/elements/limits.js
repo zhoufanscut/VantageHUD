@@ -50,7 +50,7 @@ function formatResetTime(date) {
 /**
  * Render rate limits display.
  *
- * Format: 5h:45%(3h42m) wk:12%(2d5h) mo:8%(15d3h) sn:20%(1d2h) op:5%(1d2h)
+ * Format: 5h:45%(3h42m) 7d:12%(2d5h) mo:8%(15d3h) sn:20%(1d2h) op:5%(1d2h)
  */
 export function renderRateLimits(limits, stale) {
     if (!limits)
@@ -69,8 +69,8 @@ export function renderRateLimits(limits, stale) {
         const weeklyColor = getColor(weekly);
         const weeklyReset = formatResetTime(limits.weeklyResetsAt);
         const weeklyPart = weeklyReset
-            ? `${DIM}wk:${RESET}${weeklyColor}${weekly}%${RESET}${staleMarker}${DIM}(${resetPrefix}${weeklyReset})${RESET}`
-            : `${DIM}wk:${RESET}${weeklyColor}${weekly}%${RESET}${staleMarker}`;
+            ? `7d:${weeklyColor}${weekly}%${RESET}${staleMarker}${DIM}(${resetPrefix}${weeklyReset})${RESET}`
+            : `7d:${weeklyColor}${weekly}%${RESET}${staleMarker}`;
         parts.push(weeklyPart);
     }
     if (limits.monthlyPercent != null) {
@@ -78,8 +78,8 @@ export function renderRateLimits(limits, stale) {
         const monthlyColor = getColor(monthly);
         const monthlyReset = formatResetTime(limits.monthlyResetsAt);
         const monthlyPart = monthlyReset
-            ? `${DIM}mo:${RESET}${monthlyColor}${monthly}%${RESET}${staleMarker}${DIM}(${resetPrefix}${monthlyReset})${RESET}`
-            : `${DIM}mo:${RESET}${monthlyColor}${monthly}%${RESET}${staleMarker}`;
+            ? `mo:${monthlyColor}${monthly}%${RESET}${staleMarker}${DIM}(${resetPrefix}${monthlyReset})${RESET}`
+            : `mo:${monthlyColor}${monthly}%${RESET}${staleMarker}`;
         parts.push(monthlyPart);
     }
     if (limits.sonnetWeeklyPercent != null) {
@@ -87,8 +87,8 @@ export function renderRateLimits(limits, stale) {
         const sonnetColor = getColor(sonnet);
         const sonnetReset = formatResetTime(limits.sonnetWeeklyResetsAt);
         const sonnetPart = sonnetReset
-            ? `${DIM}sn:${RESET}${sonnetColor}${sonnet}%${RESET}${staleMarker}${DIM}(${resetPrefix}${sonnetReset})${RESET}`
-            : `${DIM}sn:${RESET}${sonnetColor}${sonnet}%${RESET}${staleMarker}`;
+            ? `sn:${sonnetColor}${sonnet}%${RESET}${staleMarker}${DIM}(${resetPrefix}${sonnetReset})${RESET}`
+            : `sn:${sonnetColor}${sonnet}%${RESET}${staleMarker}`;
         parts.push(sonnetPart);
     }
     if (limits.opusWeeklyPercent != null) {
@@ -96,8 +96,8 @@ export function renderRateLimits(limits, stale) {
         const opusColor = getColor(opus);
         const opusReset = formatResetTime(limits.opusWeeklyResetsAt);
         const opusPart = opusReset
-            ? `${DIM}op:${RESET}${opusColor}${opus}%${RESET}${staleMarker}${DIM}(${resetPrefix}${opusReset})${RESET}`
-            : `${DIM}op:${RESET}${opusColor}${opus}%${RESET}${staleMarker}`;
+            ? `op:${opusColor}${opus}%${RESET}${staleMarker}${DIM}(${resetPrefix}${opusReset})${RESET}`
+            : `op:${opusColor}${opus}%${RESET}${staleMarker}`;
         parts.push(opusPart);
     }
     if (limits.extraUsagePercent != null && limits.extraUsageLimitUsd != null) {
@@ -106,8 +106,8 @@ export function renderRateLimits(limits, stale) {
         const extraReset = formatResetTime(limits.extraUsageResetsAt);
         const dollarPart = `${DIM}($${(limits.extraUsageSpentUsd ?? 0).toFixed(2)}/$${limits.extraUsageLimitUsd.toFixed(2)})${RESET}`;
         const extraPart = extraReset
-            ? `${DIM}extra:${RESET}${extraColor}${extra}%${RESET}${staleMarker}${dollarPart}${DIM}(${resetPrefix}${extraReset})${RESET}`
-            : `${DIM}extra:${RESET}${extraColor}${extra}%${RESET}${staleMarker}${dollarPart}`;
+            ? `extra:${extraColor}${extra}%${RESET}${staleMarker}${dollarPart}${DIM}(${resetPrefix}${extraReset})${RESET}`
+            : `extra:${extraColor}${extra}%${RESET}${staleMarker}${dollarPart}`;
         parts.push(extraPart);
     }
     return parts.join(' ');
@@ -115,7 +115,7 @@ export function renderRateLimits(limits, stale) {
 /**
  * Render compact rate limits (just percentages).
  *
- * Format: 45%/12% or 45%/12%/8%/20%/5% (5h/wk/mo/sn/op)
+ * Format: 45%/12% or 45%/12%/8%/20%/5% (5h/7d/mo/sn/op)
  */
 export function renderRateLimitsCompact(limits, stale) {
     if (!limits)
@@ -154,7 +154,7 @@ export function renderRateLimitsCompact(limits, stale) {
 /**
  * Render rate limits with visual progress bars.
  *
- * Format: 5h:[████░░░░░░]45%(3h42m) wk:[█░░░░░░░░░]12%(2d5h) mo:[░░░░░░░░░░]8%(15d3h) sn:[██░░░░░░░░]20%(1d2h) op:[░░░░░░░░░░]5%(1d2h)
+ * Format: 5h:[████░░░░░░]45%(3h42m) 7d:[█░░░░░░░░░]12%(2d5h) mo:[░░░░░░░░░░]8%(15d3h) sn:[██░░░░░░░░]20%(1d2h) op:[░░░░░░░░░░]5%(1d2h)
  */
 export function renderRateLimitsWithBar(limits, barWidth = 8, stale) {
     if (!limits)
@@ -179,8 +179,8 @@ export function renderRateLimitsWithBar(limits, barWidth = 8, stale) {
         const weeklyBar = `${weeklyColor}${'█'.repeat(weeklyFilled)}${DIM}${'░'.repeat(weeklyEmpty)}${RESET}`;
         const weeklyReset = formatResetTime(limits.weeklyResetsAt);
         const weeklyPart = weeklyReset
-            ? `${DIM}wk:${RESET}[${weeklyBar}]${weeklyColor}${weekly}%${RESET}${staleMarker}${DIM}(${resetPrefix}${weeklyReset})${RESET}`
-            : `${DIM}wk:${RESET}[${weeklyBar}]${weeklyColor}${weekly}%${RESET}${staleMarker}`;
+            ? `7d:[${weeklyBar}]${weeklyColor}${weekly}%${RESET}${staleMarker}${DIM}(${resetPrefix}${weeklyReset})${RESET}`
+            : `7d:[${weeklyBar}]${weeklyColor}${weekly}%${RESET}${staleMarker}`;
         parts.push(weeklyPart);
     }
     if (limits.monthlyPercent != null) {
@@ -191,8 +191,8 @@ export function renderRateLimitsWithBar(limits, barWidth = 8, stale) {
         const monthlyBar = `${monthlyColor}${'█'.repeat(monthlyFilled)}${DIM}${'░'.repeat(monthlyEmpty)}${RESET}`;
         const monthlyReset = formatResetTime(limits.monthlyResetsAt);
         const monthlyPart = monthlyReset
-            ? `${DIM}mo:${RESET}[${monthlyBar}]${monthlyColor}${monthly}%${RESET}${staleMarker}${DIM}(${resetPrefix}${monthlyReset})${RESET}`
-            : `${DIM}mo:${RESET}[${monthlyBar}]${monthlyColor}${monthly}%${RESET}${staleMarker}`;
+            ? `mo:[${monthlyBar}]${monthlyColor}${monthly}%${RESET}${staleMarker}${DIM}(${resetPrefix}${monthlyReset})${RESET}`
+            : `mo:[${monthlyBar}]${monthlyColor}${monthly}%${RESET}${staleMarker}`;
         parts.push(monthlyPart);
     }
     if (limits.sonnetWeeklyPercent != null) {
@@ -203,8 +203,8 @@ export function renderRateLimitsWithBar(limits, barWidth = 8, stale) {
         const sonnetBar = `${sonnetColor}${'█'.repeat(sonnetFilled)}${DIM}${'░'.repeat(sonnetEmpty)}${RESET}`;
         const sonnetReset = formatResetTime(limits.sonnetWeeklyResetsAt);
         const sonnetPart = sonnetReset
-            ? `${DIM}sn:${RESET}[${sonnetBar}]${sonnetColor}${sonnet}%${RESET}${staleMarker}${DIM}(${resetPrefix}${sonnetReset})${RESET}`
-            : `${DIM}sn:${RESET}[${sonnetBar}]${sonnetColor}${sonnet}%${RESET}${staleMarker}`;
+            ? `sn:[${sonnetBar}]${sonnetColor}${sonnet}%${RESET}${staleMarker}${DIM}(${resetPrefix}${sonnetReset})${RESET}`
+            : `sn:[${sonnetBar}]${sonnetColor}${sonnet}%${RESET}${staleMarker}`;
         parts.push(sonnetPart);
     }
     if (limits.opusWeeklyPercent != null) {
@@ -215,8 +215,8 @@ export function renderRateLimitsWithBar(limits, barWidth = 8, stale) {
         const opusBar = `${opusColor}${'█'.repeat(opusFilled)}${DIM}${'░'.repeat(opusEmpty)}${RESET}`;
         const opusReset = formatResetTime(limits.opusWeeklyResetsAt);
         const opusPart = opusReset
-            ? `${DIM}op:${RESET}[${opusBar}]${opusColor}${opus}%${RESET}${staleMarker}${DIM}(${resetPrefix}${opusReset})${RESET}`
-            : `${DIM}op:${RESET}[${opusBar}]${opusColor}${opus}%${RESET}${staleMarker}`;
+            ? `op:[${opusBar}]${opusColor}${opus}%${RESET}${staleMarker}${DIM}(${resetPrefix}${opusReset})${RESET}`
+            : `op:[${opusBar}]${opusColor}${opus}%${RESET}${staleMarker}`;
         parts.push(opusPart);
     }
     if (limits.extraUsagePercent != null && limits.extraUsageLimitUsd != null) {
@@ -228,8 +228,8 @@ export function renderRateLimitsWithBar(limits, barWidth = 8, stale) {
         const extraReset = formatResetTime(limits.extraUsageResetsAt);
         const dollarPart = `${DIM}($${(limits.extraUsageSpentUsd ?? 0).toFixed(2)}/$${limits.extraUsageLimitUsd.toFixed(2)})${RESET}`;
         const extraPart = extraReset
-            ? `${DIM}extra:${RESET}[${extraBar}]${extraColor}${extra}%${RESET}${staleMarker}${dollarPart}${DIM}(${resetPrefix}${extraReset})${RESET}`
-            : `${DIM}extra:${RESET}[${extraBar}]${extraColor}${extra}%${RESET}${staleMarker}${dollarPart}`;
+            ? `extra:[${extraBar}]${extraColor}${extra}%${RESET}${staleMarker}${dollarPart}${DIM}(${resetPrefix}${extraReset})${RESET}`
+            : `extra:[${extraBar}]${extraColor}${extra}%${RESET}${staleMarker}${dollarPart}`;
         parts.push(extraPart);
     }
     return parts.join(' ');
