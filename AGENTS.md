@@ -5,7 +5,7 @@ Self-contained Claude Code statusline (HUD). Reads one JSON payload on stdin, pr
 ## Source of truth & build (read first)
 
 - **The `.js` files under `src/` ARE the source. Edit them directly.** They look like transpiled TypeScript (JSDoc `@param` types, `??`, a comment in `src/hud/types.js` referencing a non-existent `render.ts`), but there is **no `tsconfig`, no `.ts` files, no build step, no `node_modules`**. Do not look for or create a build pipeline; do not introduce `.ts`.
-- **No package manager install is needed or wanted.** `package.json` has no deps, no scripts. Never add a dependency or `node_modules` — the project's entire value proposition is being self-contained Node built-ins only (`"type": "module"`, `engines.node >=14`).
+- **No package manager install is needed or wanted.** `package.json` has no deps, no scripts. Never add a dependency or `node_modules` — the project's entire value proposition is being self-contained Node built-ins only (`"type": "module"`, `engines.node >=14.17`).
   - Caveat: `src/lib/atomic-write.js` uses `crypto.randomUUID()`, so the real floor is **Node ≥ 14.17**, not 14.0.
 - Shared utilities live in **`src/lib/`** (recently moved from `src/utils/`, `src/cli/utils/`, `src/platform/`). Import helpers from `../lib/...`.
 

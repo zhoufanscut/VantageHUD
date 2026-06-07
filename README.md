@@ -6,7 +6,7 @@ working folder, the model with thinking effort (`opus 4.8 max`), context %,
 rate limits, git info, session time, and more.
 
 - **No dependencies.** Pure Node built-ins — no `node_modules`, no native code.
-- **Portable.** Clone anywhere, on macOS or Linux, with any Node `>=14`.
+- **Portable.** Clone anywhere, on macOS or Linux, with any Node `>=14.17`.
 - **Proxy aware.** Honors `HTTPS_PROXY` / `https_proxy` for the usage/rate-limit
   API via an HTTP CONNECT tunnel (no-op when unset).
 
@@ -24,7 +24,7 @@ cache/            # per-session render cache (gitignored)
 
 ### 1. Prerequisites
 - Claude Code installed (this is its statusline).
-- Node `>=14` on the machine (`node --version`). No `npm install` needed.
+- Node `>=14.17` on the machine (`node --version`). No `npm install` needed.
 
 ### 2. Get the folder
 Clone it anywhere — `~/.claude/hud` is the conventional spot:
