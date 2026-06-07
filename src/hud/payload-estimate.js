@@ -49,4 +49,3 @@ export function estimatePayloadFromTranscriptPath(transcriptPath) {
         return null;
     }
 }
-//# sourceMappingURL=payload-estimate.js.map

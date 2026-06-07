@@ -54,4 +54,3 @@ export function renderCallCounts(toolCalls, agentInvocations, skillUsages, forma
     }
     return parts.length > 0 ? parts.join(' ') : null;
 }
-//# sourceMappingURL=call-counts.js.map

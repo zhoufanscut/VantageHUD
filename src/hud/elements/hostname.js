@@ -23,4 +23,3 @@ export function renderHostname() {
         return null;
     return cyan(`host:${short}`);
 }
-//# sourceMappingURL=hostname.js.map

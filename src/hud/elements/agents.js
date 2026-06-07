@@ -1,10 +1,8 @@
 /**
  * HUD - Agents Element
  *
- * Renders active agent count display with multiple format options:
- * - count: agents:2
- * - codes: agents:Oes (type-coded with model tier casing)
- * - detailed: agents:[architect(2m),explore,exec]
+ * Renders the active-agent multi-line display: a header count plus one detail
+ * line per running agent.
  */
 import { dim, RESET, getModelTierColor, getDurationColor } from '../colors.js';
 import { truncateToWidth } from '../../utils/string-width.js';
@@ -121,181 +119,10 @@ function getAgentCode(agentType, model) {
     return code;
 }
 /**
- * Format duration for display.
- * <10s: no suffix, 10s-59s: (Xs), 1m-9m: (Xm), >=10m: !
- */
-function formatDuration(durationMs) {
-    const seconds = Math.floor(durationMs / 1000);
-    const minutes = Math.floor(seconds / 60);
-    if (seconds < 10) {
-        return ''; // No suffix for very short durations
-    }
-    else if (seconds < 60) {
-        return `(${seconds}s)`;
-    }
-    else if (minutes < 10) {
-        return `(${minutes}m)`;
-    }
-    else {
-        return '!'; // Alert for very long durations
-    }
-}
-// ============================================================================
-// Render Functions
-// ============================================================================
-/**
- * Render active agent count.
- * Returns null if no agents are running.
- *
- * Format: agents:2
- */
-export function renderAgents(agents) {
-    const running = agents.filter((a) => a.status === 'running').length;
-    if (running === 0) {
-        return null;
-    }
-    return `agents:${CYAN}${running}${RESET}`;
-}
-/**
  * Sort agents by start time (freshest first, oldest last)
  */
 function sortByFreshest(agents) {
     return [...agents].sort((a, b) => b.startTime.getTime() - a.startTime.getTime());
-}
-/**
- * Render agents with single-character type codes.
- * Uppercase = Opus tier, lowercase = Sonnet/Haiku.
- * Color-coded by model tier.
- *
- * Format: agents:Oes
- */
-export function renderAgentsCoded(agents) {
-    const running = sortByFreshest(agents.filter((a) => a.status === 'running'));
-    if (running.length === 0) {
-        return null;
-    }
-    // Build coded string with colors
-    const codes = running.map((a) => {
-        const code = getAgentCode(a.type, a.model);
-        const color = getModelTierColor(a.model);
-        return `${color}${code}${RESET}`;
-    });
-    return `agents:${codes.join('')}`;
-}
-/**
- * Render agents with codes and duration indicators.
- * Shows how long each agent has been running.
- *
- * Format: agents:O(2m)es
- */
-export function renderAgentsCodedWithDuration(agents) {
-    const running = sortByFreshest(agents.filter((a) => a.status === 'running'));
-    if (running.length === 0) {
-        return null;
-    }
-    const now = Date.now();
-    // Build coded string with colors and durations
-    const codes = running.map((a) => {
-        const code = getAgentCode(a.type, a.model);
-        const durationMs = now - a.startTime.getTime();
-        const duration = formatDuration(durationMs);
-        // Color the code by model tier
-        const modelColor = getModelTierColor(a.model);
-        if (duration === '!') {
-            // Alert case - show exclamation in duration color
-            const durationColor = getDurationColor(durationMs);
-            return `${modelColor}${code}${durationColor}!${RESET}`;
-        }
-        else if (duration) {
-            // Normal duration - dim the time portion
-            return `${modelColor}${code}${dim(duration)}${RESET}`;
-        }
-        else {
-            // No duration suffix
-            return `${modelColor}${code}${RESET}`;
-        }
-    });
-    return `agents:${codes.join('')}`;
-}
-/**
- * Render detailed agent list (for full mode).
- *
- * Format: agents:[architect(2m),explore,exec]
- */
-export function renderAgentsDetailed(agents) {
-    const running = sortByFreshest(agents.filter((a) => a.status === 'running'));
-    if (running.length === 0) {
-        return null;
-    }
-    const now = Date.now();
-    // Extract short agent type names with duration
-    const names = running.map((a) => {
-        // Extract last part of agent type (e.g., "claude-statusline:explore" -> "explore")
-        const parts = a.type.split(':');
-        let name = parts[parts.length - 1] || a.type;
-        // Abbreviate common names
-        if (name === 'executor')
-            name = 'exec';
-        if (name === 'deep-executor')
-            name = 'exec'; // deprecated alias
-        if (name === 'designer')
-            name = 'design';
-        if (name === 'qa-tester')
-            name = 'qa';
-        if (name === 'scientist')
-            name = 'sci';
-        if (name === 'security-reviewer')
-            name = 'sec';
-        if (name === 'build-fixer')
-            name = 'debug'; // deprecated alias
-        if (name === 'code-reviewer')
-            name = 'review';
-        if (name === 'git-master')
-            name = 'git';
-        if (name === 'style-reviewer')
-            name = 'style';
-        if (name === 'quality-reviewer')
-            name = 'review'; // deprecated alias
-        if (name === 'api-reviewer')
-            name = 'api-rev';
-        if (name === 'performance-reviewer')
-            name = 'perf';
-        if (name === 'dependency-expert')
-            name = 'dep-exp';
-        if (name === 'document-specialist')
-            name = 'doc-spec';
-        if (name === 'test-engineer')
-            name = 'test-eng';
-        if (name === 'quality-strategist')
-            name = 'qs';
-        if (name === 'debugger')
-            name = 'debug';
-        if (name === 'verifier')
-            name = 'verify';
-        if (name === 'product-manager')
-            name = 'pm';
-        if (name === 'ux-researcher')
-            name = 'uxr';
-        if (name === 'information-architect')
-            name = 'ia';
-        if (name === 'product-analyst')
-            name = 'pa';
-        // Add duration if significant
-        const durationMs = now - a.startTime.getTime();
-        const duration = formatDuration(durationMs);
-        return duration ? `${name}${duration}` : name;
-    });
-    return `agents:[${CYAN}${names.join(',')}${RESET}]`;
-}
-/**
- * Truncate description to fit in statusline.
- * CJK-aware: accounts for double-width characters.
- */
-function truncateDescription(desc, maxWidth = 20) {
-    if (!desc)
-        return '...';
-    // Use CJK-aware truncation (maxWidth is visual columns, not character count)
-    return truncateToWidth(desc, maxWidth);
 }
 /**
  * Get short agent type name.
@@ -336,68 +163,6 @@ function getShortAgentName(agentType) {
         'researcher': 'dep-exp',
     };
     return abbrevs[name] || name;
-}
-/**
- * Render agents with descriptions - most informative format.
- * Shows what each agent is actually doing.
- *
- * Format: O:analyzing code | e:searching files
- */
-export function renderAgentsWithDescriptions(agents) {
-    const running = sortByFreshest(agents.filter((a) => a.status === 'running'));
-    if (running.length === 0) {
-        return null;
-    }
-    const now = Date.now();
-    // Build agent entries with descriptions
-    const entries = running.map((a) => {
-        const code = getAgentCode(a.type, a.model);
-        const color = getModelTierColor(a.model);
-        const desc = truncateDescription(a.description, 25);
-        const durationMs = now - a.startTime.getTime();
-        const duration = formatDuration(durationMs);
-        // Format: O:description or O:description(2m)
-        let entry = `${color}${code}${RESET}:${dim(desc)}`;
-        if (duration && duration !== '!') {
-            entry += dim(duration);
-        }
-        else if (duration === '!') {
-            const durationColor = getDurationColor(durationMs);
-            entry += `${durationColor}!${RESET}`;
-        }
-        return entry;
-    });
-    return entries.join(dim(' | '));
-}
-/**
- * Render agents showing descriptions only (no codes).
- * Maximum clarity about what's running.
- *
- * Format: [analyzing code, searching files]
- */
-export function renderAgentsDescOnly(agents) {
-    const running = sortByFreshest(agents.filter((a) => a.status === 'running'));
-    if (running.length === 0) {
-        return null;
-    }
-    const now = Date.now();
-    // Build descriptions
-    const descriptions = running.map((a) => {
-        const color = getModelTierColor(a.model);
-        const shortName = getShortAgentName(a.type);
-        const desc = a.description ? truncateDescription(a.description, 20) : shortName;
-        const durationMs = now - a.startTime.getTime();
-        const duration = formatDuration(durationMs);
-        if (duration === '!') {
-            const durationColor = getDurationColor(durationMs);
-            return `${color}${desc}${durationColor}!${RESET}`;
-        }
-        else if (duration) {
-            return `${color}${desc}${dim(duration)}${RESET}`;
-        }
-        return `${color}${desc}${RESET}`;
-    });
-    return `[${descriptions.join(dim(', '))}]`;
 }
 /**
  * Format duration with padding for alignment.
@@ -459,29 +224,3 @@ export function renderAgentsMultiLine(agents, maxLines = 5) {
     }
     return { headerPart, detailLines };
 }
-/**
- * Render agents based on format configuration.
- */
-export function renderAgentsByFormat(agents, format) {
-    switch (format) {
-        case 'count':
-            return renderAgents(agents);
-        case 'codes':
-            return renderAgentsCoded(agents);
-        case 'codes-duration':
-            return renderAgentsCodedWithDuration(agents);
-        case 'detailed':
-            return renderAgentsDetailed(agents);
-        case 'descriptions':
-            return renderAgentsWithDescriptions(agents);
-        case 'tasks':
-            return renderAgentsDescOnly(agents);
-        case 'multiline':
-            // For backward compatibility, return just the header part
-            // The render.ts will handle the full multi-line output
-            return renderAgentsMultiLine(agents).headerPart;
-        default:
-            return renderAgentsCoded(agents);
-    }
-}
-//# sourceMappingURL=agents.js.map

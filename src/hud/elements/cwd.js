@@ -69,4 +69,3 @@ export function renderCwd(cwd, format = 'relative', useHyperlinks = false) {
     }
     return rendered;
 }
-//# sourceMappingURL=cwd.js.map

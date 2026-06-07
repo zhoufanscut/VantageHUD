@@ -11,14 +11,11 @@
 import { createHash } from 'crypto';
 import { execSync } from 'child_process';
 import { existsSync, mkdirSync, realpathSync, readdirSync } from 'fs';
-import { homedir } from 'os';
 import { resolve, normalize, relative, sep, join, isAbsolute, basename, dirname } from 'path';
 import { getClaudeConfigDir } from '../utils/config-dir.js';
 /** Standard .claude-statusline subdirectories */
 export const StatePaths = {
     ROOT: '.claude-statusline',
-    STATE: '.claude-statusline/state',
-    SESSIONS: '.claude-statusline/state/sessions',
 };
 /**
  * LRU cache for worktree root lookups to avoid repeated git subprocess calls.
@@ -85,13 +82,6 @@ export function validatePath(inputPath) {
 // ============================================================================
 /** Track which dual-dir warnings have been logged to avoid repeated warnings */
 const dualDirWarnings = new Set();
-/**
- * Clear the dual-directory warning cache (useful for testing).
- * @internal
- */
-export function clearDualDirWarnings() {
-    dualDirWarnings.clear();
-}
 /**
  * Get a stable project identifier for centralized state storage.
  *
@@ -203,168 +193,11 @@ export function resolveStatePath(relativePath, worktreeRoot) {
     }
     return fullPath;
 }
-/**
- * Resolve a state file path.
- *
- * State files follow the naming convention: {mode}-state.json
- * Examples: session-state.json, mode-state.json
- *
- * @param stateName - State name (e.g., "session", "mode", or "session-state")
- * @param worktreeRoot - Optional worktree root
- * @returns Absolute path to state file
- */
-export function resolveNamedStatePath(stateName, worktreeRoot) {
-    // Normalize: ensure -state suffix is present, then add .json
-    const normalizedName = stateName.endsWith('-state') ? stateName : `${stateName}-state`;
-    return resolveStatePath(`state/${normalizedName}.json`, worktreeRoot);
-}
-/**
- * Ensure a directory exists under .claude-statusline/.
- * Creates parent directories as needed.
- *
- * @param relativePath - Path relative to .claude-statusline/
- * @param worktreeRoot - Optional worktree root
- * @returns Absolute path to the created directory
- */
-export function ensureStateDir(relativePath, worktreeRoot) {
-    const fullPath = resolveStatePath(relativePath, worktreeRoot);
-    if (!existsSync(fullPath)) {
-        try {
-            mkdirSync(fullPath, { recursive: true });
-        }
-        catch (err) {
-            // On Windows, concurrent hooks can race past the existsSync check and
-            // throw EEXIST. Safe to ignore — see atomic-write.ts:ensureDirSync.
-            if (err.code !== "EEXIST")
-                throw err;
-        }
-    }
-    return fullPath;
-}
-/**
- * Get the absolute path to the notepad file.
- * NOTE: Named differently from hooks/notepad/getNotepadPath which takes `directory` (required).
- * This version auto-detects worktree root.
- */
-export function getWorktreeNotepadPath(worktreeRoot) {
-    return join(getStateRoot(worktreeRoot), 'notepad.md');
-}
-/**
- * Get the absolute path to the project memory file.
- */
-export function getWorktreeProjectMemoryPath(worktreeRoot) {
-    return join(getStateRoot(worktreeRoot), 'project-memory.json');
-}
-/**
- * Resolve a plan file path.
- * @param planName - Plan name (without .md extension)
- */
-export function resolvePlanPath(planName, worktreeRoot) {
-    validatePath(planName);
-    return join(getStateRoot(worktreeRoot), 'plans', `${planName}.md`);
-}
-/**
- * Resolve a research directory path.
- * @param name - Research folder name
- */
-export function resolveResearchPath(name, worktreeRoot) {
-    validatePath(name);
-    return join(getStateRoot(worktreeRoot), 'research', name);
-}
-/**
- * Resolve the logs directory path.
- */
-export function resolveLogsPath(worktreeRoot) {
-    return join(getStateRoot(worktreeRoot), 'logs');
-}
-/**
- * Resolve a wisdom/plan-scoped notepad directory path.
- * @param planName - Plan name for the scoped notepad
- */
-export function resolveWisdomPath(planName, worktreeRoot) {
-    validatePath(planName);
-    return join(getStateRoot(worktreeRoot), 'notepads', planName);
-}
-/**
- * Check if an absolute path is under the .claude-statusline directory.
- * @param absolutePath - Absolute path to check
- */
-export function isPathUnderStateRoot(absolutePath, worktreeRoot) {
-    const stateRoot = getStateRoot(worktreeRoot);
-    const normalizedPath = normalize(absolutePath);
-    const normalizedState = normalize(stateRoot);
-    return normalizedPath.startsWith(normalizedState + sep) || normalizedPath === normalizedState;
-}
-/**
- * Ensure all standard .claude-statusline subdirectories exist.
- */
-export function ensureAllStateDirs(worktreeRoot) {
-    const stateRoot = getStateRoot(worktreeRoot);
-    const subdirs = ['', 'state'];
-    for (const subdir of subdirs) {
-        const fullPath = subdir ? join(stateRoot, subdir) : stateRoot;
-        if (!existsSync(fullPath)) {
-            try {
-                mkdirSync(fullPath, { recursive: true });
-            }
-            catch (err) {
-                // On Windows, concurrent hooks can race past the existsSync check and
-                // throw EEXIST. Safe to ignore — see atomic-write.ts:ensureDirSync.
-                if (err.code !== "EEXIST")
-                    throw err;
-            }
-        }
-    }
-}
-/**
- * Clear the worktree cache (useful for testing).
- */
-export function clearWorktreeCache() {
-    worktreeCacheMap.clear();
-}
 // ============================================================================
 // SESSION-SCOPED STATE PATHS
 // ============================================================================
 /** Regex for valid session IDs: alphanumeric, hyphens, underscores, max 256 chars */
 const SESSION_ID_REGEX = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,255}$/;
-// ============================================================================
-// AUTOMATIC PROCESS SESSION ID (Issue #456)
-// ============================================================================
-/**
- * Auto-generated session ID for the current process.
- * Uses PID + process start timestamp to be unique even if PIDs are reused.
- * Generated once at module load time and stable for the process lifetime.
- */
-let processSessionId = null;
-/**
- * Get or generate a unique session ID for the current process.
- *
- * Format: `pid-{PID}-{startTimestamp}`
- * Example: `pid-12345-1707350400000`
- *
- * This prevents concurrent Claude Code instances in the same repo from
- * sharing state files (Issue #456). The ID is stable for the process
- * lifetime and unique across concurrent processes.
- *
- * @returns A unique session ID for the current process
- */
-export function getProcessSessionId() {
-    if (!processSessionId) {
-        // process.pid is unique among concurrent processes.
-        // Adding a timestamp handles PID reuse after process exit.
-        const pid = process.pid;
-        const startTime = Date.now();
-        processSessionId = `pid-${pid}-${startTime}`;
-    }
-    return processSessionId;
-}
-/**
- * Reset the process session ID (for testing only).
- * @internal
- */
-export function resetProcessSessionId() {
-    processSessionId = null;
-}
 /**
  * Validate a session ID to prevent path traversal attacks.
  *
@@ -381,45 +214,6 @@ export function validateSessionId(sessionId) {
     if (!SESSION_ID_REGEX.test(sessionId)) {
         throw new Error(`Invalid session ID: must be alphanumeric with hyphens/underscores, max 256 chars (${sessionId})`);
     }
-}
-/**
- * Validate a transcript path to prevent arbitrary file reads.
- * Transcript files should only be read from known Claude directories.
- *
- * @param transcriptPath - The transcript path to validate
- * @returns true if path is valid, false otherwise
- */
-export function isValidTranscriptPath(transcriptPath) {
-    if (!transcriptPath || typeof transcriptPath !== 'string') {
-        return false;
-    }
-    // Reject path traversal
-    if (transcriptPath.includes('..')) {
-        return false;
-    }
-    // Must be absolute
-    if (!isAbsolute(transcriptPath) && !transcriptPath.startsWith('~')) {
-        return false;
-    }
-    // Expand home directory if present
-    let expandedPath = transcriptPath;
-    if (transcriptPath.startsWith('~')) {
-        expandedPath = join(homedir(), transcriptPath.slice(1));
-    }
-    // Normalize and check it's within allowed directories
-    const normalized = normalize(expandedPath);
-    const home = homedir();
-    // Allowed: [$CLAUDE_CONFIG_DIR|~/.claude], ~/.claude-statusline/..., /tmp/...
-    const allowedPrefixes = [
-        getClaudeConfigDir(),
-        join(home, '.claude-statusline'),
-        '/tmp',
-        '/var/folders', // macOS temp
-    ];
-    return allowedPrefixes.some((prefix) => {
-        const rel = relative(prefix, normalized);
-        return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel));
-    });
 }
 /**
  * Resolve a session-scoped state file path.
@@ -695,79 +489,3 @@ export function validateWorkingDirectory(workingDirectory) {
     // never the subdirectory, to prevent .claude-statusline/ creation in subdirs (#576).
     return trustedRoot;
 }
-function getGitCommonDir(cwd) {
-    try {
-        const commonDir = execSync('git rev-parse --path-format=absolute --git-common-dir', {
-            cwd,
-            encoding: 'utf-8',
-            stdio: ['pipe', 'pipe', 'pipe'],
-            timeout: 5000,
-        }).trim();
-        return realpathSync(commonDir);
-    }
-    catch {
-        return null;
-    }
-}
-/**
- * Validate a workingDirectory while permitting linked git worktrees for the
- * same repository.
- *
- * This preserves validateWorkingDirectory's default cwd behavior and its
- * same-root/subdirectory normalization, but allows a per-call directory to
- * resolve to a sibling manual `git worktree` when both worktrees share the
- * same git common directory. Other unrelated git repositories still fall back
- * to the trusted startup cwd, and non-repo paths outside the trusted root are
- * rejected.
- */
-export function validateWorkingDirectoryOrLinkedWorktree(workingDirectory) {
-    const trustedRoot = getWorktreeRoot(process.cwd()) || process.cwd();
-    if (!workingDirectory) {
-        return trustedRoot;
-    }
-    const resolved = resolve(workingDirectory);
-    let trustedRootReal;
-    try {
-        trustedRootReal = realpathSync(trustedRoot);
-    }
-    catch {
-        trustedRootReal = trustedRoot;
-    }
-    const providedRoot = getWorktreeRoot(resolved);
-    if (providedRoot) {
-        let providedRootReal;
-        try {
-            providedRootReal = realpathSync(providedRoot);
-        }
-        catch {
-            throw new Error(`workingDirectory '${workingDirectory}' does not exist or is not accessible.`);
-        }
-        if (providedRootReal === trustedRootReal) {
-            return providedRoot;
-        }
-        const trustedCommonDir = getGitCommonDir(trustedRoot);
-        const providedCommonDir = getGitCommonDir(providedRoot);
-        if (trustedCommonDir && providedCommonDir && providedCommonDir === trustedCommonDir) {
-            return providedRoot;
-        }
-        console.error('[worktree] workingDirectory resolved to different git worktree root, using trusted root', {
-            workingDirectory: resolved,
-            providedRoot: providedRootReal,
-            trustedRoot: trustedRootReal,
-        });
-        return trustedRoot;
-    }
-    let resolvedReal;
-    try {
-        resolvedReal = realpathSync(resolved);
-    }
-    catch {
-        throw new Error(`workingDirectory '${workingDirectory}' does not exist or is not accessible.`);
-    }
-    const rel = relative(trustedRootReal, resolvedReal);
-    if (rel.startsWith('..') || isAbsolute(rel)) {
-        throw new Error(`workingDirectory '${workingDirectory}' is outside the trusted worktree root '${trustedRoot}'.`);
-    }
-    return trustedRoot;
-}
-//# sourceMappingURL=worktree-paths.js.map

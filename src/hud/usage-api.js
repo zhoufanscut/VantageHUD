@@ -18,7 +18,6 @@ import { execFileSync } from 'child_process';
 import { createHash } from 'crypto';
 import { userInfo } from 'os';
 import https from 'https';
-import { validateAnthropicBaseUrl } from '../utils/ssrf-guard.js';
 import { DEFAULT_HUD_USAGE_POLL_INTERVAL_MS, } from './types.js';
 import { readHudConfig } from './state.js';
 import { lockPathFor, withFileLock } from '../lib/file-lock.js';
@@ -44,40 +43,6 @@ function isEnterpriseUsageContext(options) {
     if (subscriptionType == null && rateLimitTier == null)
         return true;
     return subscriptionType === 'enterprise' || /claude_zero/i.test(rateLimitTier ?? '');
-}
-// z.ai `unit` code for the weekly TOKENS_LIMIT bucket (observed, undocumented)
-const ZAI_UNIT_WEEK = 6;
-/**
- * Check if a URL points to z.ai (exact hostname match)
- */
-export function isZaiHost(urlString) {
-    try {
-        const url = new URL(urlString);
-        const hostname = url.hostname.toLowerCase();
-        return hostname === 'z.ai' || hostname.endsWith('.z.ai');
-    }
-    catch {
-        return false;
-    }
-}
-/**
- * Check if a URL points to MiniMax.
- * Matches all known MiniMax domains:
- *   - minimax.io / *.minimax.io  (international)
- *   - minimaxi.com / *.minimaxi.com  (China)
- *   - minimax.com / *.minimax.com  (China alternative)
- */
-export function isMinimaxHost(urlString) {
-    try {
-        const url = new URL(urlString);
-        const hostname = url.hostname.toLowerCase();
-        return (hostname === 'minimax.io' || hostname.endsWith('.minimax.io') ||
-            hostname === 'minimaxi.com' || hostname.endsWith('.minimaxi.com') ||
-            hostname === 'minimax.com' || hostname.endsWith('.minimax.com'));
-    }
-    catch {
-        return false;
-    }
 }
 /**
  * Check if a URL points to Anthropic's own API (exact host or subdomain).
@@ -401,22 +366,6 @@ function getCredentials() {
     return readFileCredentials();
 }
 /**
- * Get subscription info from OAuth credentials.
- * Returns subscriptionType and rateLimitTier (null when unavailable; never throws).
- */
-export function getSubscriptionInfo() {
-    try {
-        const creds = getCredentials();
-        return {
-            subscriptionType: creds?.subscriptionType ?? null,
-            rateLimitTier: creds?.rateLimitTier ?? null,
-        };
-    }
-    catch {
-        return { subscriptionType: null, rateLimitTier: null };
-    }
-}
-/**
  * Validate credentials are not expired
  */
 function validateCredentials(creds) {
@@ -524,71 +473,6 @@ function fetchUsageFromApi(accessToken) {
             resolve({ data: null });
         });
         req.end();
-    });
-}
-/**
- * Fetch usage from z.ai GLM API
- */
-function fetchUsageFromZai() {
-    return new Promise((resolve) => {
-        const baseUrl = process.env.ANTHROPIC_BASE_URL;
-        const authToken = process.env.ANTHROPIC_AUTH_TOKEN;
-        if (!baseUrl || !authToken) {
-            resolve({ data: null });
-            return;
-        }
-        // Validate baseUrl for SSRF protection
-        const validation = validateAnthropicBaseUrl(baseUrl);
-        if (!validation.allowed) {
-            console.error(`[SSRF Guard] Blocking usage API call: ${validation.reason}`);
-            resolve({ data: null });
-            return;
-        }
-        try {
-            const url = new URL(baseUrl);
-            const baseDomain = `${url.protocol}//${url.host}`;
-            const quotaLimitUrl = `${baseDomain}/api/monitor/usage/quota/limit`;
-            const urlObj = new URL(quotaLimitUrl);
-            const req = https.request({
-                hostname: urlObj.hostname,
-                path: urlObj.pathname,
-                method: 'GET',
-                headers: {
-                    'Authorization': authToken,
-                    'Content-Type': 'application/json',
-                    'Accept-Language': 'en-US,en',
-                },
-                timeout: API_TIMEOUT_MS,
-            }, (res) => {
-                let data = '';
-                res.on('data', (chunk) => { data += chunk; });
-                res.on('end', () => {
-                    if (res.statusCode === 200) {
-                        try {
-                            resolve({ data: JSON.parse(data) });
-                        }
-                        catch {
-                            resolve({ data: null });
-                        }
-                    }
-                    else if (res.statusCode === 429) {
-                        if (process.env.HUD_DEBUG) {
-                            console.error(`[usage-api] z.ai API returned 429 (rate limited)`);
-                        }
-                        resolve({ data: null, rateLimited: true });
-                    }
-                    else {
-                        resolve({ data: null });
-                    }
-                });
-            });
-            req.on('error', () => resolve({ data: null }));
-            req.on('timeout', () => { req.destroy(); resolve({ data: null }); });
-            req.end();
-        }
-        catch {
-            resolve({ data: null });
-        }
     });
 }
 /**
@@ -764,184 +648,6 @@ export function parseUsageResponse(response, options) {
     return result;
 }
 /**
- * Parse z.ai API response into RateLimits.
- *
- * Weekly TOKENS_LIMIT exists only for plans purchased on/after 2026-02-12
- * (UTC+8); older accounts return only the 5-hour bucket regardless of tier.
- * Classify by the entry's `unit` field (not nextResetTime) so buckets don't
- * swap near a weekly reset boundary; fall back to nextResetTime ordering
- * when `unit` is absent.
- */
-export function parseZaiResponse(response) {
-    const limits = response.data?.limits;
-    if (!limits || limits.length === 0)
-        return null;
-    const allTokensLimits = limits.filter(l => l.type === 'TOKENS_LIMIT');
-    const timeLimit = limits.find(l => l.type === 'TIME_LIMIT');
-    if (allTokensLimits.length === 0 && !timeLimit)
-        return null;
-    // Parse nextResetTime (Unix timestamp in milliseconds) to Date
-    const parseResetTime = (timestamp) => {
-        if (!timestamp)
-            return null;
-        try {
-            const date = new Date(timestamp);
-            return isNaN(date.getTime()) ? null : date;
-        }
-        catch {
-            return null;
-        }
-    };
-    // Earlier reset wins 5h slot; equal reset, smaller percentage wins
-    const sortByResetTime = (a, b) => {
-        const aTime = a.nextResetTime && a.nextResetTime > 0 ? a.nextResetTime : Infinity;
-        const bTime = b.nextResetTime && b.nextResetTime > 0 ? b.nextResetTime : Infinity;
-        if (aTime !== bTime)
-            return aTime - bTime;
-        return (a.percentage ?? 0) - (b.percentage ?? 0);
-    };
-    const weeklyByUnit = allTokensLimits.find(l => l.unit === ZAI_UNIT_WEEK);
-    let fiveHourBucket;
-    let weeklyBucket;
-    if (weeklyByUnit) {
-        weeklyBucket = weeklyByUnit;
-        fiveHourBucket = allTokensLimits
-            .filter(l => l.unit !== ZAI_UNIT_WEEK)
-            .slice()
-            .sort(sortByResetTime)[0];
-    }
-    else {
-        // Legacy fallback: no unit field → sort all TOKENS_LIMIT by nextResetTime
-        const sorted = allTokensLimits.slice().sort(sortByResetTime);
-        fiveHourBucket = sorted[0];
-        weeklyBucket = sorted[1];
-    }
-    if (allTokensLimits.length > 2 && process.env.HUD_DEBUG) {
-        console.error(`[usage-api] z.ai returned ${allTokensLimits.length} TOKENS_LIMIT entries; using unit-based classification`);
-    }
-    const result = {
-        fiveHourPercent: clamp(fiveHourBucket?.percentage),
-        fiveHourResetsAt: parseResetTime(fiveHourBucket?.nextResetTime),
-        monthlyPercent: timeLimit ? clamp(timeLimit.percentage) : undefined,
-        monthlyResetsAt: timeLimit ? (parseResetTime(timeLimit.nextResetTime) ?? null) : undefined,
-    };
-    if (weeklyBucket) {
-        result.weeklyPercent = clamp(weeklyBucket.percentage);
-        result.weeklyResetsAt = parseResetTime(weeklyBucket.nextResetTime);
-    }
-    return result;
-}
-/**
- * Fetch usage from MiniMax coding plan API
- */
-function fetchUsageFromMinimax(apiKey) {
-    return new Promise((resolve) => {
-        const baseUrl = process.env.ANTHROPIC_BASE_URL;
-        if (!baseUrl) {
-            resolve({ data: null });
-            return;
-        }
-        // Validate baseUrl for SSRF protection
-        const validation = validateAnthropicBaseUrl(baseUrl);
-        if (!validation.allowed) {
-            console.error(`[SSRF Guard] Blocking usage API call: ${validation.reason}`);
-            resolve({ data: null });
-            return;
-        }
-        try {
-            const url = new URL(baseUrl);
-            const baseDomain = `${url.protocol}//${url.host}`;
-            const quotaUrl = `${baseDomain}/v1/api/openplatform/coding_plan/remains`;
-            const urlObj = new URL(quotaUrl);
-            const req = https.request({
-                hostname: urlObj.hostname,
-                path: urlObj.pathname,
-                method: 'GET',
-                headers: {
-                    'Authorization': `Bearer ${apiKey}`,
-                    'Content-Type': 'application/json',
-                },
-                timeout: API_TIMEOUT_MS,
-            }, (res) => {
-                let data = '';
-                res.on('data', (chunk) => { data += chunk; });
-                res.on('end', () => {
-                    if (res.statusCode === 200) {
-                        try {
-                            resolve({ data: JSON.parse(data) });
-                        }
-                        catch {
-                            resolve({ data: null });
-                        }
-                    }
-                    else if (res.statusCode === 429) {
-                        if (process.env.HUD_DEBUG) {
-                            console.error(`[usage-api] MiniMax API returned 429 (rate limited)`);
-                        }
-                        resolve({ data: null, rateLimited: true });
-                    }
-                    else {
-                        resolve({ data: null });
-                    }
-                });
-            });
-            req.on('error', () => resolve({ data: null }));
-            req.on('timeout', () => { req.destroy(); resolve({ data: null }); });
-            req.end();
-        }
-        catch {
-            resolve({ data: null });
-        }
-    });
-}
-/**
- * Parse MiniMax coding plan API response into RateLimits
- */
-export function parseMinimaxResponse(response) {
-    // Check for API error status
-    if (response.base_resp?.status_code != null && response.base_resp.status_code !== 0) {
-        return null;
-    }
-    const models = response.model_remains;
-    if (!models || models.length === 0)
-        return null;
-    // Find the primary coding model (first match, case-insensitive)
-    const codingModel = models.find(m => m.model_name.toLowerCase().startsWith('minimax-m'));
-    if (!codingModel) {
-        if (process.env.HUD_DEBUG) {
-            console.error('[usage-api] No MiniMax-M* model found in coding plan response');
-        }
-        return null;
-    }
-    // MiniMax's "remains" endpoint reports remaining quota, not consumed quota.
-    // Convert remaining-count fields to used percentages for the HUD.
-    const intervalTotal = codingModel.current_interval_total_count;
-    const intervalUsed = intervalTotal - codingModel.current_interval_usage_count;
-    const intervalPercent = intervalTotal > 0 ? (intervalUsed / intervalTotal) * 100 : 0;
-    // Calculate weekly usage percentage from remaining weekly quota
-    const weeklyTotal = codingModel.current_weekly_total_count;
-    const weeklyUsed = weeklyTotal - codingModel.current_weekly_usage_count;
-    const weeklyPercent = weeklyTotal > 0 ? (weeklyUsed / weeklyTotal) * 100 : 0;
-    // Parse reset times from Unix ms timestamps
-    const parseResetTime = (timestamp) => {
-        if (!timestamp)
-            return null;
-        try {
-            const date = new Date(timestamp);
-            return isNaN(date.getTime()) ? null : date;
-        }
-        catch {
-            return null;
-        }
-    };
-    return {
-        fiveHourPercent: clamp(intervalPercent),
-        fiveHourResetsAt: parseResetTime(codingModel.end_time),
-        weeklyPercent: clamp(weeklyPercent),
-        weeklyResetsAt: parseResetTime(codingModel.weekly_end_time),
-    };
-}
-/**
  * Generic provider fetch-and-cache cycle.
  * Handles 429 backoff, stale data fallback, and cache writes.
  * Provider-specific pre-fetch logic (e.g., credential refresh) runs before calling this.
@@ -1001,19 +707,13 @@ async function fetchAndCacheUsage(opts) {
  */
 export async function getUsage() {
     const baseUrl = process.env.ANTHROPIC_BASE_URL;
-    const authToken = process.env.ANTHROPIC_AUTH_TOKEN;
-    const isMinimax = baseUrl != null && isMinimaxHost(baseUrl);
-    const isZai = baseUrl != null && isZaiHost(baseUrl);
-    const minimaxApiKey = process.env.MINIMAX_API_KEY || authToken;
-    const currentSource = isMinimax ? 'minimax' : isZai && authToken ? 'zai' : 'anthropic';
+    const currentSource = 'anthropic';
     // Custom gateway guard: when ANTHROPIC_BASE_URL points to a third-party provider
-    // that is neither Anthropic nor a recognized usage provider (z.ai / MiniMax are
-    // already captured by currentSource above), there is no usage endpoint to query.
-    // Querying Anthropic's OAuth usage here would surface the local Claude
-    // subscription's limits, which do not describe the active provider — so report no
-    // credentials and let the HUD render nothing. Runs before any cache read so a
-    // stale 'anthropic' cache from a prior Claude session cannot leak through.
-    if (currentSource === 'anthropic' && baseUrl != null && !isAnthropicHost(baseUrl)) {
+    // that is not Anthropic, there is no usage endpoint to query. Querying Anthropic's
+    // OAuth usage here would surface the local Claude subscription's limits, which do
+    // not describe the active provider — so report no credentials and let the HUD
+    // render nothing. Runs before any cache read so a stale cache cannot leak through.
+    if (baseUrl != null && !isAnthropicHost(baseUrl)) {
         return { rateLimits: null, error: 'no_credentials' };
     }
     const pollIntervalMs = getUsagePollIntervalMs();
@@ -1028,30 +728,6 @@ export async function getUsage() {
             const cache = readCache(currentSource);
             if (cache && isCacheValid(cache, pollIntervalMs) && cache.source === currentSource) {
                 return getCachedUsageResult(cache);
-            }
-            // MiniMax path (must precede z.ai and OAuth checks)
-            if (isMinimax) {
-                if (!minimaxApiKey) {
-                    writeCache({ data: null, error: true, source: 'minimax', errorReason: 'no_credentials' });
-                    return { rateLimits: null, error: 'no_credentials' };
-                }
-                return fetchAndCacheUsage({
-                    source: 'minimax',
-                    fetchFn: () => fetchUsageFromMinimax(minimaxApiKey),
-                    parseFn: parseMinimaxResponse,
-                    cache,
-                    pollIntervalMs,
-                });
-            }
-            // z.ai path (must precede OAuth check to avoid stale Anthropic credentials)
-            if (isZai && authToken) {
-                return fetchAndCacheUsage({
-                    source: 'zai',
-                    fetchFn: () => fetchUsageFromZai(),
-                    parseFn: parseZaiResponse,
-                    cache,
-                    pollIntervalMs,
-                });
             }
             // Anthropic OAuth path (official Claude Code support)
             let creds = getCredentials();
@@ -1103,4 +779,3 @@ export async function getUsage() {
         return { rateLimits: null, error: 'network' };
     }
 }
-//# sourceMappingURL=usage-api.js.map

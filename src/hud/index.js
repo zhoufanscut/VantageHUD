@@ -8,20 +8,14 @@
 import { readStdin, writeStdinCache, readStdinCache, getContextPercent, getModelId, getModelName, getEffortLevel, getRateLimitsFromStdin, stabilizeContextPercent, } from "./stdin.js";
 import { parseTranscript } from "./transcript.js";
 import { readHudState, readHudConfig, getRunningTasks, writeHudState, initializeHUDState, } from "./state.js";
-import { getUsage, getSubscriptionInfo } from "./usage-api.js";
-import { executeCustomProvider } from "./custom-rate-provider.js";
+import { getUsage } from "./usage-api.js";
 import { render } from "./render.js";
 import { detectApiKeySource } from "./elements/api-key-source.js";
 import { sanitizeOutput } from "./sanitize.js";
 import { estimatePayloadFromTranscriptPath } from "./payload-estimate.js";
-// removed unused version.js / auto-update.js imports
-import { resolveToWorktreeRoot, resolveTranscriptPath, } from "../lib/worktree-paths.js";
-import { writeFileSync, mkdirSync, existsSync, readFileSync } from "fs";
-import { join, basename, dirname } from "path";
-import { spawn } from "child_process";
-import { fileURLToPath } from "url";
-import { getStateRoot } from "../lib/worktree-paths.js";
-import { getClaudeConfigDir } from "../utils/config-dir.js";
+import { resolveToWorktreeRoot, resolveTranscriptPath, getStateRoot } from "../lib/worktree-paths.js";
+import { writeFileSync, mkdirSync } from "fs";
+import { join, basename } from "path";
 /**
  * Extract session ID (UUID) from a transcript path.
  */
@@ -44,93 +38,6 @@ function mergeStdinRateLimits(stdinRateLimits, usageResult) {
     };
 }
 /**
- * Read cached session summary from state directory.
- */
-function readSessionSummary(stateDir, sessionId) {
-    const statePath = join(stateDir, `session-summary-${sessionId}.json`);
-    if (!existsSync(statePath))
-        return null;
-    try {
-        return JSON.parse(readFileSync(statePath, "utf-8"));
-    }
-    catch {
-        return null;
-    }
-}
-/**
- * Track the timestamp of the last spawned session-summary process to prevent
- * unbounded accumulation of detached processes when summarization takes >60s.
- */
-let lastSummarySpawnTimestamp = 0;
-/**
- * Track the PID of the spawned session-summary child process.
- * Before spawning a new process, we check if this PID is still alive
- * using process.kill(pid, 0). This prevents process accumulation even
- * when summarization runs longer than the timestamp-based throttle window.
- */
-let summaryProcessPid = null;
-/** @internal Reset spawn guard — used by tests only. */
-export function _resetSummarySpawnTimestamp() {
-    lastSummarySpawnTimestamp = 0;
-    summaryProcessPid = null;
-}
-/** @internal Get the tracked summary process PID — used by tests only. */
-export function _getSummaryProcessPid() {
-    return summaryProcessPid;
-}
-/**
- * Spawn the session-summary script in the background to generate/update summary.
- * Fire-and-forget: does not block HUD rendering.
- * Guards against duplicate spawns by tracking the last spawn timestamp.
- */
-function spawnSessionSummaryScript(transcriptPath, stateDir, sessionId) {
-    // Check if a previously spawned summary process is still alive.
-    // This prevents accumulation of detached processes when summarization
-    // takes longer than the timestamp-based throttle window.
-    if (summaryProcessPid !== null) {
-        try {
-            process.kill(summaryProcessPid, 0);
-            // Process is still alive — skip spawning a new one
-            return;
-        }
-        catch {
-            // Process is dead (ESRCH) — clear PID and allow respawn
-            summaryProcessPid = null;
-        }
-    }
-    // Secondary guard: prevent rapid re-spawns via timestamp (within 120s).
-    const now = Date.now();
-    if (now - lastSummarySpawnTimestamp < 120_000) {
-        return;
-    }
-    lastSummarySpawnTimestamp = now;
-    // Resolve the script path relative to this file's location
-    // In compiled output: dist/hud/index.js -> ../../scripts/session-summary.mjs
-    const thisDir = dirname(fileURLToPath(import.meta.url));
-    const scriptPath = join(thisDir, "..", "..", "scripts", "session-summary.mjs");
-    if (!existsSync(scriptPath)) {
-        if (process.env.HUD_DEBUG) {
-            console.error("[HUD] session-summary script not found:", scriptPath);
-        }
-        return;
-    }
-    try {
-        const child = spawn("node", [scriptPath, transcriptPath, stateDir, sessionId], {
-            stdio: "ignore",
-            detached: true,
-            env: { ...process.env, CLAUDE_CODE_ENTRYPOINT: "session-summary" },
-        });
-        summaryProcessPid = child.pid ?? null;
-        child.unref();
-    }
-    catch (error) {
-        summaryProcessPid = null;
-        if (process.env.HUD_DEBUG) {
-            console.error("[HUD] Failed to spawn session-summary:", error instanceof Error ? error.message : error);
-        }
-    }
-}
-/**
  * Calculate session health from session start time and context usage.
  */
 async function calculateSessionHealth(sessionStart, contextPercent) {
@@ -144,67 +51,19 @@ async function calculateSessionHealth(sessionStart, contextPercent) {
     return { durationMinutes, messageCount: 0, health };
 }
 /**
- * Show installation diagnostic when called from CLI without stdin.
- * Helps users verify HUD setup after setup.
- */
-function showDiagnostic() {
-    const version = "vendored";
-    const configDir = getClaudeConfigDir();
-    const hudScript = join(configDir, "hud", "statusline.mjs");
-    const settingsFile = join(configDir, "settings.json");
-    const hudExists = existsSync(hudScript);
-    let statusLineOk = false;
-    try {
-        const settings = JSON.parse(readFileSync(settingsFile, "utf-8"));
-        const sl = settings.statusLine;
-        if (sl && typeof sl === "object" && typeof sl.command === "string") {
-            statusLineOk = sl.command.includes("statusline");
-        }
-        else if (typeof sl === "string") {
-            statusLineOk = sl.includes("statusline");
-        }
-    }
-    catch {
-        /* settings.json missing or invalid */
-    }
-    const config = readHudConfig();
-    const preset = config.preset ?? "focused";
-    console.log(`[HUD] HUD v${version} | preset: ${preset}`);
-    console.log(`  HUD script:  ${hudExists ? "installed" : "MISSING"}`);
-    console.log(`  statusLine:  ${statusLineOk ? "configured" : "NOT configured"}`);
-    if (!hudExists || !statusLineOk) {
-        console.log("  Run /claude-statusline:hud setup to fix.");
-    }
-    else {
-        console.log("  HUD renders automatically inside Claude Code sessions.");
-    }
-}
-/**
  * Main HUD entry point
- * @param watchMode - true when called from the --watch polling loop (stdin is TTY)
  */
-async function main(watchMode = false, skipInit = false) {
+async function main() {
     try {
         // Read stdin from Claude Code
         const previousStdinCache = readStdinCache();
         let stdin = await readStdin();
         if (stdin) {
             stdin = stabilizeContextPercent(stdin, previousStdinCache);
-            // Persist for --watch mode so it can read data when stdin is a TTY
             writeStdinCache(stdin);
         }
-        else if (watchMode) {
-            // In watch mode stdin is always a TTY; fall back to last cached value
-            stdin = previousStdinCache;
-            if (!stdin) {
-                // Cache not yet populated (first poll before statusline fires)
-                console.log("[HUD] Starting...");
-                return;
-            }
-        }
         else {
-            // CLI invocation (TTY, no stdin) — show installation diagnostic
-            showDiagnostic();
+            // No piped stdin (e.g. invoked directly) — nothing to render.
             return;
         }
         const cwd = resolveToWorktreeRoot(stdin.cwd || undefined);
@@ -233,12 +92,9 @@ async function main(watchMode = false, skipInit = false) {
         const currentSessionId = extractSessionIdFromPath(resolvedTranscriptPath ?? stdin.transcript_path ?? "");
         // Initialize HUD state (cleanup stale/orphaned tasks)
         // Must happen after cwd resolution so cleanup targets the correct project directory
-        if (!skipInit) {
-            await initializeHUDState(cwd, currentSessionId ?? undefined);
-        }
+        await initializeHUDState(cwd, currentSessionId ?? undefined);
         // Read HUD state for background tasks
         const hudState = readHudState(cwd, currentSessionId ?? undefined);
-        const _backgroundTasks = hudState?.backgroundTasks || [];
         // Persist session start time to survive tail-parsing resets (#528)
         // When tail parsing kicks in for large transcripts, sessionStart comes from
         // the first entry in the tail chunk rather than the actual session start.
@@ -273,40 +129,8 @@ async function main(watchMode = false, skipInit = false) {
         const rateLimitsResult = config.elements.rateLimits === false
             ? null
             : mergeStdinRateLimits(stdinRateLimits, usageResult);
-        // Fetch custom rate limit buckets (if configured)
-        const customBuckets = config.rateLimitsProvider?.type === "custom"
-            ? await executeCustomProvider(config.rateLimitsProvider)
-            : null;
-        // version label + update-check removed; this label now shows the cwd path
-        const hudVersion = null;
-        const updateAvailable = null;
-        // Session summary: read cached state and trigger background regeneration if needed
-        let sessionSummary = null;
-        const sessionSummaryEnabled = config.elements.sessionSummary ?? false;
-        if (sessionSummaryEnabled && resolvedTranscriptPath && currentSessionId) {
-            const stateDir = join(getStateRoot(cwd), "state");
-            sessionSummary = readSessionSummary(stateDir, currentSessionId);
-            // Debounce: only spawn script if cache is absent or older than 60 seconds.
-            // This prevents spawning a child process on every HUD poll (every ~1s).
-            // The child script still checks turn-count freshness internally.
-            const shouldSpawn = !sessionSummary?.generatedAt ||
-                Date.now() - new Date(sessionSummary.generatedAt).getTime() > 60_000;
-            if (shouldSpawn) {
-                spawnSessionSummaryScript(resolvedTranscriptPath, stateDir, currentSessionId);
-            }
-        }
         const contextPercent = getContextPercent(stdin);
         const payloadEstimate = estimatePayloadFromTranscriptPath(resolvedTranscriptPath);
-        // Read subscription info for enterprise detection (best-effort).
-        // Rate-limit rendering must not depend on this metadata being present.
-        const subscriptionInfo = (() => {
-            try {
-                return getSubscriptionInfo() ?? { subscriptionType: null, rateLimitTier: null };
-            }
-            catch {
-                return { subscriptionType: null, rateLimitTier: null };
-            }
-        })();
         // Build render context
         const context = {
             contextPercent,
@@ -320,14 +144,10 @@ async function main(watchMode = false, skipInit = false) {
             cwd,
             lastSkill: transcriptData.lastActivatedSkill || null,
             rateLimitsResult,
-            customBuckets,
             pendingPermission: transcriptData.pendingPermission || null,
-            thinkingState: transcriptData.thinkingState || null,
             sessionHealth: await calculateSessionHealth(sessionStart, contextPercent),
             lastRequestTokenUsage: transcriptData.lastRequestTokenUsage || null,
             sessionTotalTokens: transcriptData.sessionTotalTokens ?? null,
-            hudVersion,
-            updateAvailable,
             toolCallCount: transcriptData.toolCallCount,
             agentCallCount: transcriptData.agentCallCount,
             skillCallCount: transcriptData.skillCallCount,
@@ -337,12 +157,9 @@ async function main(watchMode = false, skipInit = false) {
             apiKeySource: config.elements.apiKeySource
                 ? detectApiKeySource(cwd)
                 : null,
-            subscriptionType: subscriptionInfo.subscriptionType,
-            rateLimitTier: subscriptionInfo.rateLimitTier,
             profileName: process.env.CLAUDE_CONFIG_DIR
                 ? basename(process.env.CLAUDE_CONFIG_DIR).replace(/^\./, "")
                 : null,
-            sessionSummary,
             lastToolName: transcriptData.lastToolName,
             payloadEstimate,
         };
@@ -415,8 +232,5 @@ async function main(watchMode = false, skipInit = false) {
         }
     }
 }
-// Export for programmatic use (e.g., hud hud --watch loop)
-export { main };
 // Auto-run (unconditional so dynamic import() via statusline.mjs wrapper works correctly)
 main();
-//# sourceMappingURL=index.js.map

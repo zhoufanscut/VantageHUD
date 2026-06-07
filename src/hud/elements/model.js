@@ -69,4 +69,3 @@ export function renderModel(modelId, format = 'versioned', effortLevel = null) {
     const model = paint(getModelTierRgb(modelId), name.toLowerCase());
     return effortLevel ? `${model} ${paint(AURORA.effort, effortLevel)}` : model;
 }
-//# sourceMappingURL=model.js.map

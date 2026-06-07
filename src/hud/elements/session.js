@@ -15,4 +15,3 @@ export function renderSession(session) {
     const color = getSessionHealthColor(session.health);
     return `${auroraLabel('session:')}${color}${session.durationMinutes}m${RESET}`;
 }
-//# sourceMappingURL=session.js.map

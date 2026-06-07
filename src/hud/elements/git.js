@@ -23,15 +23,6 @@ function git(args, cwd) {
     }).trim();
 }
 /**
- * Clear all git caches. Call in tests beforeEach to ensure a clean slate.
- */
-export function resetGitCache() {
-    repoCache.clear();
-    branchCache.clear();
-    worktreeCache.clear();
-    statusCache.clear();
-}
-/**
  * Get git repository name from remote URL.
  * Extracts the repo name from URLs like:
  * - https://github.com/user/repo.git
@@ -239,4 +230,3 @@ export function renderGitStatus(cwd, labels = DEFAULT_HUD_LABELS) {
         parts.push(paint(AURORA.del, `${labels.behind}${behind}`));
     return parts.join(' ');
 }
-//# sourceMappingURL=git.js.map

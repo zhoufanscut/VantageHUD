@@ -66,10 +66,10 @@ export function resolveHudLabels(locale, labels) {
 export const DEFAULT_ELEMENT_ORDER = {
     line1: ['hostname', 'cwd', 'gitRepo', 'gitBranch', 'gitStatus', 'apiKeySource', 'profile'],
     main: [
-        'pathLabel', 'model', 'enterpriseCost', 'rateLimits', 'customBuckets', 'permission',
+        'pathLabel', 'model', 'rateLimits', 'permission',
         'promptTime', 'session', 'tokens',
         'lastSkill', 'contextBar', 'agents', 'background',
-        'callCounts', 'lastTool', 'sessionSummary',
+        'callCounts', 'lastTool',
     ],
     detail: ['agents', 'contextWarning', 'payloadWarning', 'todos'],
 };
@@ -322,4 +322,3 @@ export const PRESET_CONFIGS = {
         safeMode: true,
     },
 };
-//# sourceMappingURL=types.js.map

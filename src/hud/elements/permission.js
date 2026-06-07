@@ -14,4 +14,3 @@ export function renderPermission(pending) {
         return null;
     return `${yellow('APPROVE?')} ${dim(pending.toolName.toLowerCase())}:${pending.targetSummary}`;
 }
-//# sourceMappingURL=permission.js.map

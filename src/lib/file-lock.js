@@ -4,10 +4,6 @@
  * Uses O_CREAT|O_EXCL (exclusive-create) for atomic lock acquisition.
  * The kernel guarantees at most one process succeeds in creating the file.
  * Includes PID-based stale lock detection and automatic reaping.
- *
- * Provides both synchronous and asynchronous variants:
- * - Sync: for notepad (readFileSync-based) and state operations
- * - Async: for project-memory operations
  */
 import { openSync, closeSync, unlinkSync, writeSync, readFileSync, statSync, constants as fsConstants, } from "fs";
 import * as path from "path";
@@ -131,43 +127,9 @@ function tryAcquireSync(lockPath, staleLockMs) {
     }
 }
 /**
- * Acquire an exclusive file lock with optional retry/timeout (synchronous).
- *
- * @param lockPath Path for the lock file
- * @param opts Lock options
- * @returns FileLockHandle on success, null if lock could not be acquired
- */
-export function acquireFileLockSync(lockPath, opts) {
-    const staleLockMs = opts?.staleLockMs ?? DEFAULT_STALE_LOCK_MS;
-    const timeoutMs = opts?.timeoutMs ?? 0;
-    const retryDelayMs = opts?.retryDelayMs ?? DEFAULT_RETRY_DELAY_MS;
-    const handle = tryAcquireSync(lockPath, staleLockMs);
-    if (handle || timeoutMs <= 0)
-        return handle;
-    // Retry loop — try Atomics.wait (works in Workers), fall back to spin for main thread
-    const deadline = Date.now() + timeoutMs;
-    const sharedBuf = new SharedArrayBuffer(4);
-    const sharedArr = new Int32Array(sharedBuf);
-    while (Date.now() < deadline) {
-        const waitMs = Math.min(retryDelayMs, deadline - Date.now());
-        try {
-            Atomics.wait(sharedArr, 0, 0, waitMs);
-        }
-        catch {
-            // Main thread: Atomics.wait throws — brief spin instead (capped at retryDelayMs)
-            const waitUntil = Date.now() + waitMs;
-            while (Date.now() < waitUntil) { /* spin */ }
-        }
-        const retryHandle = tryAcquireSync(lockPath, staleLockMs);
-        if (retryHandle)
-            return retryHandle;
-    }
-    return null;
-}
-/**
  * Release a previously acquired file lock (synchronous).
  */
-export function releaseFileLockSync(handle) {
+function releaseFileLockSync(handle) {
     try {
         closeSync(handle.fd);
     }
@@ -179,27 +141,6 @@ export function releaseFileLockSync(handle) {
     }
     catch {
         /* already removed */
-    }
-}
-/**
- * Execute a function while holding an exclusive file lock (synchronous).
- *
- * @param lockPath Path for the lock file
- * @param fn Function to execute under lock
- * @param opts Lock options
- * @returns The function's return value
- * @throws Error if the lock cannot be acquired
- */
-export function withFileLockSync(lockPath, fn, opts) {
-    const handle = acquireFileLockSync(lockPath, opts);
-    if (!handle) {
-        throw new Error(`Failed to acquire file lock: ${lockPath}`);
-    }
-    try {
-        return fn();
-    }
-    finally {
-        releaseFileLockSync(handle);
     }
 }
 // ============================================================================
@@ -261,4 +202,3 @@ export async function withFileLock(lockPath, fn, opts) {
         releaseFileLock(handle);
     }
 }
-//# sourceMappingURL=file-lock.js.map

@@ -5,17 +5,11 @@
  * CLAUDE_CONFIG_DIR (absolute path, or ~-prefixed) with fallback to
  * ~/.claude.  Trailing separators are stripped; filesystem roots are
  * preserved.
- *
- * Multi-surface mirrors (keep in sync):
- *   scripts/lib/config-dir.mjs   — ESM hook/HUD runtime
- *   scripts/lib/config-dir.cjs   — CJS bridge runtime
- *   scripts/lib/config-dir.sh    — POSIX shell runtime
  */
 import { join, normalize, parse, sep } from 'path';
 import { homedir } from 'os';
 /**
  * Strip a single trailing path separator (preserve filesystem root).
- * @internal Shared with scripts/lib/config-dir.{mjs,cjs,sh} — keep in sync.
  */
 function stripTrailingSep(p) {
     if (!p.endsWith(sep)) {
@@ -44,16 +38,3 @@ export function getClaudeConfigDir() {
     }
     return stripTrailingSep(normalize(configured));
 }
-/**
- * Resolve the HUD global configuration/cache directory under the active Claude
- * config dir. This keeps hook/updater/HUD caches aligned with CLAUDE_CONFIG_DIR
- * instead of mixing in ~/.claude-statusline.
- */
-export function getStateConfigDir() {
-    return join(getClaudeConfigDir(), '.claude-statusline');
-}
-/** Resolve the canonical update-check cache file path. */
-export function getUpdateCheckCachePath() {
-    return join(getStateConfigDir(), 'update-check.json');
-}
-//# sourceMappingURL=config-dir.js.map

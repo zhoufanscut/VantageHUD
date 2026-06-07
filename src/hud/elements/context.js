@@ -42,16 +42,6 @@ function getContextDisplayStyle(safePercent, thresholds) {
     }
 }
 /**
- * Reset cached context display state.
- * Useful for test isolation and fresh render sessions.
- */
-export function resetContextDisplayState() {
-    lastDisplayedPercent = null;
-    lastDisplayedSeverity = null;
-    lastDisplayScope = null;
-    lastDisplayUpdatedAt = 0;
-}
-/**
  * Apply display-layer hysteresis so small refresh-to-refresh ctx fluctuations
  * do not visibly jitter in the HUD.
  */
@@ -111,4 +101,3 @@ export function renderContextWithBar(percent, thresholds, barWidth = 10, display
     const bar = `${color}${'█'.repeat(filled)}${DIM}${'░'.repeat(empty)}${RESET}`;
     return `${auroraLabel(`${labels.context}:`)}[${bar}]${color}${safePercent}%${suffix}${RESET}`;
 }
-//# sourceMappingURL=context.js.map

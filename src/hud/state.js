@@ -7,7 +7,7 @@ import { existsSync, readFileSync, mkdirSync, unlinkSync } from "fs";
 import { join } from "path";
 import { getClaudeConfigDir } from "../utils/config-dir.js";
 import { validateWorkingDirectory, getStateRoot, ensureSessionStateDir, resolveSessionStatePath, } from "../lib/worktree-paths.js";
-import { atomicWriteFileSync, atomicWriteJsonSync, } from "../lib/atomic-write.js";
+import { atomicWriteJsonSync } from "../lib/atomic-write.js";
 import { DEFAULT_HUD_CONFIG, PRESET_CONFIGS, isHudLocale, resolveHudLabels, sanitizeHudLabels, } from "./types.js";
 import { cleanupStaleBackgroundTasks, markOrphanedTasksAsStale, } from "./background-cleanup.js";
 // ============================================================================
@@ -75,16 +75,6 @@ function mergeContextLimitWarning(primary, secondary) {
         ...(primary ?? {}),
         ...(secondary ?? {}),
     };
-}
-function mergeElementsForWrite(legacyElements, nextElements) {
-    const merged = { ...(legacyElements ?? {}) };
-    for (const [key, value] of Object.entries(nextElements)) {
-        const defaultValue = DEFAULT_HUD_CONFIG.elements[key];
-        const legacyValue = legacyElements?.[key];
-        merged[key] =
-            value === defaultValue && legacyValue !== undefined ? legacyValue : value;
-    }
-    return merged;
 }
 /**
  * Ensure the .claude-statusline/state directory exists
@@ -192,31 +182,12 @@ export function writeHudState(state, directory, sessionId) {
     }
 }
 /**
- * Create a new empty HUD state
- */
-export function createEmptyHudState() {
-    return {
-        timestamp: new Date().toISOString(),
-        backgroundTasks: [],
-    };
-}
-/**
  * Get running background tasks from state
  */
 export function getRunningTasks(state) {
     if (!state)
         return [];
     return state.backgroundTasks.filter((task) => task.status === "running");
-}
-/**
- * Get background task count string (e.g., "3/5")
- */
-export function getBackgroundTaskCount(state) {
-    const MAX_CONCURRENT = 5;
-    const running = state
-        ? state.backgroundTasks.filter((t) => t.status === "running").length
-        : 0;
-    return { running, max: MAX_CONCURRENT };
 }
 // ============================================================================
 // HUD Config Operations
@@ -292,62 +263,9 @@ function mergeWithDefaults(config) {
             ? { elementOrder: config.elementOrder }
             : {}),
         wrapMode: config.wrapMode ?? DEFAULT_HUD_CONFIG.wrapMode,
-        ...(config.rateLimitsProvider
-            ? { rateLimitsProvider: config.rateLimitsProvider }
-            : {}),
         ...(config.maxWidth != null ? { maxWidth: config.maxWidth } : {}),
         ...(config.layout ? { layout: config.layout } : {}),
     };
-}
-/**
- * Write HUD configuration to ~/.claude/settings.json (statusline key)
- */
-export function writeHudConfig(config) {
-    try {
-        const settingsFile = getSettingsFilePath();
-        const legacyConfig = getLegacyHudConfig();
-        let settings = {};
-        if (existsSync(settingsFile)) {
-            const content = readFileSync(settingsFile, "utf-8");
-            settings = JSON.parse(content);
-        }
-        const mergedConfig = mergeWithDefaults({
-            ...legacyConfig,
-            ...config,
-            elements: mergeElementsForWrite(legacyConfig?.elements, config.elements),
-            thresholds: mergeThresholds(legacyConfig?.thresholds, config.thresholds),
-            contextLimitWarning: mergeContextLimitWarning(legacyConfig?.contextLimitWarning, config.contextLimitWarning),
-            locale: isHudLocale(config.locale) ? config.locale : legacyConfig?.locale,
-            labels: {
-                ...sanitizeHudLabels(legacyConfig?.labels),
-                ...sanitizeHudLabels(config.labels),
-            },
-        });
-        settings.statusline = mergedConfig;
-        atomicWriteFileSync(settingsFile, JSON.stringify(settings, null, 2));
-        return true;
-    }
-    catch (error) {
-        console.error("[HUD] Failed to write config:", error instanceof Error ? error.message : error);
-        return false;
-    }
-}
-/**
- * Apply a preset to the configuration
- */
-export function applyPreset(preset) {
-    const config = readHudConfig();
-    const presetElements = PRESET_CONFIGS[preset];
-    const newConfig = {
-        ...config,
-        preset,
-        elements: {
-            ...config.elements,
-            ...presetElements,
-        },
-    };
-    writeHudConfig(newConfig);
-    return newConfig;
 }
 /**
  * Initialize HUD state with cleanup of stale/orphaned tasks.
@@ -361,4 +279,3 @@ export async function initializeHUDState(directory, sessionId) {
         console.error(`HUD cleanup: removed ${removedStale} stale tasks, marked ${markedOrphaned} orphaned tasks`);
     }
 }
-//# sourceMappingURL=state.js.map

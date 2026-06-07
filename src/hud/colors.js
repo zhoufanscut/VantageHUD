@@ -8,16 +8,8 @@
 export const RESET = '\x1b[0m';
 const DIM = '\x1b[2m';
 const BOLD = '\x1b[1m';
-const RED = '\x1b[31m';
-const GREEN = '\x1b[32m';
 const YELLOW = '\x1b[33m';
-const BLUE = '\x1b[34m';
-const MAGENTA = '\x1b[35m';
 const CYAN = '\x1b[36m';
-const WHITE = '\x1b[37m';
-const BRIGHT_BLUE = '\x1b[94m';
-const BRIGHT_MAGENTA = '\x1b[95m';
-const BRIGHT_CYAN = '\x1b[96m';
 // ============================================================================
 // AURORA THEME — Truecolor engine
 // ============================================================================
@@ -92,18 +84,6 @@ export function fg(rgb) {
         return `\x1b[38;5;${rgbTo256(r, g, b)}m`;
     return `\x1b[${rgbTo16(r, g, b)}m`;
 }
-/**
- * Background SGR opener for an [r,g,b] triple at the detected color depth.
- * Used for gradient bars built from background-color spaces (survives safeMode).
- */
-export function bg(rgb) {
-    const [r, g, b] = rgb;
-    if (COLOR_DEPTH === 2)
-        return `\x1b[48;2;${r};${g};${b}m`;
-    if (COLOR_DEPTH === 1)
-        return `\x1b[48;5;${rgbTo256(r, g, b)}m`;
-    return `\x1b[${rgbTo16(r, g, b) + 10}m`;
-}
 /** Wrap text in a truecolor foreground color (with reset). */
 export function paint(rgb, text) {
     return `${fg(rgb)}${text}${RESET}`;
@@ -157,71 +137,20 @@ export function gradientColor(percent) {
     }
     return lerpRgb(AURORA.gradMid, AURORA.gradHigh, (p - 50) / 50);
 }
-/** Convenience: paint text with the Aurora usage-gradient color for `percent`. */
-export function gradientText(percent, text) {
-    return paint(gradientColor(percent), text);
-}
 // ============================================================================
 // Color Functions
 // ============================================================================
-export function green(text) {
-    return `${GREEN}${text}${RESET}`;
-}
 export function yellow(text) {
     return `${YELLOW}${text}${RESET}`;
 }
-export function red(text) {
-    return `${RED}${text}${RESET}`;
-}
 export function cyan(text) {
     return `${CYAN}${text}${RESET}`;
-}
-export function magenta(text) {
-    return `${MAGENTA}${text}${RESET}`;
-}
-export function blue(text) {
-    return `${BLUE}${text}${RESET}`;
 }
 export function dim(text) {
     return `${DIM}${text}${RESET}`;
 }
 export function bold(text) {
     return `${BOLD}${text}${RESET}`;
-}
-export function white(text) {
-    return `${WHITE}${text}${RESET}`;
-}
-export function brightCyan(text) {
-    return `${BRIGHT_CYAN}${text}${RESET}`;
-}
-export function brightMagenta(text) {
-    return `${BRIGHT_MAGENTA}${text}${RESET}`;
-}
-export function brightBlue(text) {
-    return `${BRIGHT_BLUE}${text}${RESET}`;
-}
-// ============================================================================
-// Threshold-based Colors
-// ============================================================================
-/**
- * Get color code based on context window percentage.
- * Aurora: smooth teal→amber→rose gradient (returns a truecolor SGR opener).
- */
-export function getContextColor(percent) {
-    return fg(gradientColor(percent));
-}
-/**
- * Get color for todo progress.
- */
-export function getTodoColor(completed, total) {
-    if (total === 0)
-        return DIM;
-    const percent = (completed / total) * 100;
-    if (percent >= 80)
-        return GREEN;
-    if (percent >= 50)
-        return YELLOW;
-    return CYAN;
 }
 // ============================================================================
 // Model Tier Colors (for agent visualization)
@@ -269,29 +198,6 @@ export function getDurationColor(durationMs) {
     return fg(gradientColor((minutes / 8) * 100));
 }
 // ============================================================================
-// Progress Bars
-// ============================================================================
-/**
- * Create a colored progress bar.
- */
-export function coloredBar(percent, width = 10) {
-    const safeWidth = Number.isFinite(width) ? Math.max(0, Math.round(width)) : 0;
-    const safePercent = Number.isFinite(percent)
-        ? Math.min(100, Math.max(0, percent))
-        : 0;
-    const filled = Math.round((safePercent / 100) * safeWidth);
-    const empty = safeWidth - filled;
-    const color = getContextColor(safePercent);
-    return `${color}${'█'.repeat(filled)}${DIM}${'░'.repeat(empty)}${RESET}`;
-}
-/**
- * Create a simple numeric display with color.
- */
-export function coloredValue(value, total, getColor) {
-    const color = getColor(value, total);
-    return `${color}${value}/${total}${RESET}`;
-}
-// ============================================================================
 // AURORA — shared element helpers
 // ============================================================================
 /** A faint slate hairline label (Aurora's quiet "ctx:" / "5h:" prefix tone). */
@@ -302,8 +208,6 @@ export function auroraLabel(text) {
 export function auroraFaint(text) {
     return paint(AURORA.faint, text);
 }
-/** The Aurora separator dot (available for themes that want it; default keeps " | "). */
-export const AURORA_SEPARATOR = paint(AURORA.sep, '  ·  ');
 /**
  * Session-health color as an Aurora gradient anchor.
  * Maps health buckets onto the same teal→amber→rose ramp so the session
@@ -317,31 +221,3 @@ export function getSessionHealthColor(health) {
         return fg(AURORA.gradMid);
     return fg(AURORA.gradLow);
 }
-/**
- * Build a slim gradient bar from BACKGROUND-COLOR SPACES (survives safeMode,
- * which rewrites block glyphs but preserves SGR incl. 24-bit bg). Each filled
- * cell is tinted by its own position along the usage gradient, so the bar itself
- * glides teal→amber→rose; the empty track is a faint slate.
- *
- * @param percent 0..100 fill level
- * @param width   number of cells (each cell is one space = one column)
- * @returns ANSI string of width `width` visible columns
- */
-export function gradientBar(percent, width = 8) {
-    const w = Number.isFinite(width) ? Math.max(0, Math.round(width)) : 0;
-    const p = Math.min(100, Math.max(0, Number.isFinite(percent) ? percent : 0));
-    const filled = Math.round((p / 100) * w);
-    let out = '';
-    for (let i = 0; i < w; i += 1) {
-        if (i < filled) {
-            // Tint each cell by its own fractional position so the fill is a gradient.
-            const cellPct = w > 1 ? (i / (w - 1)) * p : p;
-            out += `${bg(gradientColor(cellPct))} ${RESET}`;
-        }
-        else {
-            out += `${bg(AURORA.sep)} ${RESET}`;
-        }
-    }
-    return out;
-}
-//# sourceMappingURL=colors.js.map

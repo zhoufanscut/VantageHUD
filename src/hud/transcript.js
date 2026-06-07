@@ -19,7 +19,6 @@ import { basename } from "path";
 // agents in long sessions, leaving them stuck as "running" in the HUD.
 const MAX_TAIL_BYTES = 4 * 1024 * 1024;
 const MAX_AGENT_MAP_SIZE = 100; // Cap agent tracking
-const _MIN_RUNNING_AGENTS_THRESHOLD = 10; // Early termination threshold
 /**
  * Tools known to require permission approval in Claude Code.
  * Only these tools will trigger the "APPROVE?" indicator.
@@ -43,14 +42,6 @@ const PERMISSION_THRESHOLD_MS = 3000; // 3 seconds
  * Cleared when tool_result is received for the corresponding tool_use.
  */
 const pendingPermissionMap = new Map();
-/**
- * Content block types that indicate extended thinking mode.
- */
-const THINKING_PART_TYPES = ["thinking", "reasoning"];
-/**
- * Time threshold for considering thinking "active".
- */
-const THINKING_RECENCY_MS = 30_000; // 30 seconds
 const transcriptCache = new Map();
 const TRANSCRIPT_CACHE_MAX_SIZE = 20;
 export async function parseTranscript(transcriptPath, options) {
@@ -188,12 +179,6 @@ function cloneTranscriptData(result) {
         pendingPermission: result.pendingPermission
             ? clonePendingPermission(result.pendingPermission)
             : undefined,
-        thinkingState: result.thinkingState
-            ? {
-                ...result.thinkingState,
-                lastSeen: cloneDate(result.thinkingState.lastSeen),
-            }
-            : undefined,
         lastRequestTokenUsage: result.lastRequestTokenUsage
             ? { ...result.lastRequestTokenUsage }
             : undefined,
@@ -219,10 +204,6 @@ function finalizeTranscriptResult(result, options, pendingPermissions) {
             result.pendingPermission = clonePendingPermission(permission);
             break;
         }
-    }
-    if (result.thinkingState?.lastSeen) {
-        const age = now - result.thinkingState.lastSeen.getTime();
-        result.thinkingState.active = age <= THINKING_RECENCY_MS;
     }
     return result;
 }
@@ -366,13 +347,6 @@ function processEntry(entry, agentMap, latestTodos, result, maxAgentMapSize = 50
     if (!content || !Array.isArray(content))
         return;
     for (const block of content) {
-        // Check if this is a thinking block
-        if (THINKING_PART_TYPES.includes(block.type)) {
-            result.thinkingState = {
-                active: true,
-                lastSeen: timestamp,
-            };
-        }
         // Track tool_use for Task (agents) and TodoWrite
         if (block.type === "tool_use" && block.id && block.name) {
             result.toolCallCount++;
@@ -535,23 +509,3 @@ function extractLastRequestTokenUsage(usage) {
 function getNumericUsageValue(value) {
     return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
-// ============================================================================
-// Utility Functions
-// ============================================================================
-/**
- * Get count of running agents
- */
-export function getRunningAgentCount(agents) {
-    return agents.filter((a) => a.status === "running").length;
-}
-/**
- * Get todo completion stats
- */
-export function getTodoStats(todos) {
-    return {
-        completed: todos.filter((t) => t.status === "completed").length,
-        total: todos.length,
-        inProgress: todos.filter((t) => t.status === "in_progress").length,
-    };
-}
-//# sourceMappingURL=transcript.js.map

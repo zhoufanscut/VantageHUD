@@ -41,4 +41,3 @@ export function renderPromptTime(promptTime, now) {
     const seconds = String(promptTime.getSeconds()).padStart(2, '0');
     return `${auroraFaint('prompt:')}${paint(AURORA.label, `${hours}:${minutes}:${seconds}`)}`;
 }
-//# sourceMappingURL=prompt-time.js.map

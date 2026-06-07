@@ -6,16 +6,15 @@
 import { DEFAULT_HUD_CONFIG, DEFAULT_ELEMENT_ORDER, DEFAULT_HUD_LABELS } from "./types.js";
 import { bold, paint, AURORA } from "./colors.js";
 import { stringWidth, getCharWidth } from "../utils/string-width.js";
-import { renderAgentsByFormat, renderAgentsMultiLine, } from "./elements/agents.js";
+import { renderAgentsMultiLine } from "./elements/agents.js";
 import { renderTodosWithCurrent } from "./elements/todos.js";
 import { renderLastSkill } from "./elements/skills.js";
 import { renderContext, renderContextWithBar } from "./elements/context.js";
 import { renderBackground } from "./elements/background.js";
-import { renderRateLimits, renderRateLimitsWithBar, renderRateLimitsError, renderCustomBuckets, } from "./elements/limits.js";
+import { renderRateLimits, renderRateLimitsWithBar, renderRateLimitsError } from "./elements/limits.js";
 import { renderPermission } from "./elements/permission.js";
 import { renderSession } from "./elements/session.js";
 import { renderTokenUsage } from "./elements/token-usage.js";
-import { renderEnterpriseCost } from "./elements/enterprise-cost.js";
 import { renderPromptTime } from "./elements/prompt-time.js";
 import { renderCwd } from "./elements/cwd.js";
 import { renderHostname } from "./elements/hostname.js";
@@ -24,7 +23,6 @@ import { renderModel } from "./elements/model.js";
 import { renderApiKeySource } from "./elements/api-key-source.js";
 import { renderCallCounts } from "./elements/call-counts.js";
 import { renderContextLimitWarning, renderPayloadLimitWarning, } from "./elements/context-warning.js";
-import { renderSessionSummary } from "./elements/session-summary.js";
 import { renderLastTool } from "./elements/last-tool.js";
 /**
  * ANSI escape sequence regex (matches SGR and other CSI sequences).
@@ -241,20 +239,8 @@ export async function render(context, config) {
         // Aurora colors only: same bold path text, tinted soft slate.
         rendered.set("pathLabel", `\x1b[1m${paint(AURORA.text, shortCwd)}`);
     }
-    // Determine effective enterprise mode before rendering limits: only real
-    // enterprise accounts replace token-window limits with enterprise cost.
-    const isEnterprise = enabledElements.enterpriseMode !== undefined
-        ? enabledElements.enterpriseMode
-        : ((context.subscriptionType ?? '').toLowerCase() === 'enterprise' ||
-            /claude_zero/i.test(context.rateLimitTier ?? ''));
     // Rate limits (5h and weekly) - data takes priority over error indicator.
-    // Enterprise cost data only replaces token-window limits for accounts that
-    // are actually enterprise/claude_zero. Anthropic may include zero-dollar
-    // enterprise fields for non-enterprise paid plans; those must still show
-    // normal 5h/wk limits.
-    const enterpriseCostReplacesRateLimits = isEnterprise &&
-        context.rateLimitsResult?.rateLimits?.enterpriseSpentUsd !== undefined;
-    if (enabledElements.rateLimits && context.rateLimitsResult && !enterpriseCostReplacesRateLimits) {
+    if (enabledElements.rateLimits && context.rateLimitsResult) {
         if (context.rateLimitsResult.rateLimits) {
             const stale = context.rateLimitsResult.stale;
             const limits = enabledElements.useBars
@@ -268,12 +254,6 @@ export async function render(context, config) {
             if (errorIndicator)
                 rendered.set("rateLimits", errorIndicator);
         }
-    }
-    if (context.customBuckets) {
-        const thresholdPercent = config.rateLimitsProvider?.resetsAtDisplayThresholdPercent;
-        const custom = renderCustomBuckets(context.customBuckets, thresholdPercent);
-        if (custom)
-            rendered.set("customBuckets", custom);
     }
     if (enabledElements.permissionStatus && context.pendingPermission) {
         const permission = renderPermission(context.pendingPermission);
@@ -293,20 +273,7 @@ export async function render(context, config) {
                 rendered.set("session", session);
         }
     }
-    if (isEnterprise && enabledElements.showEnterpriseCost !== false) {
-        const stale = context.rateLimitsResult?.stale;
-        const cost = renderEnterpriseCost(context.rateLimitsResult?.rateLimits, stale);
-        if (cost) {
-            rendered.set("enterpriseCost", cost);
-        }
-        else if (enabledElements.showTokens === true) {
-            // Enterprise but no cost data — fall back to token usage
-            const tokenUsage = renderTokenUsage(context.lastRequestTokenUsage, context.sessionTotalTokens, hudLabels);
-            if (tokenUsage)
-                rendered.set("tokens", tokenUsage);
-        }
-    }
-    else if (enabledElements.showTokens === true) {
+    if (enabledElements.showTokens === true) {
         const tokenUsage = renderTokenUsage(context.lastRequestTokenUsage, context.sessionTotalTokens, hudLabels);
         if (tokenUsage)
             rendered.set("tokens", tokenUsage);
@@ -323,22 +290,14 @@ export async function render(context, config) {
         if (ctx)
             rendered.set("contextBar", ctx);
     }
-    // Active agents - handle multi-line format specially
+    // Active agents - multi-line display (header count + per-agent detail lines)
     if (enabledElements.agents) {
-        const format = enabledElements.agentsFormat || "codes";
-        if (format === "multiline") {
-            const maxLines = enabledElements.agentsMaxLines || 5;
-            const result = renderAgentsMultiLine(context.activeAgents, maxLines);
-            if (result.headerPart)
-                rendered.set("agents", result.headerPart);
-            if (result.detailLines.length > 0) {
-                renderedDetail.set("agents", result.detailLines);
-            }
-        }
-        else {
-            const agents = renderAgentsByFormat(context.activeAgents, format);
-            if (agents)
-                rendered.set("agents", agents);
+        const maxLines = enabledElements.agentsMaxLines || 5;
+        const result = renderAgentsMultiLine(context.activeAgents, maxLines);
+        if (result.headerPart)
+            rendered.set("agents", result.headerPart);
+        if (result.detailLines.length > 0) {
+            renderedDetail.set("agents", result.detailLines);
         }
     }
     if (enabledElements.backgroundTasks) {
@@ -356,11 +315,6 @@ export async function render(context, config) {
         const tool = renderLastTool(context.lastToolName ?? null);
         if (tool)
             rendered.set("lastTool", tool);
-    }
-    if (enabledElements.sessionSummary && context.sessionSummary) {
-        const summary = renderSessionSummary(context.sessionSummary);
-        if (summary)
-            rendered.set("sessionSummary", summary);
     }
     // -- detail-group elements --
     const ctxWarning = renderContextLimitWarning(context.contextPercent, config.contextLimitWarning.threshold, config.contextLimitWarning.autoCompact);
@@ -456,4 +410,3 @@ export async function render(context, config) {
         : limitedLines;
     return finalLines.join("\n");
 }
-//# sourceMappingURL=render.js.map

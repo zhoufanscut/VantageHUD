@@ -85,4 +85,3 @@ export function sanitizeOutput(output) {
     sanitized = sanitized.replace(/^\n+|\n+$/g, '');
     return sanitized;
 }
-//# sourceMappingURL=sanitize.js.map

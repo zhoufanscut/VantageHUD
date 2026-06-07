@@ -22,4 +22,3 @@ export function renderTokenUsage(usage, sessionTotalTokens, labels = DEFAULT_HUD
     }
     return parts.join(' ');
 }
-//# sourceMappingURL=token-usage.js.map

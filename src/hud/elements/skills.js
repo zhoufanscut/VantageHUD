@@ -33,4 +33,3 @@ export function renderLastSkill(lastSkill) {
     const displayName = getSkillDisplayName(lastSkill.name);
     return cyan(`skill:${displayName}${argsDisplay}`);
 }
-//# sourceMappingURL=skills.js.map

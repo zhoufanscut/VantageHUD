@@ -14,4 +14,3 @@ export function renderLastTool(lastToolName) {
         return null;
     return `${dim('tool:')}${lastToolName}`;
 }
-//# sourceMappingURL=last-tool.js.map

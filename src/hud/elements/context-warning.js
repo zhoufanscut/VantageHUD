@@ -47,4 +47,3 @@ export function renderPayloadLimitWarning(payloadEstimate) {
         : 'consider /compact soon';
     return `${color}${BOLD}[${icon}] ${payloadEstimate.label} - ${action}${RESET}`;
 }
-//# sourceMappingURL=context-warning.js.map

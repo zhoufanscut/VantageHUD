@@ -354,4 +354,3 @@ export function getEffortLevel(stdin) {
     const level = stdin.effort?.level;
     return typeof level === 'string' && level.length > 0 ? level : null;
 }
-//# sourceMappingURL=stdin.js.map

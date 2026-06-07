@@ -134,4 +134,3 @@ export async function markOrphanedTasksAsStale(directory, sessionId) {
     }
     return marked;
 }
-//# sourceMappingURL=background-cleanup.js.map
