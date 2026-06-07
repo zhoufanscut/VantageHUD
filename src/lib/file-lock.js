@@ -8,7 +8,7 @@
 import { openSync, closeSync, unlinkSync, writeSync, readFileSync, statSync, constants as fsConstants, } from "fs";
 import * as path from "path";
 import { ensureDirSync } from "./atomic-write.js";
-import { isProcessAlive } from "../platform/index.js";
+import { isProcessAlive } from "./platform.js";
 // ============================================================================
 // Constants
 // ============================================================================

@@ -5,7 +5,7 @@
  */
 import { DEFAULT_HUD_CONFIG, DEFAULT_ELEMENT_ORDER, DEFAULT_HUD_LABELS } from "./types.js";
 import { bold, paint, AURORA } from "./colors.js";
-import { stringWidth, getCharWidth } from "../utils/string-width.js";
+import { stringWidth, getCharWidth } from "../lib/string-width.js";
 import { renderAgentsMultiLine } from "./elements/agents.js";
 import { renderTodosWithCurrent } from "./elements/todos.js";
 import { renderLastSkill } from "./elements/skills.js";

@@ -5,7 +5,7 @@
  */
 import { existsSync, readFileSync, mkdirSync, unlinkSync } from "fs";
 import { join } from "path";
-import { getClaudeConfigDir } from "../utils/config-dir.js";
+import { getClaudeConfigDir } from "../lib/config-dir.js";
 import { validateWorkingDirectory, getStateRoot, ensureSessionStateDir, resolveSessionStatePath, } from "../lib/worktree-paths.js";
 import { atomicWriteJsonSync } from "../lib/atomic-write.js";
 import { DEFAULT_HUD_CONFIG, PRESET_CONFIGS, isHudLocale, resolveHudLabels, sanitizeHudLabels, } from "./types.js";

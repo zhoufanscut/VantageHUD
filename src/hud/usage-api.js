@@ -12,7 +12,7 @@
  * Response: { five_hour: { utilization }, seven_day: { utilization } }
  */
 import { existsSync, readFileSync, writeFileSync, renameSync, unlinkSync, mkdirSync } from 'fs';
-import { getClaudeConfigDir } from '../utils/config-dir.js';
+import { getClaudeConfigDir } from '../lib/config-dir.js';
 import { join, dirname } from 'path';
 import { execFileSync } from 'child_process';
 import { createHash } from 'crypto';

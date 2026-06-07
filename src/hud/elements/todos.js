@@ -4,7 +4,7 @@
  * Renders todo progress display.
  */
 import { RESET } from "../colors.js";
-import { truncateToWidth } from "../../utils/string-width.js";
+import { truncateToWidth } from "../../lib/string-width.js";
 const GREEN = "\x1b[32m";
 const YELLOW = "\x1b[33m";
 const CYAN = "\x1b[36m";

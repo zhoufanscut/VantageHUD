@@ -4,7 +4,7 @@
  * Renders the last activated skill badge.
  */
 import { cyan } from '../colors.js';
-import { truncateToWidth } from '../../utils/string-width.js';
+import { truncateToWidth } from '../../lib/string-width.js';
 /**
  * Truncate string to max visual width with ellipsis.
  * CJK-aware: accounts for double-width characters.

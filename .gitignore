@@ -7,3 +7,6 @@ cache/
 
 # Per-project runtime state (written into the cwd, never the repo)
 .claude-statusline/
+
+# Local agent tooling scratch
+.omo/

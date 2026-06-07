@@ -10,7 +10,7 @@
 // Windows terminals (cmd.exe, PowerShell, Windows Terminal) may not render
 // multi-byte emoji correctly, causing HUD layout corruption.
 // WSL terminals may also lack emoji support.
-import { isWSL } from '../../platform/index.js';
+import { isWSL } from '../../lib/platform.js';
 import { DEFAULT_HUD_LABELS } from '../types.js';
 import { paint, AURORA } from '../colors.js';
 function shouldUseAscii(format = 'auto') {

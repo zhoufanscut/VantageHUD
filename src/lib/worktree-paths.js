@@ -12,7 +12,7 @@ import { createHash } from 'crypto';
 import { execSync } from 'child_process';
 import { existsSync, mkdirSync, realpathSync, readdirSync } from 'fs';
 import { resolve, normalize, relative, sep, join, isAbsolute, basename, dirname } from 'path';
-import { getClaudeConfigDir } from '../utils/config-dir.js';
+import { getClaudeConfigDir } from './config-dir.js';
 /** Standard .claude-statusline subdirectories */
 export const StatePaths = {
     ROOT: '.claude-statusline',

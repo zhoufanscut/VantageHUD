@@ -4,7 +4,7 @@
  * Renders the current model name with thinking effort folded in.
  */
 import { paint, getModelTierRgb, AURORA } from '../colors.js';
-import { truncateToWidth } from '../../utils/string-width.js';
+import { truncateToWidth } from '../../lib/string-width.js';
 /**
  * Extract version from a model ID string.
  * E.g., 'claude-opus-4-7-20260416' -> '4.7'

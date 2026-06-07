@@ -5,7 +5,7 @@
  * line per running agent.
  */
 import { dim, RESET, getModelTierColor, getDurationColor } from '../colors.js';
-import { truncateToWidth } from '../../utils/string-width.js';
+import { truncateToWidth } from '../../lib/string-width.js';
 const CYAN = '\x1b[36m';
 // ============================================================================
 // Agent Type Codes
