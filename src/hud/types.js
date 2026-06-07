@@ -68,8 +68,8 @@ export const DEFAULT_ELEMENT_ORDER = {
     main: [
         'pathLabel', 'model', 'rateLimits', 'permission',
         'promptTime', 'session', 'tokens',
-        'lastSkill', 'contextBar', 'agents', 'background',
-        'callCounts', 'lastTool',
+        'contextBar', 'agents', 'background',
+        'callCounts', 'lastSkill', 'lastTool',
     ],
     detail: ['agents', 'contextWarning', 'payloadWarning', 'todos'],
 };

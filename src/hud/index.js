@@ -151,9 +151,10 @@ async function main() {
             toolCallCount: transcriptData.toolCallCount,
             agentCallCount: transcriptData.agentCallCount,
             skillCallCount: transcriptData.skillCallCount,
-            promptTime: hudState?.lastPromptTimestamp
-                ? new Date(hudState.lastPromptTimestamp)
-                : null,
+            promptTime: transcriptData.lastPromptTime
+                ?? (hudState?.lastPromptTimestamp
+                    ? new Date(hudState.lastPromptTimestamp)
+                    : null),
             apiKeySource: config.elements.apiKeySource
                 ? detectApiKeySource(cwd)
                 : null,

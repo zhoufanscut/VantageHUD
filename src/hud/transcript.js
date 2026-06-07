@@ -54,6 +54,7 @@ export async function parseTranscript(transcriptPath, options) {
         agentCallCount: 0,
         skillCallCount: 0,
         lastToolName: null,
+        lastPromptTime: undefined,
     };
     if (!transcriptPath || !existsSync(transcriptPath)) {
         return result;
@@ -170,6 +171,7 @@ function cloneTranscriptData(result) {
         })),
         todos: result.todos.map((todo) => ({ ...todo })),
         sessionStart: cloneDate(result.sessionStart),
+        lastPromptTime: cloneDate(result.lastPromptTime),
         lastActivatedSkill: result.lastActivatedSkill
             ? {
                 ...result.lastActivatedSkill,
@@ -341,6 +343,15 @@ function processEntry(entry, agentMap, latestTodos, result, maxAgentMapSize = 50
                     }
                 }
             }
+        }
+        else if (entry.timestamp && entry.type === "user" && !entry.isMeta && !entry.isCompactSummary && !content.trimStart().startsWith("<")) {
+            // Most recent real user-typed prompt. Assistant turns and tool results
+            // use array content; task-notifications are handled above; slash-command
+            // and command-output entries (<command-name>, <local-command-stdout>,
+            // <local-command-caveat>, …) are string-content user entries that start
+            // with "<". Requiring a real timestamp avoids the new Date() fallback
+            // poisoning the gauge. Entries are chronological, so the last wins.
+            result.lastPromptTime = timestamp;
         }
         return;
     }

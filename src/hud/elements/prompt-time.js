@@ -1,10 +1,18 @@
 /**
  * HUD - Prompt Time Element
  *
- * Renders elapsed time since the last user prompt submission.
- * Recorded by the keyword-detector hook on UserPromptSubmit.
+ * Renders elapsed time since the last user prompt, doubling as a prompt-cache-age
+ * gauge (teal while warm, rose once the 5-min cache TTL lapses). The timestamp is
+ * derived from the transcript's most recent user-prompt entry, falling back to a
+ * UserPromptSubmit hook timestamp (hudState.lastPromptTimestamp) if one is present.
  */
 import { paint, auroraFaint, AURORA } from '../colors.js';
+/**
+ * Anthropic prompt-cache TTL. Once the idle gap since the last prompt exceeds
+ * this, the next turn re-reads the full context uncached (a cache miss), so the
+ * elapsed timer flips from warm (teal) to alert (rose).
+ */
+const CACHE_TTL_MS = 5 * 60 * 1000;
 /**
  * Format elapsed milliseconds as human-readable duration.
  * < 60s  → 13s
@@ -33,7 +41,10 @@ export function renderPromptTime(promptTime, now) {
     if (now) {
         const elapsed = now.getTime() - promptTime.getTime();
         if (elapsed >= 0) {
-            return `${auroraFaint('⏱')}${paint(AURORA.label, formatElapsed(elapsed))}`;
+            // Teal while the prompt cache is still warm; rose once the 5-minute
+            // TTL has lapsed and the next turn will miss the cache.
+            const color = elapsed >= CACHE_TTL_MS ? AURORA.gradHigh : AURORA.gradLow;
+            return `${auroraFaint('⏱')}${paint(color, formatElapsed(elapsed))}`;
         }
     }
     const hours = String(promptTime.getHours()).padStart(2, '0');
