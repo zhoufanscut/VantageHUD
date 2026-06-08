@@ -32,7 +32,7 @@ function formatElapsed(ms) {
 /**
  * Render elapsed time since prompt submission.
  *
- * Format: ⏱ 13s  or  ⏱ 1m23s  or  ⏱ 2h3m
+ * Format: ⏰13s  or  ⏰1m23s  or  ⏰2h3m
  * Falls back to HH:MM:SS timestamp if now is not provided.
  */
 export function renderPromptTime(promptTime, now) {
@@ -44,7 +44,7 @@ export function renderPromptTime(promptTime, now) {
             // Teal while the prompt cache is still warm; rose once the 5-minute
             // TTL has lapsed and the next turn will miss the cache.
             const color = elapsed >= CACHE_TTL_MS ? AURORA.gradHigh : AURORA.gradLow;
-            return `${auroraFaint('⏱')} ${paint(color, formatElapsed(elapsed))}`;
+            return `${auroraFaint('⏰')}${paint(color, formatElapsed(elapsed))}`;
         }
     }
     const hours = String(promptTime.getHours()).padStart(2, '0');

@@ -60,6 +60,33 @@ export function isCJKCharacter(codePoint) {
         (codePoint >= 0xfe30 && codePoint <= 0xfe4f));
 }
 /**
+ * Check if a code point is an emoji that terminals render double-width.
+ *
+ * Unicode marks these East_Asian_Width = Wide (W); modern terminals
+ * (SecureCRT included) draw them across two cells. The CJK table above does
+ * not cover them, so without this they'd be under-counted as width 1 and the
+ * right side of the HUD would drift one column per glyph.
+ *
+ * The Misc Technical block (U+2300-23FF) is mixed, so only its Wide members
+ * are listed explicitly — narrow siblings such as U+23F1 (⏱) and U+23F2 (⏲)
+ * deliberately stay width 1.
+ */
+export function isWideEmoji(codePoint) {
+    return (
+    // Supplemental emoji planes: emoticons, pictographs, transport,
+    // symbols & pictographs A/B — e.g. 🔧 (U+1F527), 🤖 (U+1F916).
+    (codePoint >= 0x1f300 && codePoint <= 0x1faff) ||
+        // Enclosed supplement, mahjong tiles, dominoes, playing cards.
+        (codePoint >= 0x1f000 && codePoint <= 0x1f2ff) ||
+        // High Voltage ⚡ (U+26A1), used as the skill icon in call-counts.
+        codePoint === 0x26a1 ||
+        // Wide members of Misc Technical: ⌚⌛ (U+231A/1B), media transport
+        // (U+23E9-23EC), ⏰ alarm clock (U+23F0), ⏳ hourglass (U+23F3).
+        codePoint === 0x231a || codePoint === 0x231b ||
+        (codePoint >= 0x23e9 && codePoint <= 0x23ec) ||
+        codePoint === 0x23f0 || codePoint === 0x23f3);
+}
+/**
  * Check if a character is a zero-width character.
  * These characters don't contribute to visual width.
  */
@@ -94,6 +121,8 @@ export function getCharWidth(char) {
     if (isZeroWidth(codePoint))
         return 0;
     if (isCJKCharacter(codePoint))
+        return 2;
+    if (isWideEmoji(codePoint))
         return 2;
     return 1;
 }
