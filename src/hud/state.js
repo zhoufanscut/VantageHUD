@@ -3,10 +3,10 @@
  *
  * Manages HUD state file for background task tracking.
  */
-import { existsSync, readFileSync, mkdirSync, unlinkSync } from "fs";
+import { existsSync, readFileSync } from "fs";
 import { join } from "path";
 import { getClaudeConfigDir } from "../lib/config-dir.js";
-import { validateWorkingDirectory, getStateRoot, ensureSessionStateDir, resolveSessionStatePath, } from "../lib/worktree-paths.js";
+import { sessionCacheFile, ensureCacheDir } from "../lib/worktree-paths.js";
 import { atomicWriteJsonSync } from "../lib/atomic-write.js";
 import { DEFAULT_HUD_CONFIG, PRESET_CONFIGS, isHudLocale, resolveHudLabels, sanitizeHudLabels, } from "./types.js";
 import { cleanupStaleBackgroundTasks, markOrphanedTasksAsStale, } from "./background-cleanup.js";
@@ -14,23 +14,13 @@ import { cleanupStaleBackgroundTasks, markOrphanedTasksAsStale, } from "./backgr
 // Path Helpers
 // ============================================================================
 /**
- * Get the HUD state file path in the project's .claude-statusline/state directory
+ * Resolve the HUD state file: `<cacheDir>/hud-state.<session>.json`.
+ * Flat and session-scoped; a missing session id collapses to
+ * `hud-state.default.json`. The `directory` argument is unused (state no longer
+ * lives under the project/worktree) but kept for call-site compatibility.
  */
-function getLocalStateFilePath(directory) {
-    const baseDir = validateWorkingDirectory(directory);
-    const stateDir = join(getStateRoot(baseDir), "state");
-    return join(stateDir, "hud-state.json");
-}
-function getLegacyRootStateFilePath(directory) {
-    const baseDir = validateWorkingDirectory(directory);
-    return join(getStateRoot(baseDir), "hud-state.json");
-}
-function getStateFilePath(directory, sessionId) {
-    const baseDir = validateWorkingDirectory(directory);
-    if (sessionId) {
-        return resolveSessionStatePath("hud", sessionId, baseDir);
-    }
-    return getLocalStateFilePath(baseDir);
+function getStateFilePath(_directory, sessionId) {
+    return sessionCacheFile("hud-state", sessionId);
 }
 /**
  * Get Claude Code settings.json path
@@ -76,23 +66,6 @@ function mergeContextLimitWarning(primary, secondary) {
         ...(secondary ?? {}),
     };
 }
-/**
- * Ensure the .claude-statusline/state directory exists
- */
-function ensureStateDir(directory) {
-    const baseDir = validateWorkingDirectory(directory);
-    const stateDir = join(getStateRoot(baseDir), "state");
-    if (!existsSync(stateDir)) {
-        mkdirSync(stateDir, { recursive: true });
-    }
-}
-function ensureHudStateDir(directory, sessionId) {
-    if (sessionId) {
-        ensureSessionStateDir(sessionId, validateWorkingDirectory(directory));
-        return;
-    }
-    ensureStateDir(directory);
-}
 // ============================================================================
 // HUD State Operations
 // ============================================================================
@@ -100,80 +73,27 @@ function ensureHudStateDir(directory, sessionId) {
  * Read HUD state from disk (checks new local and legacy local only)
  */
 export function readHudState(directory, sessionId) {
-    // Session-scoped HUD state should never fall back to root/legacy files.
-    // This prevents a stale root state from being revived after a pane/session
-    // recreation when the current session has already been identified.
-    if (sessionId) {
-        const sessionStateFile = getStateFilePath(directory, sessionId);
-        if (!existsSync(sessionStateFile)) {
-            return null;
-        }
-        try {
-            const content = readFileSync(sessionStateFile, "utf-8");
-            return JSON.parse(content);
-        }
-        catch (error) {
-            console.error("[HUD] Failed to read session state:", error instanceof Error ? error.message : error);
-            return null;
-        }
+    const stateFile = getStateFilePath(directory, sessionId);
+    if (!existsSync(stateFile)) {
+        return null;
     }
-    // Check new local state first (.claude-statusline/state/hud-state.json)
-    const localStateFile = getLocalStateFilePath(directory);
-    if (existsSync(localStateFile)) {
-        try {
-            const content = readFileSync(localStateFile, "utf-8");
-            return JSON.parse(content);
-        }
-        catch (error) {
-            console.error("[HUD] Failed to read local state:", error instanceof Error ? error.message : error);
-            // Fall through to legacy check
-        }
+    try {
+        return JSON.parse(readFileSync(stateFile, "utf-8"));
     }
-    // Check legacy local state (.claude-statusline/hud-state.json)
-    const legacyStateFile = getLegacyRootStateFilePath(directory);
-    if (existsSync(legacyStateFile)) {
-        try {
-            const content = readFileSync(legacyStateFile, "utf-8");
-            return JSON.parse(content);
-        }
-        catch (error) {
-            console.error("[HUD] Failed to read legacy state:", error instanceof Error ? error.message : error);
-            return null;
-        }
+    catch (error) {
+        console.error("[HUD] Failed to read session state:", error instanceof Error ? error.message : error);
+        return null;
     }
-    return null;
 }
 /**
  * Write HUD state to disk (local only)
  */
 export function writeHudState(state, directory, sessionId) {
     try {
-        // Write to the session-scoped file when the current session is known,
-        // otherwise keep the legacy local path for backwards compatibility.
-        ensureHudStateDir(directory, sessionId);
+        ensureCacheDir();
         const stateFile = getStateFilePath(directory, sessionId);
         const nextState = sessionId ? { ...state, sessionId } : state;
         atomicWriteJsonSync(stateFile, nextState);
-        if (sessionId) {
-            const legacyCandidates = [
-                getLegacyRootStateFilePath(directory),
-            ];
-            for (const legacyFile of legacyCandidates) {
-                if (!existsSync(legacyFile)) {
-                    continue;
-                }
-                try {
-                    const content = readFileSync(legacyFile, "utf-8");
-                    const legacyState = JSON.parse(content);
-                    if (!legacyState.sessionId || legacyState.sessionId === sessionId) {
-                        unlinkSync(legacyFile);
-                    }
-                }
-                catch {
-                    // Best-effort ghost cleanup only.
-                }
-            }
-        }
         return true;
     }
     catch (error) {

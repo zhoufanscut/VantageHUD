@@ -72,6 +72,9 @@ extract_json_string() {
 }
 
 SESSION_KEY=$(extract_json_string session_id)
+if [ -z "$SESSION_KEY" ] && [ -n "${CLAUDE_CODE_SESSION_ID:-}" ]; then
+  SESSION_KEY=$CLAUDE_CODE_SESSION_ID
+fi
 if [ -z "$SESSION_KEY" ] && [ -n "${CLAUDE_SESSION_ID:-}" ]; then
   SESSION_KEY=$CLAUDE_SESSION_ID
 fi

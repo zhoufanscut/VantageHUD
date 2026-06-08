@@ -4,168 +4,56 @@
  * Parse stdin JSON from Claude Code statusline interface.
  * Based on claude-hud reference implementation.
  */
-import { existsSync, readFileSync, statSync, writeFileSync, mkdirSync } from 'fs';
-import { dirname, join } from 'path';
-import { getSessionStateDir, getWorktreeRoot, listSessionIds, resolveStatePath, } from '../lib/worktree-paths.js';
+import { readFileSync, writeFileSync } from 'fs';
+import { join } from 'path';
+import { ensureCacheDir, sessionCacheFile, listSessionCacheFiles, } from '../lib/worktree-paths.js';
 const TRANSIENT_CONTEXT_PERCENT_TOLERANCE = 3;
 // ============================================================================
-// Stdin Cache (for --watch mode)
+// Stdin Cache (session-scoped, flat under the cache dir)
 // ============================================================================
 /**
- * Session-id environment variables consulted in priority order.
- * Claude Code populates `CLAUDE_SESSION_ID` first; `CLAUDECODE_SESSION_ID`
- * is a legacy / compatibility alias for the same value.
- */
-const SESSION_ID_ENV_VARS = ['CLAUDE_SESSION_ID', 'CLAUDECODE_SESSION_ID'];
-/**
- * Normalize an env value to a session-id candidate.
- * Empty / whitespace-only strings are treated as "not set" so a defined
- * but blank slot does not block the fallback to the next candidate.
- */
-function normalizeCandidate(value) {
-    if (!value)
-        return null;
-    const trimmed = value.trim();
-    return trimmed.length > 0 ? trimmed : null;
-}
-/**
- * Resolve the stdin cache path.
+ * Persist the last successful stdin read, keyed by session.
  *
- * Walks the session-id env vars in priority order, and for each candidate
- * tries to resolve a session-scoped path via the shared validated helper
- * `getSessionStateDir` (which calls `validateSessionId`). A candidate
- * that fails validation (path traversal, disallowed chars, overlong) is
- * skipped so the next candidate still gets a chance — a non-empty-but-
- * invalid primary does not silently bypass a valid secondary. Only when
- * no candidate yields a valid session path do we fall back to the legacy
- * flat path.
- *
- * The file name remains `hud-stdin-cache.json` so that the existing
- * session-end cleanup pattern (`/^hud-stdin-cache\.json$/`) still matches
- * and no migration is required for existing environments.
+ * Written to `<cacheDir>/hud-stdin-cache.<session>.json`. The session key is
+ * supplied by the caller (derived from the stdin `session_id`), so the cache is
+ * per-session by construction — concurrent sessions in the same directory can
+ * no longer clobber each other's stabilization snapshot.
  */
-function getStdinCachePath() {
-    const root = getWorktreeRoot() || process.cwd();
-    for (const envVar of SESSION_ID_ENV_VARS) {
-        const candidate = normalizeCandidate(process.env[envVar]);
-        if (!candidate)
-            continue;
-        try {
-            return join(getSessionStateDir(candidate, root), 'hud-stdin-cache.json');
-        }
-        catch {
-            // Invalid session id — try the next candidate.
-        }
-    }
-    // Legacy flat path must also resolve through the shared HUD-root helper so
-    // `HUD_STATE_DIR`-backed deployments land on the same directory as writers.
-    return resolveStatePath('state/hud-stdin-cache.json', root);
-}
-/**
- * Persist the last successful stdin read to disk.
- * Used by --watch mode to recover data when stdin is a TTY.
- */
-export function writeStdinCache(stdin) {
+export function writeStdinCache(stdin, sessionKey) {
     try {
-        const cachePath = getStdinCachePath();
-        const cacheDir = dirname(cachePath);
-        if (!existsSync(cacheDir)) {
-            mkdirSync(cacheDir, { recursive: true });
-        }
-        writeFileSync(cachePath, JSON.stringify(stdin));
+        ensureCacheDir();
+        writeFileSync(sessionCacheFile('hud-stdin-cache', sessionKey), JSON.stringify(stdin));
     }
     catch {
         // Best-effort; ignore failures
     }
 }
 /**
- * Read the last cached stdin JSON.
+ * Read the cached stdin JSON for a session.
  *
- * When a session id is available in the environment, the session-scoped
- * path is authoritative. Otherwise — e.g. `hud hud --watch` running as a
- * detached CLI/tmux process that never inherited the parent's session
- * env — we still need a way to surface the active session's cache; we
- * fall back first to the legacy flat path, and then to the most recently
- * updated `state/sessions/{id}/hud-stdin-cache.json` so the watch pane
- * does not stay stuck on an empty/starting view.
- *
- * Returns null if no cache exists or it is unreadable.
+ * With a session key, the per-session file is authoritative. Without one (e.g.
+ * a detached watch process that never received the stdin payload), fall back to
+ * the most recently modified `hud-stdin-cache.*.json` so the view is not stuck
+ * empty. Returns null if no cache exists or it is unreadable.
  */
-export function readStdinCache() {
-    const root = getWorktreeRoot() || process.cwd();
-    const scopedPath = getStdinCachePath();
-    const tryRead = (p) => {
+export function readStdinCache(sessionKey) {
+    const tryRead = (path) => {
+        if (!path)
+            return null;
         try {
-            if (!existsSync(p))
-                return null;
-            return JSON.parse(readFileSync(p, 'utf-8'));
+            return JSON.parse(readFileSync(path, 'utf-8'));
         }
         catch {
+            // Missing/unreadable cache — treat as no previous snapshot.
             return null;
         }
     };
-    const scoped = tryRead(scopedPath);
-    if (scoped)
-        return scoped;
-    // If the scoped path already *is* the legacy flat path (no session id
-    // was available), there's no further lookup to try.
-    const legacyPath = resolveStatePath('state/hud-stdin-cache.json', root);
-    if (scopedPath !== legacyPath) {
-        return null;
+    if (sessionKey != null && String(sessionKey).trim() !== '') {
+        return tryRead(sessionCacheFile('hud-stdin-cache', sessionKey));
     }
-    // Env-less reader: pick the most recent session-scoped cache as a
-    // best-effort surface of "the active session's HUD".
-    return readMostRecentSessionCache(root);
-}
-/**
- * Scan `state/sessions/{id}/hud-stdin-cache.json` and return the contents
- * of the most recently modified one. Only used as a fallback when no
- * session id is available in the environment (e.g. a tmux-hosted
- * `hud hud --watch` reader that did not inherit `CLAUDE_SESSION_ID`).
- *
- * Uses the same HUD-root helpers as the writers (`listSessionIds` /
- * `getSessionStateDir`) so this fallback honors `HUD_STATE_DIR` and any
- * other centralized-state configuration.
- */
-function readMostRecentSessionCache(root) {
-    let sessionIds;
-    try {
-        sessionIds = listSessionIds(root);
-    }
-    catch {
-        return null;
-    }
-    let bestPath = null;
-    let bestMtime = -Infinity;
-    for (const sid of sessionIds) {
-        let candidate;
-        try {
-            candidate = join(getSessionStateDir(sid, root), 'hud-stdin-cache.json');
-        }
-        catch {
-            continue;
-        }
-        try {
-            const st = statSync(candidate);
-            if (!st.isFile())
-                continue;
-            if (st.mtimeMs > bestMtime) {
-                bestMtime = st.mtimeMs;
-                bestPath = candidate;
-            }
-        }
-        catch {
-            // Skip unreadable entries
-        }
-    }
-    if (!bestPath)
-        return null;
-    try {
-        return JSON.parse(readFileSync(bestPath, 'utf-8'));
-    }
-    catch {
-        return null;
-    }
+    // Env-less reader: surface the most recent session's cache.
+    const [mostRecent] = listSessionCacheFiles('hud-stdin-cache');
+    return tryRead(mostRecent ?? null);
 }
 // ============================================================================
 // Stdin Reader
@@ -319,6 +207,41 @@ export function getContextPercent(stdin) {
         ?? getPositiveManualContextPercent(stdin)
         ?? getTotalInputContextPercent(stdin)
         ?? 0);
+}
+/**
+ * Last-resort context percentage derived from the transcript's last-request
+ * token usage. Used only when the live stdin `context_window` yields nothing.
+ *
+ * Claude Code emits all-null `context_window` frames between turns, so the HUD
+ * normally relies on `stabilizeContextPercent` to carry the previous percentage
+ * across them. That bridge fails in two situations that are common with an API
+ * token + a non-Anthropic model reached via ANTHROPIC_BASE_URL:
+ *   1. the stdin cache is shared per-worktree (Claude Code does not export a
+ *      session id, so the cache is not session-scoped); a concurrent/interleaved
+ *      session in the same directory clobbers it, and `isSameContextStream`
+ *      then rejects the foreign snapshot, leaving nothing to carry forward; and
+ *   2. the first frame after a resume has no prior snapshot at all.
+ * In both cases ctx collapses to 0 even though the conversation is non-empty.
+ *
+ * The transcript persists the real last-request usage regardless of the
+ * transient stdin frame, so it recovers the value. We sum the input-side
+ * tokens (input + cache creation + cache read) to mirror Claude Code's native
+ * `total_input_tokens` metric, divided by the live `context_window_size`
+ * (which stays populated even in the zeroed frames). Returns null when either
+ * the window size or the usage is unavailable.
+ */
+export function getContextPercentFromUsage(stdin, usage) {
+    const size = stdin?.context_window?.context_window_size;
+    if (!size || size <= 0 || !usage) {
+        return null;
+    }
+    const contextTokens = (usage.inputTokens ?? 0)
+        + (usage.cacheCreationInputTokens ?? 0)
+        + (usage.cacheReadInputTokens ?? 0);
+    if (contextTokens <= 0) {
+        return null;
+    }
+    return Math.min(100, Math.max(0, Math.round((contextTokens / size) * 100)));
 }
 /**
  * Convert Claude Code stdin rate_limits into the existing HUD RateLimits shape.

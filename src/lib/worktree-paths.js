@@ -1,23 +1,20 @@
 /**
- * Worktree Path Enforcement
+ * Worktree + cache path helpers.
  *
- * Provides strict path validation and resolution for .claude-statusline/ paths,
- * ensuring all operations stay within the worktree boundary.
+ * Worktree resolution (getWorktreeRoot / resolveToWorktreeRoot /
+ * resolveTranscriptPath) is used for cwd display and transcript lookup.
  *
- * State is centralized under <hud-install>/.claude-statusline/{project-identifier}/
- * by default, so no .claude-statusline/ folder is ever created inside a user's
- * project. The HUD_STATE_DIR environment variable overrides the base directory.
+ * All runtime files live flat in a single cache directory
+ * (getCacheDir → HUD_CACHE_DIR || <install>/cache) with a `<name>.<session>.json`
+ * naming scheme. Nothing is ever written inside a user's project, and the
+ * globally-unique session id keeps unrelated sessions (and projects) from
+ * colliding — so no per-project subdirectory is needed.
  */
-import { createHash } from 'crypto';
 import { execSync } from 'child_process';
-import { existsSync, mkdirSync, realpathSync, readdirSync } from 'fs';
-import { resolve, normalize, relative, sep, join, isAbsolute, basename, dirname } from 'path';
+import { existsSync, mkdirSync, realpathSync, readdirSync, statSync } from 'fs';
+import { resolve, relative, sep, join, isAbsolute, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { getClaudeConfigDir } from './config-dir.js';
-/** Standard .claude-statusline subdirectories */
-export const StatePaths = {
-    ROOT: '.claude-statusline',
-};
 /**
  * LRU cache for worktree root lookups to avoid repeated git subprocess calls.
  * Bounded to MAX_WORKTREE_CACHE_SIZE entries to prevent memory growth when
@@ -79,210 +76,97 @@ export function validatePath(inputPath) {
     }
 }
 // ============================================================================
-// STATE PATH RESOLUTION (default base = HUD install dir; HUD_STATE_DIR overrides) — Issue #1014
+// FLAT CACHE PATHS (single dir = HUD_CACHE_DIR || <install>/cache) — matches statusline.sh
 // ============================================================================
 /**
- * Get a stable project identifier for centralized state storage.
+ * Resolve the shared cache directory. Both the shell wrapper's render cache and
+ * the Node HUD's state live here, flat, named `<base>.<session>.json`.
  *
- * Uses a hybrid strategy:
- * 1. Git remote URL hash (stable across worktrees and clones of the same repo)
- * 2. Fallback to worktree root path hash (for local-only repos without remotes)
- *
- * Format: `{dirName}-{hash}` where hash is first 16 chars of SHA-256.
- * Example: `my-project-a1b2c3d4e5f6g7h8`
- *
- * @param worktreeRoot - Optional worktree root path
- * @returns A stable project identifier string
+ * The default is the HUD install's own `cache/` folder, derived from this
+ * module's location so it follows a relocated install. worktree-paths.js lives
+ * at `<hud-install>/src/lib/`, so the install root is two directories up — the
+ * same `$SCRIPT_DIR/cache` statusline.sh resolves. `HUD_CACHE_DIR` overrides it
+ * (honored by the shell too), so the two layers never diverge.
  */
-export function getProjectIdentifier(worktreeRoot) {
-    const root = worktreeRoot || getWorktreeRoot() || process.cwd();
-    let source;
-    try {
-        const remoteUrl = execSync('git remote get-url origin', {
-            cwd: root,
-            encoding: 'utf-8',
-            stdio: ['pipe', 'pipe', 'pipe'],
-        }).trim();
-        source = remoteUrl || root;
+export function getCacheDir() {
+    if (process.env.HUD_CACHE_DIR) {
+        return process.env.HUD_CACHE_DIR;
     }
-    catch {
-        // No git remote (local-only repo or not a git repo) — use path
-        source = root;
-    }
-    // For linked worktrees (created via `git worktree add`), resolve to the
-    // primary repository root so all worktrees of the same repo produce the
-    // same project identifier. Without this, sibling worktrees like
-    // `repo.feature-x/` and `repo.feature-y/` would create separate state
-    // directories despite sharing the same remote URL hash.
-    let primaryRoot = root;
-    try {
-        const commonDir = execSync('git rev-parse --path-format=absolute --git-common-dir', {
-            cwd: root,
-            encoding: 'utf-8',
-            stdio: ['pipe', 'pipe', 'pipe'],
-            timeout: 5000,
-        }).trim();
-        // Only resolve when --git-common-dir points to a .git directory.
-        // - Linked worktrees: returns <primary>/.git → dirname gives primary root ✓
-        // - Submodules: returns <super>/.git/modules/<name> → skip (wrong parent)
-        // - Bare repos: returns the repo root itself (no .git suffix) → skip
-        //   (dirname would go up to the parent folder, colliding sibling repos)
-        const isGitDir = basename(commonDir) === '.git';
-        const isSubmodule = commonDir.includes(`${sep}.git${sep}modules`);
-        if (isGitDir && !isSubmodule) {
-            const resolved = dirname(commonDir);
-            if (resolved && resolved !== root) {
-                primaryRoot = resolved;
-            }
-        }
-    }
-    catch {
-        // Not a git repo or command failed — fall back to worktree root
-    }
-    const hash = createHash('sha256').update(source).digest('hex').slice(0, 16);
-    const dirName = basename(primaryRoot).replace(/[^a-zA-Z0-9_-]/g, '_');
-    return `${dirName}-${hash}`;
-}
-/**
- * Default state base directory: the HUD install's own `.claude-statusline/`
- * folder, derived from this module's location so it stays correct if the HUD
- * is relocated. worktree-paths.js lives at `<hud-install>/src/lib/`, so the
- * install root is two directories up.
- */
-function getDefaultStateBase() {
     const moduleDir = dirname(fileURLToPath(import.meta.url));
     const hudInstallRoot = resolve(moduleDir, '..', '..');
-    return join(hudInstallRoot, StatePaths.ROOT);
+    return join(hudInstallRoot, 'cache');
 }
 /**
- * Get the state root directory for a project.
- *
- * State is centralized under a single base directory with a per-project
- * subdirectory, so unrelated projects never collide:
- *   <base>/<project-identifier>/
- *
- * The base defaults to the HUD install's own `.claude-statusline/` folder
- * (next to the code), so a `.claude-statusline/` directory is never created
- * inside a user's project. Setting HUD_STATE_DIR overrides the base.
- *
- * @param worktreeRoot - Optional worktree root (used to derive the project id)
- * @returns Absolute path to the project's state root
+ * Ensure the shared cache directory exists. Best-effort; tolerates the EEXIST
+ * race between concurrent sessions (see atomic-write.js:ensureDirSync).
  */
-export function getStateRoot(worktreeRoot) {
-    const root = worktreeRoot || getWorktreeRoot() || process.cwd();
-    const baseDir = process.env.HUD_STATE_DIR || getDefaultStateBase();
-    return join(baseDir, getProjectIdentifier(root));
-}
-/**
- * Resolve a relative path under .claude-statusline/ to an absolute path.
- * Validates the path is within the hud boundary.
- *
- * @param relativePath - Path relative to .claude-statusline/ (e.g., "state/session.json")
- * @param worktreeRoot - Optional worktree root (auto-detected if not provided)
- * @returns Absolute path
- * @throws Error if path would escape hud boundary
- */
-export function resolveStatePath(relativePath, worktreeRoot) {
-    validatePath(relativePath);
-    const stateDir = getStateRoot(worktreeRoot);
-    const fullPath = normalize(resolve(stateDir, relativePath));
-    // Verify resolved path is still under hud directory
-    const relativeToState = relative(stateDir, fullPath);
-    if (relativeToState.startsWith('..') || relativeToState.startsWith(sep + '..')) {
-        throw new Error(`Path escapes hud boundary: ${relativePath}`);
-    }
-    return fullPath;
-}
-// ============================================================================
-// SESSION-SCOPED STATE PATHS
-// ============================================================================
-/** Regex for valid session IDs: alphanumeric, hyphens, underscores, max 256 chars */
-const SESSION_ID_REGEX = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,255}$/;
-/**
- * Validate a session ID to prevent path traversal attacks.
- *
- * @param sessionId - The session ID to validate
- * @throws Error if session ID is invalid
- */
-export function validateSessionId(sessionId) {
-    if (!sessionId) {
-        throw new Error('Session ID cannot be empty');
-    }
-    if (sessionId.includes('..') || sessionId.includes('/') || sessionId.includes('\\')) {
-        throw new Error(`Invalid session ID: path traversal not allowed (${sessionId})`);
-    }
-    if (!SESSION_ID_REGEX.test(sessionId)) {
-        throw new Error(`Invalid session ID: must be alphanumeric with hyphens/underscores, max 256 chars (${sessionId})`);
-    }
-}
-/**
- * Resolve a session-scoped state file path.
- * Path: {stateRoot}/state/sessions/{sessionId}/{mode}-state.json
- *
- * @param stateName - State name (e.g., "session", "mode")
- * @param sessionId - Session identifier
- * @param worktreeRoot - Optional worktree root
- * @returns Absolute path to session-scoped state file
- */
-export function resolveSessionStatePath(stateName, sessionId, worktreeRoot) {
-    validateSessionId(sessionId);
-    const normalizedName = stateName.endsWith('-state') ? stateName : `${stateName}-state`;
-    return resolveStatePath(`state/sessions/${sessionId}/${normalizedName}.json`, worktreeRoot);
-}
-/**
- * Get the session state directory path.
- * Path: {stateRoot}/state/sessions/{sessionId}/
- *
- * @param sessionId - Session identifier
- * @param worktreeRoot - Optional worktree root
- * @returns Absolute path to session state directory
- */
-export function getSessionStateDir(sessionId, worktreeRoot) {
-    validateSessionId(sessionId);
-    return join(getStateRoot(worktreeRoot), 'state', 'sessions', sessionId);
-}
-/**
- * List all session IDs that have state directories.
- *
- * @param worktreeRoot - Optional worktree root
- * @returns Array of session IDs
- */
-export function listSessionIds(worktreeRoot) {
-    const sessionsDir = join(getStateRoot(worktreeRoot), 'state', 'sessions');
-    if (!existsSync(sessionsDir)) {
-        return [];
-    }
-    try {
-        const entries = readdirSync(sessionsDir, { withFileTypes: true });
-        return entries
-            .filter(entry => entry.isDirectory() && SESSION_ID_REGEX.test(entry.name))
-            .map(entry => entry.name);
-    }
-    catch {
-        return [];
-    }
-}
-/**
- * Ensure the session state directory exists.
- *
- * @param sessionId - Session identifier
- * @param worktreeRoot - Optional worktree root
- * @returns Absolute path to the session state directory
- */
-export function ensureSessionStateDir(sessionId, worktreeRoot) {
-    const sessionDir = getSessionStateDir(sessionId, worktreeRoot);
-    if (!existsSync(sessionDir)) {
+export function ensureCacheDir() {
+    const dir = getCacheDir();
+    if (!existsSync(dir)) {
         try {
-            mkdirSync(sessionDir, { recursive: true });
+            mkdirSync(dir, { recursive: true });
         }
         catch (err) {
-            // On Windows, concurrent hooks can race past the existsSync check and
-            // throw EEXIST. Safe to ignore — see atomic-write.ts:ensureDirSync.
-            if (err.code !== "EEXIST")
+            if (err.code !== 'EEXIST')
                 throw err;
         }
     }
-    return sessionDir;
+    return dir;
+}
+/**
+ * Sanitize a session key for use as a filename suffix. Mirrors the shell's
+ * `sed 's/[^A-Za-z0-9_.-]/_/g'` (statusline.sh) so Node and the shell agree on
+ * the suffix for the same session. Empty/missing keys collapse to `default`.
+ */
+export function sanitizeSessionKey(sessionKey) {
+    const raw = (sessionKey == null ? '' : String(sessionKey)).trim();
+    if (!raw) {
+        return 'default';
+    }
+    return raw.replace(/[^A-Za-z0-9_.-]/g, '_');
+}
+/**
+ * Resolve a session-scoped cache file path: `<cacheDir>/<baseName>.<session>.json`.
+ *
+ * Flat — no per-project or per-session subdirectories. The globally-unique
+ * session id keeps unrelated sessions (and projects sharing one install) from
+ * colliding, which is also why the stdin cache can no longer be clobbered
+ * across sessions.
+ */
+export function sessionCacheFile(baseName, sessionKey) {
+    return join(getCacheDir(), `${baseName}.${sanitizeSessionKey(sessionKey)}.json`);
+}
+/**
+ * List existing `<baseName>.*.json` cache files, most-recently-modified first
+ * (absolute paths). Used only as a fallback for readers that have no session
+ * key (e.g. a detached watch process); the primary path always passes a key.
+ */
+export function listSessionCacheFiles(baseName) {
+    const dir = getCacheDir();
+    if (!existsSync(dir)) {
+        return [];
+    }
+    const prefix = `${baseName}.`;
+    try {
+        return readdirSync(dir, { withFileTypes: true })
+            .filter((entry) => entry.isFile()
+            && entry.name.startsWith(prefix)
+            && entry.name.endsWith('.json'))
+            .map((entry) => join(dir, entry.name))
+            .map((path) => {
+            try {
+                return { path, mtime: statSync(path).mtimeMs };
+            }
+            catch {
+                return { path, mtime: -Infinity };
+            }
+        })
+            .sort((a, b) => b.mtime - a.mtime)
+            .map((entry) => entry.path);
+    }
+    catch {
+        return [];
+    }
 }
 /**
  * Resolve a directory path to its git worktree root.
@@ -290,8 +174,8 @@ export function ensureSessionStateDir(sessionId, worktreeRoot) {
  * Walks up from `directory` using `git rev-parse --show-toplevel`.
  * Falls back to `getWorktreeRoot(process.cwd())`, then `process.cwd()`.
  *
- * This ensures .claude-statusline/ state is always written at the worktree root,
- * even when called from a subdirectory (fixes #576).
+ * Used to derive the cwd shown in the HUD and to resolve transcript paths —
+ * not for state location (runtime files live flat under getCacheDir()).
  *
  * @param directory - Any directory inside a git worktree (optional)
  * @returns The worktree root (never a subdirectory)

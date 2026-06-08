@@ -5,7 +5,7 @@
  * Statusline command that visualizes claude-statusline state.
  * Receives stdin JSON from Claude Code and outputs formatted statusline.
  */
-import { readStdin, writeStdinCache, readStdinCache, getContextPercent, getModelId, getModelName, getEffortLevel, getRateLimitsFromStdin, stabilizeContextPercent, } from "./stdin.js";
+import { readStdin, writeStdinCache, readStdinCache, getContextPercent, getContextPercentFromUsage, getModelId, getModelName, getEffortLevel, getRateLimitsFromStdin, stabilizeContextPercent, } from "./stdin.js";
 import { parseTranscript } from "./transcript.js";
 import { readHudState, readHudConfig, getRunningTasks, writeHudState, initializeHUDState, } from "./state.js";
 import { getUsage } from "./usage-api.js";
@@ -13,9 +13,9 @@ import { render } from "./render.js";
 import { detectApiKeySource } from "./elements/api-key-source.js";
 import { sanitizeOutput } from "./sanitize.js";
 import { estimatePayloadFromTranscriptPath } from "./payload-estimate.js";
-import { resolveToWorktreeRoot, resolveTranscriptPath, getStateRoot } from "../lib/worktree-paths.js";
-import { writeFileSync, mkdirSync } from "fs";
-import { join, basename } from "path";
+import { resolveToWorktreeRoot, resolveTranscriptPath, sessionCacheFile, ensureCacheDir } from "../lib/worktree-paths.js";
+import { writeFileSync } from "fs";
+import { basename } from "path";
 /**
  * Extract session ID (UUID) from a transcript path.
  */
@@ -24,6 +24,22 @@ function extractSessionIdFromPath(transcriptPath) {
         return null;
     const match = transcriptPath.match(/([0-9a-f-]{36})(?:\.jsonl)?$/i);
     return match ? match[1] : null;
+}
+/**
+ * Resolve the session key that names every per-session cache file.
+ *
+ * Prefers Claude Code's stdin `session_id` (the same value statusline.sh uses
+ * for `stdin.<session>.json`, so filenames line up), then the session-id env
+ * vars, then the transcript-derived UUID. Falls back to `default` so a payload
+ * with no session info still gets a stable, self-consistent file.
+ */
+function resolveSessionKey(stdin) {
+    return (stdin?.session_id
+        || process.env.CLAUDE_CODE_SESSION_ID
+        || process.env.CLAUDE_SESSION_ID
+        || process.env.CLAUDECODE_SESSION_ID
+        || extractSessionIdFromPath(stdin?.transcript_path ?? "")
+        || "default");
 }
 function mergeStdinRateLimits(stdinRateLimits, usageResult) {
     if (!stdinRateLimits) {
@@ -55,17 +71,20 @@ async function calculateSessionHealth(sessionStart, contextPercent) {
  */
 async function main() {
     try {
-        // Read stdin from Claude Code
-        const previousStdinCache = readStdinCache();
+        // Read stdin from Claude Code first — the session key (and therefore
+        // every per-session cache file) is derived from it.
         let stdin = await readStdin();
-        if (stdin) {
-            stdin = stabilizeContextPercent(stdin, previousStdinCache);
-            writeStdinCache(stdin);
-        }
-        else {
+        if (!stdin) {
             // No piped stdin (e.g. invoked directly) — nothing to render.
             return;
         }
+        const sessionKey = resolveSessionKey(stdin);
+        // Carry the previous frame's context% across Claude Code's transient
+        // all-null context_window snapshots. The cache is per-session, so other
+        // sessions in this directory can no longer clobber it.
+        const previousStdinCache = readStdinCache(sessionKey);
+        stdin = stabilizeContextPercent(stdin, previousStdinCache);
+        writeStdinCache(stdin, sessionKey);
         const cwd = resolveToWorktreeRoot(stdin.cwd || undefined);
         // Read configuration (before transcript parsing so we can use staleTaskThresholdMinutes)
         // Clone to avoid mutating shared DEFAULT_HUD_CONFIG when applying runtime width detection
@@ -89,19 +108,17 @@ async function main() {
         const transcriptData = await parseTranscript(resolvedTranscriptPath, {
             staleTaskThresholdMinutes: config.staleTaskThresholdMinutes,
         });
-        const currentSessionId = extractSessionIdFromPath(resolvedTranscriptPath ?? stdin.transcript_path ?? "");
         // Initialize HUD state (cleanup stale/orphaned tasks)
-        // Must happen after cwd resolution so cleanup targets the correct project directory
-        await initializeHUDState(cwd, currentSessionId ?? undefined);
+        await initializeHUDState(cwd, sessionKey);
         // Read HUD state for background tasks
-        const hudState = readHudState(cwd, currentSessionId ?? undefined);
+        const hudState = readHudState(cwd, sessionKey);
         // Persist session start time to survive tail-parsing resets (#528)
         // When tail parsing kicks in for large transcripts, sessionStart comes from
         // the first entry in the tail chunk rather than the actual session start.
         // We persist the real start time in HUD state on first observation.
         // Scoped per session ID so a new session in the same cwd resets the timestamp.
         let sessionStart = transcriptData.sessionStart;
-        const sameSession = hudState?.sessionId === currentSessionId;
+        const sameSession = hudState?.sessionId === sessionKey;
         if (sameSession && hudState?.sessionStartTimestamp) {
             // Use persisted value (the real session start) - but validate first
             const persisted = new Date(hudState.sessionStartTimestamp);
@@ -117,9 +134,9 @@ async function main() {
                 backgroundTasks: [],
             };
             stateToWrite.sessionStartTimestamp = sessionStart.toISOString();
-            stateToWrite.sessionId = currentSessionId ?? undefined;
+            stateToWrite.sessionId = sessionKey;
             stateToWrite.timestamp = new Date().toISOString();
-            writeHudState(stateToWrite, cwd, currentSessionId ?? undefined);
+            writeHudState(stateToWrite, cwd, sessionKey);
         }
         // Merge Claude Code stdin generic buckets with API/cache-specific fields.
         // Stdin owns fresher five-hour/seven-day values, while getUsage() may provide
@@ -129,12 +146,23 @@ async function main() {
         const rateLimitsResult = config.elements.rateLimits === false
             ? null
             : mergeStdinRateLimits(stdinRateLimits, usageResult);
-        const contextPercent = getContextPercent(stdin);
+        // Native stdin context_window is authoritative when present, but Claude
+        // Code zeroes it between turns and non-Anthropic providers (API token +
+        // ANTHROPIC_BASE_URL) leave it zeroed far more often. When it yields 0,
+        // recover the value from the transcript's last-request usage so ctx does
+        // not collapse to 0% on idle frames or after a cross-session cache clobber.
+        let contextPercent = getContextPercent(stdin);
+        if (contextPercent === 0) {
+            const contextFromUsage = getContextPercentFromUsage(stdin, transcriptData.lastRequestTokenUsage);
+            if (contextFromUsage != null) {
+                contextPercent = contextFromUsage;
+            }
+        }
         const payloadEstimate = estimatePayloadFromTranscriptPath(resolvedTranscriptPath);
         // Build render context
         const context = {
             contextPercent,
-            contextDisplayScope: currentSessionId ?? cwd,
+            contextDisplayScope: sessionKey,
             modelName: getModelName(stdin),
             modelId: getModelId(stdin),
             effortLevel: getEffortLevel(stdin),
@@ -177,9 +205,8 @@ async function main() {
         if (config.contextLimitWarning.autoCompact &&
             context.contextPercent >= config.contextLimitWarning.threshold) {
             try {
-                const stateDir = join(getStateRoot(cwd), "state");
-                mkdirSync(stateDir, { recursive: true });
-                const triggerFile = join(stateDir, "compact-requested.json");
+                ensureCacheDir();
+                const triggerFile = sessionCacheFile("compact-requested", sessionKey);
                 writeFileSync(triggerFile, JSON.stringify({
                     requestedAt: new Date().toISOString(),
                     contextPercent: context.contextPercent,

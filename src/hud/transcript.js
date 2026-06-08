@@ -505,6 +505,14 @@ function extractLastRequestTokenUsage(usage) {
         ?? usage.output_tokens_details?.reasoningTokens
         ?? usage.completion_tokens_details?.reasoning_tokens
         ?? usage.completion_tokens_details?.reasoningTokens);
+    // Cache-side input tokens. Captured so the context element can fall back to
+    // the transcript when the live stdin context_window is zeroed (see
+    // getContextPercentFromUsage in stdin.js). For Anthropic these carry the
+    // bulk of the prompt; for non-Anthropic providers they are typically 0.
+    const cacheReadInputTokens = getNumericUsageValue(usage.cache_read_input_tokens
+        ?? usage.cacheReadInputTokens);
+    const cacheCreationInputTokens = getNumericUsageValue(usage.cache_creation_input_tokens
+        ?? usage.cacheCreationInputTokens);
     if (inputTokens == null && outputTokens == null) {
         return null;
     }
@@ -514,6 +522,12 @@ function extractLastRequestTokenUsage(usage) {
     };
     if (reasoningTokens != null && reasoningTokens > 0) {
         normalized.reasoningTokens = Math.max(0, Math.round(reasoningTokens));
+    }
+    if (cacheReadInputTokens != null && cacheReadInputTokens > 0) {
+        normalized.cacheReadInputTokens = Math.max(0, Math.round(cacheReadInputTokens));
+    }
+    if (cacheCreationInputTokens != null && cacheCreationInputTokens > 0) {
+        normalized.cacheCreationInputTokens = Math.max(0, Math.round(cacheCreationInputTokens));
     }
     return normalized;
 }
