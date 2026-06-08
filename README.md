@@ -87,4 +87,5 @@ git -C ~/.claude/hud pull
 - The working-folder path shows `~` in place of `$HOME` to stay compact.
 - Per-session render cache lives in `cache/` and is safe to delete anytime.
 - Optional env: `HUD_CACHE_DIR`, `HUD_SYNC_REFRESH=1` (synchronous render),
-  `HUD_DEBUG=1` (verbose), `HUD_STATE_DIR` (centralized per-project state).
+  `HUD_DEBUG=1` (verbose), `HUD_STATE_DIR` (override the state base dir; by default
+  state centralizes under the HUD install dir, never inside your project).

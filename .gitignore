@@ -5,7 +5,8 @@ cache/
 *.log
 *.tmp
 
-# Per-project runtime state (written into the cwd, never the repo)
+# HUD runtime state — centralized under <hud>/.claude-statusline/<project-id> by
+# default (override with HUD_STATE_DIR). Matched at any depth; never committed.
 .claude-statusline/
 
 # Local agent tooling scratch

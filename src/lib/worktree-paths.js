@@ -4,14 +4,15 @@
  * Provides strict path validation and resolution for .claude-statusline/ paths,
  * ensuring all operations stay within the worktree boundary.
  *
- * Supports HUD_STATE_DIR environment variable for centralized state storage.
- * When set, state is stored at $HUD_STATE_DIR/{project-identifier}/ instead
- * of {worktree}/.claude-statusline/. This preserves state across worktree deletions.
+ * State is centralized under <hud-install>/.claude-statusline/{project-identifier}/
+ * by default, so no .claude-statusline/ folder is ever created inside a user's
+ * project. The HUD_STATE_DIR environment variable overrides the base directory.
  */
 import { createHash } from 'crypto';
 import { execSync } from 'child_process';
 import { existsSync, mkdirSync, realpathSync, readdirSync } from 'fs';
 import { resolve, normalize, relative, sep, join, isAbsolute, basename, dirname } from 'path';
+import { fileURLToPath } from 'url';
 import { getClaudeConfigDir } from './config-dir.js';
 /** Standard .claude-statusline subdirectories */
 export const StatePaths = {
@@ -78,10 +79,8 @@ export function validatePath(inputPath) {
     }
 }
 // ============================================================================
-// HUD_STATE_DIR SUPPORT (Issue #1014)
+// STATE PATH RESOLUTION (default base = HUD install dir; HUD_STATE_DIR overrides) — Issue #1014
 // ============================================================================
-/** Track which dual-dir warnings have been logged to avoid repeated warnings */
-const dualDirWarnings = new Set();
 /**
  * Get a stable project identifier for centralized state storage.
  *
@@ -145,33 +144,34 @@ export function getProjectIdentifier(worktreeRoot) {
     return `${dirName}-${hash}`;
 }
 /**
- * Get the .claude-statusline root directory path.
+ * Default state base directory: the HUD install's own `.claude-statusline/`
+ * folder, derived from this module's location so it stays correct if the HUD
+ * is relocated. worktree-paths.js lives at `<hud-install>/src/lib/`, so the
+ * install root is two directories up.
+ */
+function getDefaultStateBase() {
+    const moduleDir = dirname(fileURLToPath(import.meta.url));
+    const hudInstallRoot = resolve(moduleDir, '..', '..');
+    return join(hudInstallRoot, StatePaths.ROOT);
+}
+/**
+ * Get the state root directory for a project.
  *
- * When HUD_STATE_DIR is set, returns $HUD_STATE_DIR/{project-identifier}/
- * instead of {worktree}/.claude-statusline/. This allows centralized state storage that
- * survives worktree deletion.
+ * State is centralized under a single base directory with a per-project
+ * subdirectory, so unrelated projects never collide:
+ *   <base>/<project-identifier>/
  *
- * @param worktreeRoot - Optional worktree root
- * @returns Absolute path to the hud root directory
+ * The base defaults to the HUD install's own `.claude-statusline/` folder
+ * (next to the code), so a `.claude-statusline/` directory is never created
+ * inside a user's project. Setting HUD_STATE_DIR overrides the base.
+ *
+ * @param worktreeRoot - Optional worktree root (used to derive the project id)
+ * @returns Absolute path to the project's state root
  */
 export function getStateRoot(worktreeRoot) {
-    const customDir = process.env.HUD_STATE_DIR;
-    if (customDir) {
-        const root = worktreeRoot || getWorktreeRoot() || process.cwd();
-        const projectId = getProjectIdentifier(root);
-        const centralizedPath = join(customDir, projectId);
-        // Log notice if both legacy .claude-statusline/ and new centralized dir exist
-        const legacyPath = join(root, StatePaths.ROOT);
-        const warningKey = `${legacyPath}:${centralizedPath}`;
-        if (!dualDirWarnings.has(warningKey) && existsSync(legacyPath) && existsSync(centralizedPath)) {
-            dualDirWarnings.add(warningKey);
-            console.warn(`[hud] Both legacy state dir (${legacyPath}) and centralized state dir (${centralizedPath}) exist. ` +
-                `Using centralized dir. Consider migrating data from the legacy dir and removing it.`);
-        }
-        return centralizedPath;
-    }
     const root = worktreeRoot || getWorktreeRoot() || process.cwd();
-    return join(root, StatePaths.ROOT);
+    const baseDir = process.env.HUD_STATE_DIR || getDefaultStateBase();
+    return join(baseDir, getProjectIdentifier(root));
 }
 /**
  * Resolve a relative path under .claude-statusline/ to an absolute path.
