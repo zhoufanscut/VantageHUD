@@ -67,8 +67,8 @@ export const DEFAULT_ELEMENT_ORDER = {
     line1: ['hostname', 'cwd', 'gitRepo', 'gitBranch', 'gitStatus', 'apiKeySource', 'profile'],
     main: [
         'pathLabel', 'model', 'rateLimits', 'permission',
-        'promptTime', 'session', 'tokens',
-        'contextBar', 'agents', 'background',
+        'contextBar', 'tokens', 'session', 'promptTime',
+        'agents', 'background',
         'callCounts', 'lastSkill', 'lastTool',
     ],
     detail: ['agents', 'contextWarning', 'payloadWarning', 'todos'],
