@@ -44,7 +44,9 @@ export function renderPromptTime(promptTime, now) {
             // Teal while the prompt cache is still warm; rose once the 5-minute
             // TTL has lapsed and the next turn will miss the cache.
             const color = elapsed >= CACHE_TTL_MS ? AURORA.gradHigh : AURORA.gradLow;
-            return `${auroraFaint('⏰')}${paint(color, formatElapsed(elapsed))}`;
+            // Icon left unpainted so it renders as a native-color emoji, matching
+            // the raw tool/agent/skill icons in call-counts (which apply no SGR).
+            return `⏰${paint(color, formatElapsed(elapsed))}`;
         }
     }
     const hours = String(promptTime.getHours()).padStart(2, '0');
