@@ -6,7 +6,7 @@
 import { existsSync, readFileSync } from "fs";
 import { join } from "path";
 import { getClaudeConfigDir } from "../lib/config-dir.js";
-import { sessionCacheFile, ensureCacheDir } from "../lib/worktree-paths.js";
+import { sessionCacheFile, ensureSessionCacheDir } from "../lib/worktree-paths.js";
 import { atomicWriteJsonSync } from "../lib/atomic-write.js";
 import { DEFAULT_HUD_CONFIG, PRESET_CONFIGS, isHudLocale, resolveHudLabels, sanitizeHudLabels, } from "./types.js";
 import { cleanupStaleBackgroundTasks, markOrphanedTasksAsStale, } from "./background-cleanup.js";
@@ -14,9 +14,9 @@ import { cleanupStaleBackgroundTasks, markOrphanedTasksAsStale, } from "./backgr
 // Path Helpers
 // ============================================================================
 /**
- * Resolve the HUD state file: `<cacheDir>/hud-state.<session>.json`.
- * Flat and session-scoped; a missing session id collapses to
- * `hud-state.default.json`. The `directory` argument is unused (state no longer
+ * Resolve the HUD state file: `<cacheDir>/<session>/hud-state.json`.
+ * Session-scoped via a per-session subfolder; a missing session id collapses to
+ * the `default/` folder. The `directory` argument is unused (state no longer
  * lives under the project/worktree) but kept for call-site compatibility.
  */
 function getStateFilePath(_directory, sessionId) {
@@ -90,7 +90,7 @@ export function readHudState(directory, sessionId) {
  */
 export function writeHudState(state, directory, sessionId) {
     try {
-        ensureCacheDir();
+        ensureSessionCacheDir(sessionId);
         const stateFile = getStateFilePath(directory, sessionId);
         const nextState = sessionId ? { ...state, sessionId } : state;
         atomicWriteJsonSync(stateFile, nextState);

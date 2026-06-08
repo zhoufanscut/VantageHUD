@@ -17,7 +17,7 @@ statusline.sh     # entry point Claude Code calls (caches + renders)
 statusline.mjs    # Node launcher: installs the proxy tunnel, loads src/
 find-node.sh      # locates node (PATH / nvm / fnm / homebrew)
 src/              # the renderer (ESM, Node built-ins only)
-cache/            # per-session render cache (gitignored)
+cache/            # render cache + state, one subfolder per session (gitignored)
 ```
 
 ## Setup
@@ -85,9 +85,10 @@ git -C ~/.claude/hud pull
 
 ## Notes
 - The working-folder path shows `~` in place of `$HOME` to stay compact.
-- All runtime files live flat in `cache/`, named `<name>.<session>.json` (the
-  render cache, HUD state, and the context-stabilization snapshot). Centralized
-  under the HUD install dir, never inside your project; safe to delete anytime.
+- All runtime files live in a per-session subfolder of `cache/`, i.e.
+  `cache/<session>/<name>.json` (the render cache, HUD state, and the
+  context-stabilization snapshot grouped per session). Centralized under the HUD
+  install dir, never inside your project; safe to delete anytime.
 - Optional env: `HUD_CACHE_DIR` (override that cache/state dir; default is the HUD
   install's own `cache/`), `HUD_SYNC_REFRESH=1` (synchronous render), `HUD_DEBUG=1`
   (verbose).

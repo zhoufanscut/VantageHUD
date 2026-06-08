@@ -4,11 +4,11 @@
  * Worktree resolution (getWorktreeRoot / resolveToWorktreeRoot /
  * resolveTranscriptPath) is used for cwd display and transcript lookup.
  *
- * All runtime files live flat in a single cache directory
- * (getCacheDir → HUD_CACHE_DIR || <install>/cache) with a `<name>.<session>.json`
- * naming scheme. Nothing is ever written inside a user's project, and the
- * globally-unique session id keeps unrelated sessions (and projects) from
- * colliding — so no per-project subdirectory is needed.
+ * Runtime files live in a per-session subfolder of the cache directory
+ * (getCacheDir → HUD_CACHE_DIR || <install>/cache), i.e.
+ * `<cacheDir>/<session>/<name>.json`. Nothing is ever written inside a user's
+ * project, and the globally-unique session id names the folder, so unrelated
+ * sessions (and projects sharing one install) never collide.
  */
 import { execSync } from 'child_process';
 import { existsSync, mkdirSync, realpathSync, readdirSync, statSync } from 'fs';
@@ -76,11 +76,12 @@ export function validatePath(inputPath) {
     }
 }
 // ============================================================================
-// FLAT CACHE PATHS (single dir = HUD_CACHE_DIR || <install>/cache) — matches statusline.sh
+// SESSION CACHE PATHS (<cacheDir>/<session>/<name>.json) — matches statusline.sh
 // ============================================================================
 /**
- * Resolve the shared cache directory. Both the shell wrapper's render cache and
- * the Node HUD's state live here, flat, named `<base>.<session>.json`.
+ * Resolve the shared cache root. Both the shell wrapper's render cache and the
+ * Node HUD's state live under here, each in a per-session subfolder
+ * (`<cacheDir>/<session>/<base>.json`).
  *
  * The default is the HUD install's own `cache/` folder, derived from this
  * module's location so it follows a relocated install. worktree-paths.js lives
@@ -97,11 +98,38 @@ export function getCacheDir() {
     return join(hudInstallRoot, 'cache');
 }
 /**
- * Ensure the shared cache directory exists. Best-effort; tolerates the EEXIST
- * race between concurrent sessions (see atomic-write.js:ensureDirSync).
+ * Sanitize a session key for use as a cache folder name. Mirrors the shell's
+ * `sed 's/[^A-Za-z0-9_.-]/_/g'` (statusline.sh) so Node and the shell agree on
+ * the folder for the same session. Empty/missing keys — and a bare `.`/`..`,
+ * which would otherwise point the session dir at the cache root or its parent —
+ * collapse to `default`.
  */
-export function ensureCacheDir() {
-    const dir = getCacheDir();
+export function sanitizeSessionKey(sessionKey) {
+    const raw = (sessionKey == null ? '' : String(sessionKey)).trim();
+    if (!raw) {
+        return 'default';
+    }
+    const safe = raw.replace(/[^A-Za-z0-9_.-]/g, '_');
+    return safe === '.' || safe === '..' ? 'default' : safe;
+}
+/**
+ * Resolve a session's cache subfolder: `<cacheDir>/<session>`.
+ *
+ * The sanitized session id names the folder, so every file for one session is
+ * grouped together and unrelated sessions (or projects sharing one install)
+ * never collide.
+ */
+export function getSessionCacheDir(sessionKey) {
+    return join(getCacheDir(), sanitizeSessionKey(sessionKey));
+}
+/**
+ * Ensure a session's cache subfolder exists. Best-effort; tolerates the EEXIST
+ * race between concurrent sessions (see atomic-write.js:ensureDirSync). Callers
+ * using raw fs.writeFileSync must call this first — only atomicWriteFileSync and
+ * the file lock auto-create parent dirs.
+ */
+export function ensureSessionCacheDir(sessionKey) {
+    const dir = getSessionCacheDir(sessionKey);
     if (!existsSync(dir)) {
         try {
             mkdirSync(dir, { recursive: true });
@@ -114,45 +142,32 @@ export function ensureCacheDir() {
     return dir;
 }
 /**
- * Sanitize a session key for use as a filename suffix. Mirrors the shell's
- * `sed 's/[^A-Za-z0-9_.-]/_/g'` (statusline.sh) so Node and the shell agree on
- * the suffix for the same session. Empty/missing keys collapse to `default`.
- */
-export function sanitizeSessionKey(sessionKey) {
-    const raw = (sessionKey == null ? '' : String(sessionKey)).trim();
-    if (!raw) {
-        return 'default';
-    }
-    return raw.replace(/[^A-Za-z0-9_.-]/g, '_');
-}
-/**
- * Resolve a session-scoped cache file path: `<cacheDir>/<baseName>.<session>.json`.
+ * Resolve a session-scoped cache file path: `<cacheDir>/<session>/<baseName>.json`.
  *
- * Flat — no per-project or per-session subdirectories. The globally-unique
- * session id keeps unrelated sessions (and projects sharing one install) from
- * colliding, which is also why the stdin cache can no longer be clobbered
- * across sessions.
+ * Each session gets its own subfolder (named by the sanitized session id), so a
+ * session's files are grouped together and unrelated sessions — or projects
+ * sharing one install — never collide.
  */
 export function sessionCacheFile(baseName, sessionKey) {
-    return join(getCacheDir(), `${baseName}.${sanitizeSessionKey(sessionKey)}.json`);
+    return join(getSessionCacheDir(sessionKey), `${baseName}.json`);
 }
 /**
- * List existing `<baseName>.*.json` cache files, most-recently-modified first
- * (absolute paths). Used only as a fallback for readers that have no session
- * key (e.g. a detached watch process); the primary path always passes a key.
+ * List existing `<session>/<baseName>.json` cache files across every session
+ * subfolder, most-recently-modified first (absolute paths). Used only as a
+ * fallback for readers that have no session key (e.g. a detached watch
+ * process); the primary path always passes a key.
  */
 export function listSessionCacheFiles(baseName) {
     const dir = getCacheDir();
     if (!existsSync(dir)) {
         return [];
     }
-    const prefix = `${baseName}.`;
+    const fileName = `${baseName}.json`;
     try {
         return readdirSync(dir, { withFileTypes: true })
-            .filter((entry) => entry.isFile()
-            && entry.name.startsWith(prefix)
-            && entry.name.endsWith('.json'))
-            .map((entry) => join(dir, entry.name))
+            .filter((entry) => entry.isDirectory())
+            .map((entry) => join(dir, entry.name, fileName))
+            .filter((path) => existsSync(path))
             .map((path) => {
             try {
                 return { path, mtime: statSync(path).mtimeMs };
@@ -175,7 +190,7 @@ export function listSessionCacheFiles(baseName) {
  * Falls back to `getWorktreeRoot(process.cwd())`, then `process.cwd()`.
  *
  * Used to derive the cwd shown in the HUD and to resolve transcript paths —
- * not for state location (runtime files live flat under getCacheDir()).
+ * not for state location (runtime files live under getCacheDir()/<session>/).
  *
  * @param directory - Any directory inside a git worktree (optional)
  * @returns The worktree root (never a subdirectory)

@@ -43,7 +43,7 @@ is_stale_path() {
 }
 
 cleanup_empty_temp_files() {
-  for temp_path in "$CACHE_DIR"/stdin.*.tmp "$CACHE_DIR"/statusline.*.tmp "$CACHE_DIR"/statusline.*.err; do
+  for temp_path in "$CACHE_DIR"/stdin.*.tmp "$CACHE_DIR"/*/statusline.*.tmp "$CACHE_DIR"/*/statusline.*.err; do
     [ -f "$temp_path" ] || continue
     [ -s "$temp_path" ] && continue
     is_stale_path "$temp_path" || continue
@@ -52,7 +52,7 @@ cleanup_empty_temp_files() {
 }
 
 cleanup_stale_render_locks() {
-  for stale_lock_dir in "$CACHE_DIR"/render.*.lock; do
+  for stale_lock_dir in "$CACHE_DIR"/*/render.lock; do
     [ -d "$stale_lock_dir" ] || continue
     is_stale_path "$stale_lock_dir" || continue
     rm -rf "$stale_lock_dir" 2>/dev/null || :
@@ -98,12 +98,25 @@ if [ -z "$SESSION_KEY" ]; then
   SESSION_KEY=default
 fi
 SESSION_KEY=$(printf '%s' "$SESSION_KEY" | sed 's/[^A-Za-z0-9_.-]/_/g')
+# A bare . or .. would point the session dir at the cache root or its parent.
+case "$SESSION_KEY" in
+  . | ..) SESSION_KEY=default ;;
+esac
 
-INPUT_FILE="$CACHE_DIR/stdin.$SESSION_KEY.json"
-OUTPUT_FILE="$CACHE_DIR/statusline.$SESSION_KEY.txt"
-LOCK_DIR="$CACHE_DIR/render.$SESSION_KEY.lock"
-NODE_STDOUT_TMP="$CACHE_DIR/statusline.$SESSION_KEY.$$.tmp"
-NODE_STDERR_TMP="$CACHE_DIR/statusline.$SESSION_KEY.$$.err"
+# Every file for a session lives together in its own subfolder. If it can't be
+# created, degrade gracefully without stranding the captured stdin payload.
+SESSION_DIR="$CACHE_DIR/$SESSION_KEY"
+mkdir -p "$SESSION_DIR" 2>/dev/null || {
+  printf '[HUD] Starting...\n'
+  rm -f "$INPUT_TMP" 2>/dev/null || :
+  exit 0
+}
+
+INPUT_FILE="$SESSION_DIR/stdin.json"
+OUTPUT_FILE="$SESSION_DIR/statusline.txt"
+LOCK_DIR="$SESSION_DIR/render.lock"
+NODE_STDOUT_TMP="$SESSION_DIR/statusline.$$.tmp"
+NODE_STDERR_TMP="$SESSION_DIR/statusline.$$.err"
 
 if [ -s "$INPUT_TMP" ]; then
   mv "$INPUT_TMP" "$INPUT_FILE" 2>/dev/null || cp "$INPUT_TMP" "$INPUT_FILE" 2>/dev/null || :

@@ -5,23 +5,22 @@
  * Based on claude-hud reference implementation.
  */
 import { readFileSync, writeFileSync } from 'fs';
-import { join } from 'path';
-import { ensureCacheDir, sessionCacheFile, listSessionCacheFiles, } from '../lib/worktree-paths.js';
+import { ensureSessionCacheDir, sessionCacheFile, listSessionCacheFiles, } from '../lib/worktree-paths.js';
 const TRANSIENT_CONTEXT_PERCENT_TOLERANCE = 3;
 // ============================================================================
-// Stdin Cache (session-scoped, flat under the cache dir)
+// Stdin Cache (session-scoped, in the session's cache subfolder)
 // ============================================================================
 /**
  * Persist the last successful stdin read, keyed by session.
  *
- * Written to `<cacheDir>/hud-stdin-cache.<session>.json`. The session key is
+ * Written to `<cacheDir>/<session>/hud-stdin-cache.json`. The session key is
  * supplied by the caller (derived from the stdin `session_id`), so the cache is
  * per-session by construction — concurrent sessions in the same directory can
  * no longer clobber each other's stabilization snapshot.
  */
 export function writeStdinCache(stdin, sessionKey) {
     try {
-        ensureCacheDir();
+        ensureSessionCacheDir(sessionKey);
         writeFileSync(sessionCacheFile('hud-stdin-cache', sessionKey), JSON.stringify(stdin));
     }
     catch {
@@ -33,8 +32,8 @@ export function writeStdinCache(stdin, sessionKey) {
  *
  * With a session key, the per-session file is authoritative. Without one (e.g.
  * a detached watch process that never received the stdin payload), fall back to
- * the most recently modified `hud-stdin-cache.*.json` so the view is not stuck
- * empty. Returns null if no cache exists or it is unreadable.
+ * the most recently modified `<session>/hud-stdin-cache.json` so the view is not
+ * stuck empty. Returns null if no cache exists or it is unreadable.
  */
 export function readStdinCache(sessionKey) {
     const tryRead = (path) => {

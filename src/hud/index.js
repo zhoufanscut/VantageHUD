@@ -13,7 +13,7 @@ import { render } from "./render.js";
 import { detectApiKeySource } from "./elements/api-key-source.js";
 import { sanitizeOutput } from "./sanitize.js";
 import { estimatePayloadFromTranscriptPath } from "./payload-estimate.js";
-import { resolveToWorktreeRoot, resolveTranscriptPath, sessionCacheFile, ensureCacheDir } from "../lib/worktree-paths.js";
+import { resolveToWorktreeRoot, resolveTranscriptPath, sessionCacheFile, ensureSessionCacheDir } from "../lib/worktree-paths.js";
 import { writeFileSync } from "fs";
 import { basename } from "path";
 /**
@@ -29,7 +29,7 @@ function extractSessionIdFromPath(transcriptPath) {
  * Resolve the session key that names every per-session cache file.
  *
  * Prefers Claude Code's stdin `session_id` (the same value statusline.sh uses
- * for `stdin.<session>.json`, so filenames line up), then the session-id env
+ * to name the `<session>/` cache folder, so the two sides line up), then the session-id env
  * vars, then the transcript-derived UUID. Falls back to `default` so a payload
  * with no session info still gets a stable, self-consistent file.
  */
@@ -205,7 +205,7 @@ async function main() {
         if (config.contextLimitWarning.autoCompact &&
             context.contextPercent >= config.contextLimitWarning.threshold) {
             try {
-                ensureCacheDir();
+                ensureSessionCacheDir(sessionKey);
                 const triggerFile = sessionCacheFile("compact-requested", sessionKey);
                 writeFileSync(triggerFile, JSON.stringify({
                     requestedAt: new Date().toISOString(),
