@@ -1,10 +1,13 @@
 /**
  * HUD - Prompt Time Element
  *
- * Renders elapsed time since the last user prompt, doubling as a prompt-cache-age
- * gauge (teal while warm, rose once the 5-min cache TTL lapses). The timestamp is
- * derived from the transcript's most recent user-prompt entry, falling back to a
- * UserPromptSubmit hook timestamp (hudState.lastPromptTimestamp) if one is present.
+ * Renders a prompt-cache-age gauge: elapsed time since the last API round-trip
+ * (teal while warm, rose once the 5-min cache TTL lapses). The timestamp is the
+ * transcript's most recent main-thread user/assistant turn — typed prompts,
+ * tool_results (incl. AskUserQuestion answers), and assistant responses all count,
+ * since each re-reads and refreshes the prompt cache; subagent sidechains don't.
+ * Falls back to the last typed prompt, then a UserPromptSubmit hook timestamp
+ * (hudState.lastPromptTimestamp), if the activity signal is unavailable.
  */
 import { paint, auroraFaint, AURORA } from '../colors.js';
 /**

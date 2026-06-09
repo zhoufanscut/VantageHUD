@@ -55,6 +55,7 @@ export async function parseTranscript(transcriptPath, options) {
         skillCallCount: 0,
         lastToolName: null,
         lastPromptTime: undefined,
+        lastActivityTime: undefined,
     };
     if (!transcriptPath || !existsSync(transcriptPath)) {
         return result;
@@ -172,6 +173,7 @@ function cloneTranscriptData(result) {
         todos: result.todos.map((todo) => ({ ...todo })),
         sessionStart: cloneDate(result.sessionStart),
         lastPromptTime: cloneDate(result.lastPromptTime),
+        lastActivityTime: cloneDate(result.lastActivityTime),
         lastActivatedSkill: result.lastActivatedSkill
             ? {
                 ...result.lastActivatedSkill,
@@ -313,6 +315,18 @@ function processEntry(entry, agentMap, latestTodos, result, maxAgentMapSize = 50
     // Set session start time from first entry
     if (!result.sessionStart && entry.timestamp) {
         result.sessionStart = timestamp;
+    }
+    // Prompt-cache-age signal. Every main-thread user/assistant entry is an API
+    // round-trip that re-reads (and refreshes the TTL on) the prompt cache —
+    // typed prompts, tool_results (incl. AskUserQuestion answers), and assistant
+    // turns alike. Track the most recent one so promptTime reflects true cache
+    // age, not just the last thing the user typed. Sidechain (subagent) entries
+    // touch a *separate* context/cache, so they're excluded. Entries are
+    // chronological; the last wins. A real timestamp is required to avoid the
+    // new Date() fallback poisoning the gauge.
+    if (entry.timestamp && !entry.isSidechain && !entry.isMeta &&
+        (entry.type === "user" || entry.type === "assistant")) {
+        result.lastActivityTime = timestamp;
     }
     const content = entry.message?.content;
     // Claude Code emits background-agent completion as a user-role message with

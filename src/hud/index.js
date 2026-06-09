@@ -179,7 +179,11 @@ async function main() {
             toolCallCount: transcriptData.toolCallCount,
             agentCallCount: transcriptData.agentCallCount,
             skillCallCount: transcriptData.skillCallCount,
-            promptTime: transcriptData.lastPromptTime
+            // Prompt-cache age: prefer the last API round-trip (any user/assistant
+            // turn) so the gauge tracks true cache warmth, not just typed prompts.
+            // Fall back to the last typed prompt, then the UserPromptSubmit hook ts.
+            promptTime: transcriptData.lastActivityTime
+                ?? transcriptData.lastPromptTime
                 ?? (hudState?.lastPromptTimestamp
                     ? new Date(hudState.lastPromptTimestamp)
                     : null),
