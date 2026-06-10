@@ -285,8 +285,8 @@ export async function render(context, config) {
     }
     if (enabledElements.contextBar) {
         const ctx = enabledElements.useBars
-            ? renderContextWithBar(context.contextPercent, config.thresholds, 10, context.contextDisplayScope, hudLabels)
-            : renderContext(context.contextPercent, config.thresholds, context.contextDisplayScope, hudLabels);
+            ? renderContextWithBar(context.contextPercent, config.thresholds, 10, hudLabels)
+            : renderContext(context.contextPercent, config.thresholds, hudLabels);
         if (ctx)
             rendered.set("contextBar", ctx);
     }

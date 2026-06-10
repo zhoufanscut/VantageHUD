@@ -105,7 +105,9 @@ export function writeHudState(state, directory, sessionId) {
  * Get running background tasks from state
  */
 export function getRunningTasks(state) {
-    if (!state)
+    // The state file is also written by external hooks (e.g. a UserPromptSubmit
+    // hook adding lastPromptTimestamp), so backgroundTasks may be absent.
+    if (!state || !Array.isArray(state.backgroundTasks))
         return [];
     return state.backgroundTasks.filter((task) => task.status === "running");
 }

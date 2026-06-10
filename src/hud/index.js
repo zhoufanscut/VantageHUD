@@ -13,8 +13,8 @@ import { render } from "./render.js";
 import { detectApiKeySource } from "./elements/api-key-source.js";
 import { sanitizeOutput } from "./sanitize.js";
 import { estimatePayloadFromTranscriptPath } from "./payload-estimate.js";
-import { resolveToWorktreeRoot, resolveTranscriptPath, sessionCacheFile, ensureSessionCacheDir } from "../lib/worktree-paths.js";
-import { writeFileSync } from "fs";
+import { resolveToWorktreeRoot, resolveTranscriptPath, sessionCacheFile } from "../lib/worktree-paths.js";
+import { atomicWriteJsonSync } from "../lib/atomic-write.js";
 import { basename } from "path";
 /**
  * Extract session ID (UUID) from a transcript path.
@@ -29,12 +29,16 @@ function extractSessionIdFromPath(transcriptPath) {
  * Resolve the session key that names every per-session cache file.
  *
  * Prefers Claude Code's stdin `session_id` (the same value statusline.sh uses
- * to name the `<session>/` cache folder, so the two sides line up), then the session-id env
- * vars, then the transcript-derived UUID. Falls back to `default` so a payload
- * with no session info still gets a stable, self-consistent file.
+ * to name the `<session>/` cache folder, so the two sides line up), then
+ * `HUD_SESSION_KEY` — the key statusline.sh computed for this render, exported
+ * so its fallback chain (transcript/cwd checksums) and Node's can never pick
+ * different folders. The remaining fallbacks (session-id env vars, the
+ * transcript-derived UUID, `default`) cover direct `node statusline.mjs` runs
+ * without the wrapper.
  */
 function resolveSessionKey(stdin) {
     return (stdin?.session_id
+        || process.env.HUD_SESSION_KEY
         || process.env.CLAUDE_CODE_SESSION_ID
         || process.env.CLAUDE_SESSION_ID
         || process.env.CLAUDECODE_SESSION_ID
@@ -162,7 +166,6 @@ async function main() {
         // Build render context
         const context = {
             contextPercent,
-            contextDisplayScope: sessionKey,
             modelName: getModelName(stdin),
             modelId: getModelId(stdin),
             effortLevel: getEffortLevel(stdin),
@@ -209,13 +212,12 @@ async function main() {
         if (config.contextLimitWarning.autoCompact &&
             context.contextPercent >= config.contextLimitWarning.threshold) {
             try {
-                ensureSessionCacheDir(sessionKey);
                 const triggerFile = sessionCacheFile("compact-requested", sessionKey);
-                writeFileSync(triggerFile, JSON.stringify({
+                atomicWriteJsonSync(triggerFile, {
                     requestedAt: new Date().toISOString(),
                     contextPercent: context.contextPercent,
                     threshold: config.contextLimitWarning.threshold,
-                }));
+                });
             }
             catch (error) {
                 // Silent failure — don't break HUD rendering

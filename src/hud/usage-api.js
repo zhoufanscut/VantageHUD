@@ -11,9 +11,10 @@
  * API: api.anthropic.com/api/oauth/usage
  * Response: { five_hour: { utilization }, seven_day: { utilization } }
  */
-import { existsSync, readFileSync, writeFileSync, renameSync, unlinkSync, mkdirSync } from 'fs';
+import { existsSync, readFileSync, writeFileSync, renameSync, unlinkSync } from 'fs';
 import { getClaudeConfigDir } from '../lib/config-dir.js';
-import { join, dirname } from 'path';
+import { join } from 'path';
+import { atomicWriteFileSync, atomicWriteJsonSync } from '../lib/atomic-write.js';
 import { execFileSync } from 'child_process';
 import { createHash } from 'crypto';
 import { userInfo } from 'os';
@@ -93,12 +94,8 @@ function migrateLegacyCache(source) {
         // Source mismatch guard: only migrate if legacy cache belongs to this provider
         if (cache.source !== source)
             return;
-        const newPath = getCachePath(source);
-        const cacheDir = dirname(newPath);
-        if (!existsSync(cacheDir)) {
-            mkdirSync(cacheDir, { recursive: true });
-        }
-        writeFileSync(newPath, content);
+        // Atomic write (creates the parent dir itself).
+        atomicWriteFileSync(getCachePath(source), content);
     }
     catch {
         // Best-effort migration — failures are harmless
@@ -147,10 +144,6 @@ function readCache(source) {
 function writeCache(opts) {
     try {
         const cachePath = getCachePath(opts.source);
-        const cacheDir = dirname(cachePath);
-        if (!existsSync(cacheDir)) {
-            mkdirSync(cacheDir, { recursive: true });
-        }
         const cache = {
             timestamp: Date.now(),
             data: opts.data,
@@ -162,7 +155,9 @@ function writeCache(opts) {
             rateLimitedUntil: opts.rateLimitedUntil,
             lastSuccessAt: opts.lastSuccessAt,
         };
-        writeFileSync(cachePath, JSON.stringify(cache, null, 2));
+        // Atomic write: this file is shared across sessions and read on an
+        // unlocked fast path, so a torn read must never be possible.
+        atomicWriteJsonSync(cachePath, cache);
     }
     catch {
         // Ignore cache write errors
@@ -608,18 +603,12 @@ export function parseUsageResponse(response, options) {
         // Enterprise path: used_credits (minor units) is present instead of spent_usd/limit_usd.
         // Only USD is observed in practice; the /100 divisor below assumes 2-digit minor units.
         // For any non-USD currency we refuse to guess the minor-unit digit count (JPY/KRW are
-        // 0-digit, TND/BHD are 3-digit per ISO 4217) and skip the enterprise fields — the
-        // renderer will then return null rather than display a wrong figure.
+        // 0-digit, TND/BHD are 3-digit per ISO 4217).
         const currency = (extra.currency ?? 'USD').toUpperCase();
         if (extra.used_credits != null && currency === 'USD' && isEnterpriseContext) {
-            result.enterpriseSpentUsd = extra.used_credits / 100;
-            result.enterpriseLimitUsd = extra.monthly_limit == null ? null : extra.monthly_limit / 100;
-            result.enterpriseCurrency = currency;
-            // Only compute utilization when there is a positive cap
-            if (extra.monthly_limit != null && extra.monthly_limit > 0) {
-                result.enterpriseUtilization = clamp((extra.used_credits / extra.monthly_limit) * 100);
-            }
-            // resets_at not provided in enterprise response — leave enterpriseResetsAt unset
+            // Enterprise spend is deliberately not rendered (the enterprise-cost
+            // element was pruned), but the branch must stay so enterprise
+            // used_credits are never misread as Pro/Max "extra:" overage below.
         }
         else if (extra.used_credits != null && currency === 'USD' && !isEnterpriseContext && extra.monthly_limit != null && extra.monthly_limit > 0) {
             // Max/Pro organization overage path: the API can use the enterprise-shaped

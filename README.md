@@ -88,7 +88,11 @@ git -C ~/.claude/hud pull
 - All runtime files live in a per-session subfolder of `cache/`, i.e.
   `cache/<session>/<name>.json` (the render cache, HUD state, and the
   context-stabilization snapshot grouped per session). Centralized under the HUD
-  install dir, never inside your project; safe to delete anytime.
+  install dir, never inside your project; safe to delete anytime. Session folders
+  idle for more than 14 days are pruned automatically.
+- If a render fails, the renderer's stderr is kept as
+  `cache/<session>/statusline.err` (cleared by the next good render) — check it
+  when the bar shows `[HUD] HUD error`.
 - Optional env: `HUD_CACHE_DIR` (override that cache/state dir; default is the HUD
-  install's own `cache/`), `HUD_SYNC_REFRESH=1` (synchronous render), `HUD_DEBUG=1`
-  (verbose).
+  install's own `cache/`), `HUD_CACHE_MAX_AGE_DAYS` (idle-session retention,
+  default 14), `HUD_SYNC_REFRESH=1` (synchronous render), `HUD_DEBUG=1` (verbose).

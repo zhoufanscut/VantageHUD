@@ -6,12 +6,6 @@
 import { DEFAULT_HUD_LABELS } from '../types.js';
 import { RESET, fg, gradientColor, auroraLabel } from '../colors.js';
 const DIM = '\x1b[2m';
-const CONTEXT_DISPLAY_HYSTERESIS = 2;
-const CONTEXT_DISPLAY_STATE_TTL_MS = 5_000;
-let lastDisplayedPercent = null;
-let lastDisplayedSeverity = null;
-let lastDisplayScope = null;
-let lastDisplayUpdatedAt = 0;
 function clampContextPercent(percent) {
     return Math.min(100, Math.max(0, Math.round(percent)));
 }
@@ -42,49 +36,16 @@ function getContextDisplayStyle(safePercent, thresholds) {
     }
 }
 /**
- * Apply display-layer hysteresis so small refresh-to-refresh ctx fluctuations
- * do not visibly jitter in the HUD.
- */
-export function getStableContextDisplayPercent(percent, thresholds, displayScope) {
-    const safePercent = clampContextPercent(percent);
-    const severity = getContextSeverity(safePercent, thresholds);
-    const nextScope = displayScope ?? null;
-    const now = Date.now();
-    if (nextScope !== lastDisplayScope) {
-        lastDisplayedPercent = null;
-        lastDisplayedSeverity = null;
-        lastDisplayScope = nextScope;
-    }
-    if (lastDisplayedPercent === null
-        || lastDisplayedSeverity === null
-        || now - lastDisplayUpdatedAt > CONTEXT_DISPLAY_STATE_TTL_MS) {
-        lastDisplayedPercent = safePercent;
-        lastDisplayedSeverity = severity;
-        lastDisplayUpdatedAt = now;
-        return safePercent;
-    }
-    if (severity !== lastDisplayedSeverity) {
-        lastDisplayedPercent = safePercent;
-        lastDisplayedSeverity = severity;
-        lastDisplayUpdatedAt = now;
-        return safePercent;
-    }
-    if (Math.abs(safePercent - lastDisplayedPercent) <= CONTEXT_DISPLAY_HYSTERESIS) {
-        lastDisplayUpdatedAt = now;
-        return lastDisplayedPercent;
-    }
-    lastDisplayedPercent = safePercent;
-    lastDisplayedSeverity = severity;
-    lastDisplayUpdatedAt = now;
-    return safePercent;
-}
-/**
  * Render context window percentage.
  *
  * Format: ctx:67%
+ *
+ * Frame-to-frame jitter damping happens upstream in stabilizeContextPercent
+ * (stdin.js), which persists across renders via the per-session stdin cache —
+ * in-process state cannot survive the one-process-per-render architecture.
  */
-export function renderContext(percent, thresholds, displayScope, labels = DEFAULT_HUD_LABELS) {
-    const safePercent = getStableContextDisplayPercent(percent, thresholds, displayScope);
+export function renderContext(percent, thresholds, labels = DEFAULT_HUD_LABELS) {
+    const safePercent = clampContextPercent(percent);
     const { color, suffix } = getContextDisplayStyle(safePercent, thresholds);
     return `${auroraLabel(`${labels.context}:`)}${color}${safePercent}%${suffix}${RESET}`;
 }
@@ -93,8 +54,8 @@ export function renderContext(percent, thresholds, displayScope, labels = DEFAUL
  *
  * Format: ctx:[████░░░░░░]67%
  */
-export function renderContextWithBar(percent, thresholds, barWidth = 10, displayScope, labels = DEFAULT_HUD_LABELS) {
-    const safePercent = getStableContextDisplayPercent(percent, thresholds, displayScope);
+export function renderContextWithBar(percent, thresholds, barWidth = 10, labels = DEFAULT_HUD_LABELS) {
+    const safePercent = clampContextPercent(percent);
     const filled = Math.round((safePercent / 100) * barWidth);
     const empty = barWidth - filled;
     const { color, suffix } = getContextDisplayStyle(safePercent, thresholds);

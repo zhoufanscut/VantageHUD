@@ -173,15 +173,10 @@ function formatDurationPadded(durationMs) {
     if (seconds < 10) {
         return '    '; // No duration for very short
     }
-    else if (seconds < 60) {
+    if (seconds < 60) {
         return `${seconds}s`.padStart(4);
     }
-    else if (minutes < 10) {
-        return `${minutes}m`.padStart(4);
-    }
-    else {
-        return `${minutes}m`.padStart(4);
-    }
+    return `${minutes}m`.padStart(4);
 }
 /**
  * Render agents as multi-line display for maximum clarity.

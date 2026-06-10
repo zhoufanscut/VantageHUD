@@ -43,7 +43,8 @@ export function renderCwd(cwd, format = 'relative', useHyperlinks = false) {
     switch (format) {
         case 'relative': {
             const home = homedir();
-            displayPath = cwd.startsWith(home)
+            // Require a separator so /home/userfoo doesn't render as ~foo.
+            displayPath = cwd === home || cwd.startsWith(home + '/')
                 ? '~' + cwd.slice(home.length)
                 : cwd;
             break;

@@ -4,8 +4,9 @@
  * Parse stdin JSON from Claude Code statusline interface.
  * Based on claude-hud reference implementation.
  */
-import { readFileSync, writeFileSync } from 'fs';
-import { ensureSessionCacheDir, sessionCacheFile, listSessionCacheFiles, } from '../lib/worktree-paths.js';
+import { readFileSync } from 'fs';
+import { sessionCacheFile, listSessionCacheFiles, } from '../lib/worktree-paths.js';
+import { atomicWriteJsonSync } from '../lib/atomic-write.js';
 const TRANSIENT_CONTEXT_PERCENT_TOLERANCE = 3;
 // ============================================================================
 // Stdin Cache (session-scoped, in the session's cache subfolder)
@@ -20,8 +21,9 @@ const TRANSIENT_CONTEXT_PERCENT_TOLERANCE = 3;
  */
 export function writeStdinCache(stdin, sessionKey) {
     try {
-        ensureSessionCacheDir(sessionKey);
-        writeFileSync(sessionCacheFile('hud-stdin-cache', sessionKey), JSON.stringify(stdin));
+        // Atomic write (creates the session dir itself): a torn file here would
+        // silently drop the stabilization snapshot for the next frame.
+        atomicWriteJsonSync(sessionCacheFile('hud-stdin-cache', sessionKey), stdin);
     }
     catch {
         // Best-effort; ignore failures
@@ -213,14 +215,11 @@ export function getContextPercent(stdin) {
  *
  * Claude Code emits all-null `context_window` frames between turns, so the HUD
  * normally relies on `stabilizeContextPercent` to carry the previous percentage
- * across them. That bridge fails in two situations that are common with an API
- * token + a non-Anthropic model reached via ANTHROPIC_BASE_URL:
- *   1. the stdin cache is shared per-worktree (Claude Code does not export a
- *      session id, so the cache is not session-scoped); a concurrent/interleaved
- *      session in the same directory clobbers it, and `isSameContextStream`
- *      then rejects the foreign snapshot, leaving nothing to carry forward; and
- *   2. the first frame after a resume has no prior snapshot at all.
- * In both cases ctx collapses to 0 even though the conversation is non-empty.
+ * across them. That bridge fails when there is no usable prior snapshot — most
+ * commonly the first frame after a resume (the stdin cache is per-session, so a
+ * fresh session starts empty), which is routine with an API token + a
+ * non-Anthropic model reached via ANTHROPIC_BASE_URL. ctx would then collapse
+ * to 0 even though the conversation is non-empty.
  *
  * The transcript persists the real last-request usage regardless of the
  * transient stdin frame, so it recovers the value. We sum the input-side

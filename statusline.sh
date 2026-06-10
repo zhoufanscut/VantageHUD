@@ -59,6 +59,37 @@ cleanup_stale_render_locks() {
   done
 }
 
+PRUNE_MARKER="$CACHE_DIR/.last-prune"
+PRUNE_INTERVAL_SECONDS=86400
+CACHE_MAX_AGE_DAYS=${HUD_CACHE_MAX_AGE_DAYS:-14}
+
+# Evict abandoned cache state. Runs from the locked refresh path (never the hot
+# path) and at most once per PRUNE_INTERVAL_SECONDS via the marker file.
+prune_old_cache() {
+  if [ -f "$PRUNE_MARKER" ]; then
+    prune_now=$(date +%s 2>/dev/null || printf '0')
+    prune_mtime=$(file_mtime "$PRUNE_MARKER")
+    if [ -n "$prune_mtime" ] && [ "$prune_now" -gt 0 ] \
+      && [ $((prune_now - prune_mtime)) -lt "$PRUNE_INTERVAL_SECONDS" ]; then
+      return
+    fi
+  fi
+  touch "$PRUNE_MARKER" 2>/dev/null || :
+  # Legacy flat files from the pre-subfolder layout (<name>.<session>.json at
+  # the cache root) — dead since sessions moved into subfolders; remove.
+  find "$CACHE_DIR" -maxdepth 1 -type f \
+    \( -name 'hud-state.*.json' -o -name 'hud-stdin-cache.*.json' \
+    -o -name 'stdin.*.json' -o -name 'statusline.*.txt' \
+    -o -name 'compact-requested.*.json' \) \
+    -exec rm -f {} + 2>/dev/null || :
+  # Session folders idle longer than the retention window. A folder's mtime
+  # refreshes on every render (files are renamed into it), so live sessions are
+  # never this old; a wrongly-pruned idle session self-heals via the
+  # synchronous first-render path.
+  find "$CACHE_DIR" -mindepth 1 -maxdepth 1 -type d -mtime +"$CACHE_MAX_AGE_DAYS" \
+    -exec rm -rf {} + 2>/dev/null || :
+}
+
 cleanup_empty_temp_files
 cleanup_stale_render_locks
 
@@ -152,16 +183,26 @@ refresh_cache() {
     return
   fi
 
+  # HUD_SESSION_KEY hands Node the exact key that named this session folder, so
+  # the renderer's cache files land in the same folder even when the key came
+  # from a fallback (transcript/cwd checksum) Node cannot recompute itself.
   if [ -x "$SCRIPT_DIR/find-node.sh" ]; then
-    sh "$SCRIPT_DIR/find-node.sh" "$HUD_SCRIPT" < "$INPUT_FILE" > "$NODE_STDOUT_TMP" 2> "$NODE_STDERR_TMP"
+    HUD_SESSION_KEY="$SESSION_KEY" sh "$SCRIPT_DIR/find-node.sh" "$HUD_SCRIPT" < "$INPUT_FILE" > "$NODE_STDOUT_TMP" 2> "$NODE_STDERR_TMP"
   else
-    node "$HUD_SCRIPT" < "$INPUT_FILE" > "$NODE_STDOUT_TMP" 2> "$NODE_STDERR_TMP"
+    HUD_SESSION_KEY="$SESSION_KEY" node "$HUD_SCRIPT" < "$INPUT_FILE" > "$NODE_STDOUT_TMP" 2> "$NODE_STDERR_TMP"
   fi
 
-  # Keep the last good line if rendering fails or returns empty output.
+  # Keep the last good line if rendering fails or returns empty output. On
+  # failure, keep the renderer's stderr as statusline.err so the HUD's
+  # "check stderr" hint has something to point at; a good render clears it.
   if [ -s "$NODE_STDOUT_TMP" ]; then
     mv "$NODE_STDOUT_TMP" "$OUTPUT_FILE" 2>/dev/null || cp "$NODE_STDOUT_TMP" "$OUTPUT_FILE" 2>/dev/null || :
+    rm -f "$SESSION_DIR/statusline.err" 2>/dev/null || :
+  elif [ -s "$NODE_STDERR_TMP" ]; then
+    mv "$NODE_STDERR_TMP" "$SESSION_DIR/statusline.err" 2>/dev/null || :
   fi
+
+  prune_old_cache
 
   rm -f "$NODE_STDOUT_TMP" "$NODE_STDERR_TMP" 2>/dev/null || :
   rm -rf "$LOCK_DIR" 2>/dev/null || :
