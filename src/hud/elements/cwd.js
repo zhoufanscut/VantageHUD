@@ -5,7 +5,7 @@
  * Supports OSC 8 terminal hyperlinks for supported terminals (iTerm2, WezTerm, etc.)
  */
 import { homedir } from 'node:os';
-import { basename, dirname, join } from 'node:path';
+import { basename, dirname, join, sep } from 'node:path';
 import { dim } from '../colors.js';
 /**
  * Wrap text in an OSC 8 terminal hyperlink.
@@ -44,9 +44,12 @@ export function renderCwd(cwd, format = 'relative', useHyperlinks = false) {
         case 'relative': {
             const home = homedir();
             // Require a separator so /home/userfoo doesn't render as ~foo.
-            displayPath = cwd === home || cwd.startsWith(home + '/')
-                ? '~' + cwd.slice(home.length)
-                : cwd;
+            // Windows paths may arrive with either slash, so accept both there;
+            // on POSIX a backslash is a legal filename character, not a separator.
+            const underHome = cwd === home
+                || cwd.startsWith(home + sep)
+                || (sep === '\\' && cwd.startsWith(home + '/'));
+            displayPath = underHome ? '~' + cwd.slice(home.length) : cwd;
             break;
         }
         case 'absolute':

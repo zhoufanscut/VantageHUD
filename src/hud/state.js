@@ -106,10 +106,11 @@ export function writeHudState(state, directory, sessionId) {
  */
 export function getRunningTasks(state) {
     // The state file is also written by external hooks (e.g. a UserPromptSubmit
-    // hook adding lastPromptTimestamp), so backgroundTasks may be absent.
+    // hook adding lastPromptTimestamp), so backgroundTasks may be absent — and
+    // its entries are untrusted too (a null entry must not throw).
     if (!state || !Array.isArray(state.backgroundTasks))
         return [];
-    return state.backgroundTasks.filter((task) => task.status === "running");
+    return state.backgroundTasks.filter((task) => task?.status === "running");
 }
 // ============================================================================
 // HUD Config Operations

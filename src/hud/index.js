@@ -28,17 +28,18 @@ function extractSessionIdFromPath(transcriptPath) {
 /**
  * Resolve the session key that names every per-session cache file.
  *
- * Prefers Claude Code's stdin `session_id` (the same value statusline.sh uses
- * to name the `<session>/` cache folder, so the two sides line up), then
- * `HUD_SESSION_KEY` — the key statusline.sh computed for this render, exported
- * so its fallback chain (transcript/cwd checksums) and Node's can never pick
- * different folders. The remaining fallbacks (session-id env vars, the
- * transcript-derived UUID, `default`) cover direct `node statusline.mjs` runs
- * without the wrapper.
+ * Prefers `HUD_SESSION_KEY` — the key statusline.sh computed for this render
+ * and exported when it spawned Node. It names the folder the shell already
+ * wrote `stdin.json`/`statusline.txt` into, so trusting it first means the two
+ * layers cannot diverge even when the shell's naive `session_id` extraction
+ * and a real JSON parse would disagree, or the shell fell back to a
+ * transcript/cwd checksum Node cannot recompute. The remaining fallbacks
+ * (stdin `session_id`, session-id env vars, the transcript-derived UUID,
+ * `default`) cover direct `node statusline.mjs` runs without the wrapper.
  */
 function resolveSessionKey(stdin) {
-    return (stdin?.session_id
-        || process.env.HUD_SESSION_KEY
+    return (process.env.HUD_SESSION_KEY
+        || stdin?.session_id
         || process.env.CLAUDE_CODE_SESSION_ID
         || process.env.CLAUDE_SESSION_ID
         || process.env.CLAUDECODE_SESSION_ID
@@ -76,7 +77,8 @@ async function calculateSessionHealth(sessionStart, contextPercent) {
 async function main() {
     try {
         // Read stdin from Claude Code first — the session key (and therefore
-        // every per-session cache file) is derived from it.
+        // every per-session cache file) falls back to it when the shell
+        // wrapper didn't export HUD_SESSION_KEY.
         let stdin = await readStdin();
         if (!stdin) {
             // No piped stdin (e.g. invoked directly) — nothing to render.

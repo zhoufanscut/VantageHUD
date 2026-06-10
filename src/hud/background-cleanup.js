@@ -24,7 +24,9 @@ function getTaskStartMs(task) {
  */
 export async function cleanupStaleBackgroundTasks(thresholdMs = STALE_TASK_THRESHOLD_MS, directory, sessionId) {
     const state = readHudState(directory, sessionId);
-    if (!state || !state.backgroundTasks) {
+    // The state file is also written by external hooks, so backgroundTasks may
+    // be absent, non-array, or contain junk entries (see state.js#getRunningTasks).
+    if (!state || !Array.isArray(state.backgroundTasks)) {
         return 0;
     }
     const now = Date.now();
@@ -33,7 +35,7 @@ export async function cleanupStaleBackgroundTasks(thresholdMs = STALE_TASK_THRES
     // Mark stale running tasks as failed before filtering (consistent with cleanupTasks()
     // in background-tasks.ts) — prevents silently dropping running tasks
     for (const task of state.backgroundTasks) {
-        if (task.status === 'running') {
+        if (task?.status === 'running') {
             const startMs = getTaskStartMs(task);
             if (Number.isNaN(startMs)) {
                 // Unparseable timestamp — treat as stale to avoid silent data loss
@@ -55,6 +57,9 @@ export async function cleanupStaleBackgroundTasks(thresholdMs = STALE_TASK_THRES
     // in background-tasks.ts: running tasks always kept, completed/failed expire
     // based on completedAt)
     state.backgroundTasks = state.backgroundTasks.filter(task => {
+        // Junk entries from external writers (null / non-objects) are dropped.
+        if (!task || typeof task !== 'object')
+            return false;
         // Running tasks always kept (stale ones were already marked failed above)
         if (task.status === 'running')
             return true;
@@ -91,14 +96,14 @@ export async function cleanupStaleBackgroundTasks(thresholdMs = STALE_TASK_THRES
  */
 export async function detectOrphanedTasks(directory, sessionId) {
     const state = readHudState(directory, sessionId);
-    if (!state || !state.backgroundTasks) {
+    if (!state || !Array.isArray(state.backgroundTasks)) {
         return [];
     }
     // Detect tasks that are marked as running but should have completed
     // (e.g., from previous session crashes)
     const orphaned = [];
     for (const task of state.backgroundTasks) {
-        if (task.status === 'running') {
+        if (task?.status === 'running') {
             // Check if task is from a previous HUD session
             // (simple heuristic: running for more than 2 hours is likely orphaned)
             const taskAge = Date.now() - new Date(task.startedAt).getTime();
@@ -117,13 +122,13 @@ export async function detectOrphanedTasks(directory, sessionId) {
  */
 export async function markOrphanedTasksAsStale(directory, sessionId) {
     const state = readHudState(directory, sessionId);
-    if (!state || !state.backgroundTasks) {
+    if (!state || !Array.isArray(state.backgroundTasks)) {
         return 0;
     }
     const orphaned = await detectOrphanedTasks(directory, sessionId);
     let marked = 0;
     for (const orphanedTask of orphaned) {
-        const task = state.backgroundTasks.find(t => t.id === orphanedTask.id);
+        const task = state.backgroundTasks.find(t => t?.id === orphanedTask.id);
         if (task && task.status === 'running') {
             task.status = 'completed'; // Mark as completed to remove from active display
             marked++;

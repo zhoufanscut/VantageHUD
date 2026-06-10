@@ -192,14 +192,22 @@ refresh_cache() {
     HUD_SESSION_KEY="$SESSION_KEY" node "$HUD_SCRIPT" < "$INPUT_FILE" > "$NODE_STDOUT_TMP" 2> "$NODE_STDERR_TMP"
   fi
 
-  # Keep the last good line if rendering fails or returns empty output. On
-  # failure, keep the renderer's stderr as statusline.err so the HUD's
-  # "check stderr" hint has something to point at; a good render clears it.
+  # Keep the last good line if rendering fails or returns empty output. A
+  # failed render either leaves stdout empty or prints a "[HUD] ..." fallback
+  # line there (e.g. "[HUD] HUD error - check stderr"), so non-empty stdout
+  # alone does not mean success. On failure, keep stderr as statusline.err so
+  # the "check stderr" hint points at something; only a successful render
+  # clears it. Successful renders may emit benign stderr noise (worktree
+  # warnings, HUD_DEBUG) — that is discarded, never persisted.
+  if [ ! -s "$NODE_STDOUT_TMP" ] || grep -q '^\[HUD\]' "$NODE_STDOUT_TMP" 2>/dev/null; then
+    if [ -s "$NODE_STDERR_TMP" ]; then
+      mv "$NODE_STDERR_TMP" "$SESSION_DIR/statusline.err" 2>/dev/null || :
+    fi
+  else
+    rm -f "$SESSION_DIR/statusline.err" 2>/dev/null || :
+  fi
   if [ -s "$NODE_STDOUT_TMP" ]; then
     mv "$NODE_STDOUT_TMP" "$OUTPUT_FILE" 2>/dev/null || cp "$NODE_STDOUT_TMP" "$OUTPUT_FILE" 2>/dev/null || :
-    rm -f "$SESSION_DIR/statusline.err" 2>/dev/null || :
-  elif [ -s "$NODE_STDERR_TMP" ]; then
-    mv "$NODE_STDERR_TMP" "$SESSION_DIR/statusline.err" 2>/dev/null || :
   fi
 
   prune_old_cache
