@@ -35,7 +35,7 @@ function formatElapsed(ms) {
 /**
  * Render elapsed time since prompt submission.
  *
- * Format: ⏰13s  or  ⏰1m23s  or  ⏰2h3m
+ * Format: ⌚13s  or  ⌚1m23s  or  ⌚2h3m
  * Falls back to HH:MM:SS timestamp if now is not provided.
  */
 export function renderPromptTime(promptTime, now) {
@@ -49,7 +49,7 @@ export function renderPromptTime(promptTime, now) {
             const color = elapsed >= CACHE_TTL_MS ? AURORA.gradHigh : AURORA.gradLow;
             // Icon left unpainted so it renders as a native-color emoji, matching
             // the raw tool/agent/skill icons in call-counts (which apply no SGR).
-            return `⏰${paint(color, formatElapsed(elapsed))}`;
+            return `⌚${paint(color, formatElapsed(elapsed))}`;
         }
     }
     const hours = String(promptTime.getHours()).padStart(2, '0');
