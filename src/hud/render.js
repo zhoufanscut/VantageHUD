@@ -243,9 +243,10 @@ export async function render(context, config) {
     if (enabledElements.rateLimits && context.rateLimitsResult) {
         if (context.rateLimitsResult.rateLimits) {
             const stale = context.rateLimitsResult.stale;
+            const snThreshold = config.thresholds?.sonnetWeeklyVisibility ?? 80;
             const limits = enabledElements.useBars
-                ? renderRateLimitsWithBar(context.rateLimitsResult.rateLimits, undefined, stale)
-                : renderRateLimits(context.rateLimitsResult.rateLimits, stale);
+                ? renderRateLimitsWithBar(context.rateLimitsResult.rateLimits, undefined, stale, snThreshold)
+                : renderRateLimits(context.rateLimitsResult.rateLimits, stale, snThreshold);
             if (limits)
                 rendered.set("rateLimits", limits);
         }

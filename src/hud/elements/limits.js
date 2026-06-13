@@ -44,7 +44,7 @@ function formatResetTime(date) {
  *
  * Format: 5h:45%(3h42m) 7d:12%(2d5h) mo:8%(15d3h) sn:20%(1d2h) op:5%(1d2h)
  */
-export function renderRateLimits(limits, stale) {
+export function renderRateLimits(limits, stale, sonnetThreshold = 0) {
     if (!limits)
         return null;
     const staleMarker = stale ? `${DIM}*${RESET}` : '';
@@ -63,7 +63,9 @@ export function renderRateLimits(limits, stale) {
     if (limits.monthlyPercent != null) {
         parts.push(fmt('mo', limits.monthlyPercent, limits.monthlyResetsAt));
     }
-    if (limits.sonnetWeeklyPercent != null) {
+    // Sonnet weekly (sn) is a low-signal bucket for Opus-heavy users (often 0%);
+    // only surface it once it approaches its cap (>= sonnetThreshold, 0 = always).
+    if (limits.sonnetWeeklyPercent != null && Math.round(limits.sonnetWeeklyPercent) >= sonnetThreshold) {
         parts.push(fmt('sn', limits.sonnetWeeklyPercent, limits.sonnetWeeklyResetsAt));
     }
     if (limits.opusWeeklyPercent != null) {
@@ -83,7 +85,7 @@ export function renderRateLimits(limits, stale) {
  *
  * Format: 5h:[████░░░░]45%(3h42m) 7d:[█░░░░░░░]12%(2d5h) ...
  */
-export function renderRateLimitsWithBar(limits, barWidth = 8, stale) {
+export function renderRateLimitsWithBar(limits, barWidth = 8, stale, sonnetThreshold = 0) {
     if (!limits)
         return null;
     const staleMarker = stale ? `${DIM}*${RESET}` : '';
@@ -106,7 +108,9 @@ export function renderRateLimitsWithBar(limits, barWidth = 8, stale) {
     if (limits.monthlyPercent != null) {
         parts.push(fmt('mo', limits.monthlyPercent, limits.monthlyResetsAt));
     }
-    if (limits.sonnetWeeklyPercent != null) {
+    // Sonnet weekly (sn) is a low-signal bucket for Opus-heavy users (often 0%);
+    // only surface it once it approaches its cap (>= sonnetThreshold, 0 = always).
+    if (limits.sonnetWeeklyPercent != null && Math.round(limits.sonnetWeeklyPercent) >= sonnetThreshold) {
         parts.push(fmt('sn', limits.sonnetWeeklyPercent, limits.sonnetWeeklyResetsAt));
     }
     if (limits.opusWeeklyPercent != null) {
