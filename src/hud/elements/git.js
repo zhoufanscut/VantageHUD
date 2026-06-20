@@ -6,7 +6,7 @@
 import { execFileSync } from 'node:child_process';
 import { realpathSync } from 'node:fs';
 import { resolve, basename } from 'node:path';
-import { paint, auroraFaint, AURORA } from '../colors.js';
+import { paint, auroraLabel, AURORA } from '../colors.js';
 import { DEFAULT_HUD_LABELS } from '../types.js';
 const CACHE_TTL_MS = 30_000;
 const repoCache = new Map();
@@ -129,7 +129,7 @@ export function renderGitRepo(cwd) {
     const repo = getGitRepoName(cwd);
     if (!repo)
         return null;
-    return `${auroraFaint('repo:')}${paint(AURORA.sonnet, repo)}`;
+    return `${auroraLabel('repo:')}${paint(AURORA.gradLow, repo)}`;
 }
 /**
  * Render git branch element.
@@ -145,9 +145,9 @@ export function renderGitBranch(cwd) {
         return null;
     const wtInfo = getWorktreeInfo(cwd);
     if (wtInfo.isWorktree && wtInfo.worktreeName) {
-        return `${auroraFaint('branch:')}${paint(AURORA.sonnet, branch)} ${auroraFaint('(wt:')}${paint(AURORA.sonnet, wtInfo.worktreeName)}${auroraFaint(')')}`;
+        return `${auroraLabel('branch:')}${paint(AURORA.gradLow, branch)} ${auroraLabel('(wt:')}${paint(AURORA.gradLow, wtInfo.worktreeName)}${auroraLabel(')')}`;
     }
-    return `${auroraFaint('branch:')}${paint(AURORA.sonnet, branch)}`;
+    return `${auroraLabel('branch:')}${paint(AURORA.gradLow, branch)}`;
 }
 /**
  * Get git working tree status counts.

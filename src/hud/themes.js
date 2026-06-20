@@ -41,7 +41,7 @@ export const THEMES = {
     // Tokyo-Night family). The original HUD palette: calm, nothing jarring.
     aurora: {
         text: [200, 211, 232], // #c8d3e8 soft slate
-        label: [126, 138, 168], // #7e8aa8 muted steel
+        label: [143, 208, 216], // #8fd0d8 cyan-teal
         faint: [110, 120, 150], // #6e7896 quiet slate
         sep: [72, 80, 106], // #48506a hairline
         opus: [180, 164, 232], // #b4a4e8 periwinkle

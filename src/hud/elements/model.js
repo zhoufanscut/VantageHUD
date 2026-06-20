@@ -3,7 +3,7 @@
  *
  * Renders the current model name with thinking effort folded in.
  */
-import { paint, gradientColor } from '../colors.js';
+import { paint, gradientColor, PALETTE } from '../colors.js';
 import { truncateToWidth } from '../../lib/string-width.js';
 /**
  * Extract version from a model ID string.
@@ -61,13 +61,18 @@ export function formatModelName(modelId, format = 'short') {
 /**
  * Map a thinking-effort level onto the shared teal→amber→rose gauge ramp (the
  * same ramp as ctx / session / limits), inverted so more effort reads calmer:
- * max → teal, xhigh → teal-amber, high → amber, medium → amber-rose, low → rose.
- * Unknown or absent levels fall back to the max (teal) end.
+ * max → accent (cyan-teal), xhigh → teal-amber, high → amber, medium → amber-rose, low → rose.
+ * Absent or unknown levels fall back to the max (accent) end.
  */
 const EFFORT_RANK = { low: 100, medium: 75, high: 50, xhigh: 25, max: 0 };
 function effortColor(level) {
-    const pct = level == null ? null : EFFORT_RANK[String(level).toLowerCase()];
-    return gradientColor(pct == null ? EFFORT_RANK.max : pct);
+    const key = level == null ? 'max' : String(level).toLowerCase();
+    const pct = EFFORT_RANK[key];
+    // Max effort — and any absent/unknown level, which falls back to max — uses the
+    // theme's accent tone (cyan-teal in aurora) rather than the gradient's teal end.
+    if (pct == null || key === 'max')
+        return PALETTE.accent;
+    return gradientColor(pct);
 }
 /**
  * Render model element.
@@ -77,7 +82,7 @@ export function renderModel(modelId, format = 'versioned', effortLevel = null) {
     if (!name)
         return null;
     // Model name + thinking effort render as one unit, colored by the effort
-    // level on the shared gauge ramp (low→teal … max→rose), matching ctx/session.
+    // level on the shared gauge ramp (max→accent, low→rose), matching ctx/session.
     const text = effortLevel ? `${name.toLowerCase()} ${effortLevel}` : name.toLowerCase();
     return paint(effortColor(effortLevel), text);
 }

@@ -8,7 +8,7 @@ import { join } from "path";
 import { getClaudeConfigDir } from "../lib/config-dir.js";
 import { sessionCacheFile, ensureSessionCacheDir } from "../lib/worktree-paths.js";
 import { atomicWriteJsonSync } from "../lib/atomic-write.js";
-import { DEFAULT_HUD_CONFIG, PRESET_CONFIGS, isHudLocale, resolveHudLabels, sanitizeHudLabels, } from "./types.js";
+import { DEFAULT_HUD_CONFIG, PRESET_CONFIGS, isHudLocale, resolveHudLabels, } from "./types.js";
 import { cleanupStaleBackgroundTasks, markOrphanedTasksAsStale, } from "./background-cleanup.js";
 // ============================================================================
 // Path Helpers
@@ -27,44 +27,6 @@ function getStateFilePath(_directory, sessionId) {
  */
 function getSettingsFilePath() {
     return join(getClaudeConfigDir(), "settings.json");
-}
-/**
- * Get the HUD config file path (legacy)
- */
-function getConfigFilePath() {
-    return join(getClaudeConfigDir(), ".claude-statusline", "hud-config.json");
-}
-function readJsonFile(filePath) {
-    if (!existsSync(filePath)) {
-        return null;
-    }
-    try {
-        return JSON.parse(readFileSync(filePath, "utf-8"));
-    }
-    catch {
-        return null;
-    }
-}
-function getLegacyHudConfig() {
-    return readJsonFile(getConfigFilePath());
-}
-function mergeElements(primary, secondary) {
-    return {
-        ...(primary ?? {}),
-        ...(secondary ?? {}),
-    };
-}
-function mergeThresholds(primary, secondary) {
-    return {
-        ...(primary ?? {}),
-        ...(secondary ?? {}),
-    };
-}
-function mergeContextLimitWarning(primary, secondary) {
-    return {
-        ...(primary ?? {}),
-        ...(secondary ?? {}),
-    };
 }
 // ============================================================================
 // HUD State Operations
@@ -117,38 +79,21 @@ export function getRunningTasks(state) {
 // ============================================================================
 /**
  * Read HUD configuration from disk.
- * Priority: settings.json > hud-config.json (legacy) > defaults
+ * Priority: settings.json `statusline` block > defaults.
  */
 export function readHudConfig() {
     const settingsFile = getSettingsFilePath();
-    const legacyConfig = getLegacyHudConfig();
     if (existsSync(settingsFile)) {
         try {
             const content = readFileSync(settingsFile, "utf-8");
             const settings = JSON.parse(content);
             if (settings.statusline) {
-                return mergeWithDefaults({
-                    ...legacyConfig,
-                    ...settings.statusline,
-                    elements: mergeElements(legacyConfig?.elements, settings.statusline.elements),
-                    thresholds: mergeThresholds(legacyConfig?.thresholds, settings.statusline.thresholds),
-                    contextLimitWarning: mergeContextLimitWarning(legacyConfig?.contextLimitWarning, settings.statusline.contextLimitWarning),
-                    locale: isHudLocale(settings.statusline.locale)
-                        ? settings.statusline.locale
-                        : legacyConfig?.locale,
-                    labels: {
-                        ...sanitizeHudLabels(legacyConfig?.labels),
-                        ...sanitizeHudLabels(settings.statusline.labels),
-                    },
-                });
+                return mergeWithDefaults(settings.statusline);
             }
         }
         catch (error) {
             console.error("[HUD] Failed to read settings.json:", error instanceof Error ? error.message : error);
         }
-    }
-    if (legacyConfig) {
-        return mergeWithDefaults(legacyConfig);
     }
     return DEFAULT_HUD_CONFIG;
 }

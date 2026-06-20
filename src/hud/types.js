@@ -64,12 +64,12 @@ export function resolveHudLabels(locale, labels) {
  * Used as fallback when no layout is configured.
  */
 export const DEFAULT_ELEMENT_ORDER = {
-    line1: ['hostname', 'cwd', 'gitRepo', 'gitBranch', 'gitStatus', 'apiKeySource', 'profile'],
+    line1: ['hostname', 'cwd', 'apiKeySource', 'profile'],
     main: [
         'pathLabel', 'model', 'rateLimits', 'permission',
         'contextBar', 'tokens', 'session', 'promptTime',
         'agents', 'background',
-        'callCounts', 'lastSkill', 'lastTool',
+        'callCounts', 'gitRepo', 'gitBranch', 'gitStatus', 'lastSkill', 'lastTool',
     ],
     detail: ['agents', 'contextWarning', 'payloadWarning', 'todos'],
 };
@@ -89,9 +89,9 @@ export const DEFAULT_HUD_CONFIG = {
         cwd: false, // Disabled by default for backward compatibility
         cwdFormat: 'relative',
         useHyperlinks: false,
-        gitRepo: false, // Disabled by default for backward compatibility
-        gitBranch: false, // Disabled by default for backward compatibility
-        gitStatus: false, // Disabled by default for backward compatibility
+        gitRepo: true, // Show repository name by default
+        gitBranch: true, // Show branch (and worktree suffix) by default
+        gitStatus: true, // Show working-tree status by default
         gitInfoPosition: 'above', // Git info above main HUD line (backward compatible)
         model: true, // Show only when Claude Code statusline stdin provides a model
         modelFormat: 'versioned', // Preserve model version by default
