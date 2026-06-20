@@ -36,8 +36,6 @@ skimming. Add a term back (or a new one) when it earns its place; keep this shor
   `DEFAULT_ELEMENT_ORDER.main` (`src/hud/types.js`); `layout.main` / `elementOrder`
   reorder it. (The HUD was formerly three zones — `line1` / `main` / `detail` — but
   is now single-line, so only `main` remains.)
-- **preset** — a named bundle of element toggles: `minimal | focused | full |
-  opencode | dense`. Default `focused` (`PRESET_CONFIGS`, `types.js`).
 
 ## Theming
 

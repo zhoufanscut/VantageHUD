@@ -2,7 +2,7 @@
 
 Self-contained Claude Code statusline (HUD). Reads one JSON payload on stdin, prints the status line on stdout. Pure Node built-ins, ESM, **zero dependencies**. See `README.md` for end-user setup/proxy/env docs — this file is the agent-specific map.
 
-**Shared vocabulary lives in [`GLOSSARY.md`](GLOSSARY.md)** — read it if a term here is unfamiliar (element, fragment, preset, palette/token, session key, render context, safeMode, …). It also flags the easy-to-confuse pairs (`statusline` vs `statusLine`, `AURORA` alias vs the `aurora` theme, render context vs context window). When you add an element/theme/preset, add its term there too.
+**Shared vocabulary lives in [`GLOSSARY.md`](GLOSSARY.md)** — read it if a term here is unfamiliar (element, fragment, palette/token, session key, render context, safeMode, …). It also flags the easy-to-confuse pairs (`statusline` vs `statusLine`, `AURORA` alias vs the `aurora` theme, render context vs context window). When you add an element/theme, add its term there too.
 
 ## Source of truth & build (read first)
 
@@ -36,7 +36,7 @@ Claude Code → statusline.sh → find-node.sh → statusline.mjs → src/hud/in
 ## Configuration
 
 - User config is **not in this repo**. `src/hud/state.js#readHudConfig()` reads it from Claude Code's `settings.json` (in the resolved config dir) under the **`statusline`** key. Footgun: that lowercase `statusline` config block is **distinct** from the `statusLine` (capital L) command-hook key documented in the README. Precedence: `settings.json` `statusline` > defaults. (Note: Claude Code's own settings.json schema validation rejects the lowercase `statusline` key when written via its tooling, so in practice most installs run on the code defaults.)
-- Defaults, presets (`minimal`/`focused`/`full`/`opencode`/`dense`), labels (en + zh-CN), and the canonical element order (`DEFAULT_ELEMENT_ORDER`) all live in **`src/hud/types.js`**. Change defaults there.
+- Defaults, labels (en + zh-CN), and the canonical element order (`DEFAULT_ELEMENT_ORDER`) all live in **`src/hud/types.js`**. Change defaults there.
 
 ## Adding or changing a statusline element
 

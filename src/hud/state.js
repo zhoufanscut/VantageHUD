@@ -8,7 +8,7 @@ import { join } from "path";
 import { getClaudeConfigDir } from "../lib/config-dir.js";
 import { sessionCacheFile, ensureSessionCacheDir } from "../lib/worktree-paths.js";
 import { atomicWriteJsonSync } from "../lib/atomic-write.js";
-import { DEFAULT_HUD_CONFIG, PRESET_CONFIGS, isHudLocale, resolveHudLabels, } from "./types.js";
+import { DEFAULT_HUD_CONFIG, isHudLocale, resolveHudLabels, } from "./types.js";
 import { cleanupStaleBackgroundTasks, markOrphanedTasksAsStale, } from "./background-cleanup.js";
 // ============================================================================
 // Path Helpers
@@ -101,18 +101,14 @@ export function readHudConfig() {
  * Merge partial config with defaults
  */
 function mergeWithDefaults(config) {
-    const preset = config.preset ?? DEFAULT_HUD_CONFIG.preset;
-    const presetElements = PRESET_CONFIGS[preset] ?? {};
     const locale = isHudLocale(config.locale)
         ? config.locale
         : DEFAULT_HUD_CONFIG.locale;
     return {
-        preset,
         locale,
         labels: resolveHudLabels(locale, config.labels),
         elements: {
             ...DEFAULT_HUD_CONFIG.elements, // Base defaults
-            ...presetElements, // Preset overrides
             ...config.elements, // User overrides
         },
         thresholds: {
