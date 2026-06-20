@@ -15,7 +15,7 @@ const BOLD = '\x1b[1m';
 // Palettes (the color *data*) live in `themes.js`; this file is the engine that
 // turns a palette token into an escape sequence and degrades gracefully:
 // truecolor → 256-color → basic 16. The active theme — slate-cool "aurora" or
-// warm "ember", selected via `HUD_THEME` / settings.json — is resolved there and
+// warm "ember", selected via `HUD_THEME` / config.json — is resolved there and
 // surfaced here as `PALETTE`.
 /**
  * Detect terminal color depth once per process.
@@ -106,7 +106,7 @@ export function lerpRgb(c1, c2, t) {
 // -- Active palette ----------------------------------------------------------
 // THEME SEAM: every element routes its color through these tokens (directly, or
 // via the helpers below) — none reach for a raw ANSI hue. The palette is chosen
-// in `themes.js` (env / settings.json / default) before any element imports it,
+// in `themes.js` (env / config.json / default) before any element imports it,
 // so swapping `theme` reskins the whole HUD. Add new palettes in `themes.js`.
 export const PALETTE = ACTIVE_PALETTE;
 /** The resolved theme name for this process (handy under HUD_DEBUG). */

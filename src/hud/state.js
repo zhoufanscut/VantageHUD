@@ -4,9 +4,8 @@
  * Manages HUD state file for background task tracking.
  */
 import { existsSync, readFileSync } from "fs";
-import { join } from "path";
-import { getClaudeConfigDir } from "../lib/config-dir.js";
 import { sessionCacheFile, ensureSessionCacheDir } from "../lib/worktree-paths.js";
+import { getHudConfigFile } from "../lib/install-paths.js";
 import { atomicWriteJsonSync } from "../lib/atomic-write.js";
 import { DEFAULT_HUD_CONFIG, isHudLocale, resolveHudLabels, } from "./types.js";
 import { cleanupStaleBackgroundTasks, markOrphanedTasksAsStale, } from "./background-cleanup.js";
@@ -21,12 +20,6 @@ import { cleanupStaleBackgroundTasks, markOrphanedTasksAsStale, } from "./backgr
  */
 function getStateFilePath(_directory, sessionId) {
     return sessionCacheFile("hud-state", sessionId);
-}
-/**
- * Get Claude Code settings.json path
- */
-function getSettingsFilePath() {
-    return join(getClaudeConfigDir(), "settings.json");
 }
 // ============================================================================
 // HUD State Operations
@@ -79,20 +72,24 @@ export function getRunningTasks(state) {
 // ============================================================================
 /**
  * Read HUD configuration from disk.
- * Priority: settings.json `statusline` block > defaults.
+ * Priority: the HUD's own `config.json` (see `getHudConfigFile`) > defaults.
+ *
+ * This is the HUD's *own* config file — its top-level object IS the config (no
+ * wrapper key). It is read directly, independent of Claude Code's settings.json
+ * schema, so it can never be stripped on Claude Code's settings write-back.
  */
 export function readHudConfig() {
-    const settingsFile = getSettingsFilePath();
-    if (existsSync(settingsFile)) {
+    const configFile = getHudConfigFile();
+    if (existsSync(configFile)) {
         try {
-            const content = readFileSync(settingsFile, "utf-8");
-            const settings = JSON.parse(content);
-            if (settings.statusline) {
-                return mergeWithDefaults(settings.statusline);
+            const content = readFileSync(configFile, "utf-8");
+            const config = JSON.parse(content);
+            if (config && typeof config === "object") {
+                return mergeWithDefaults(config);
             }
         }
         catch (error) {
-            console.error("[HUD] Failed to read settings.json:", error instanceof Error ? error.message : error);
+            console.error("[HUD] Failed to read config.json:", error instanceof Error ? error.message : error);
         }
     }
     return DEFAULT_HUD_CONFIG;

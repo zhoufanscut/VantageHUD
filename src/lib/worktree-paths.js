@@ -13,8 +13,8 @@
 import { execSync } from 'child_process';
 import { existsSync, mkdirSync, realpathSync, readdirSync, statSync } from 'fs';
 import { resolve, relative, sep, join, isAbsolute, dirname } from 'path';
-import { fileURLToPath } from 'url';
 import { getClaudeConfigDir } from './config-dir.js';
+import { getHudInstallRoot } from './install-paths.js';
 /**
  * LRU cache for worktree root lookups to avoid repeated git subprocess calls.
  * Bounded to MAX_WORKTREE_CACHE_SIZE entries to prevent memory growth when
@@ -83,9 +83,8 @@ export function validatePath(inputPath) {
  * Node HUD's state live under here, each in a per-session subfolder
  * (`<cacheDir>/<session>/<base>.json`).
  *
- * The default is the HUD install's own `cache/` folder, derived from this
- * module's location so it follows a relocated install. worktree-paths.js lives
- * at `<hud-install>/src/lib/`, so the install root is two directories up — the
+ * The default is the HUD install's own `cache/` folder, derived from the
+ * install root (`getHudInstallRoot`) so it follows a relocated install — the
  * same `$SCRIPT_DIR/cache` statusline.sh resolves. `HUD_CACHE_DIR` overrides it
  * (honored by the shell too), so the two layers never diverge.
  */
@@ -93,9 +92,7 @@ export function getCacheDir() {
     if (process.env.HUD_CACHE_DIR) {
         return process.env.HUD_CACHE_DIR;
     }
-    const moduleDir = dirname(fileURLToPath(import.meta.url));
-    const hudInstallRoot = resolve(moduleDir, '..', '..');
-    return join(hudInstallRoot, 'cache');
+    return join(getHudInstallRoot(), 'cache');
 }
 /**
  * Sanitize a session key for use as a cache folder name. Mirrors the shell's

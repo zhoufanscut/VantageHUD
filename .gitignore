@@ -1,6 +1,10 @@
 # Runtime render cache (regenerated per session, scoped per machine)
 cache/
 
+# Personal HUD config — copy config.json.example → config.json and edit.
+# Per-install/personal; the committed .example is the canonical reference.
+/config.json
+
 # Logs / scratch
 *.log
 *.tmp

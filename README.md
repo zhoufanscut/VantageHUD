@@ -72,6 +72,22 @@ echo '{"session_id":"t","cwd":"'"$HOME"'/example","effort":{"level":"high"},"mod
 Expected: a single line containing `opus 4.8 high` (the leading
 path is your working directory).
 
+## Configure (optional)
+The HUD runs on sensible defaults out of the box. To customize, copy the example
+to `config.json` inside the HUD folder and edit it:
+```sh
+cp ~/.claude/hud/config.json.example ~/.claude/hud/config.json
+```
+- This is the HUD's **own** config file — *not* a block in Claude Code's
+  `settings.json`, and separate from the `statusLine` hook key from step 3. Every
+  key is optional; omit any and its built-in default applies. `config.json` is
+  gitignored, so `git pull` never clobbers your settings.
+- Common knobs: `theme` (`aurora` | `ember`), `locale` (`en` | `zh-CN`), and the
+  `elements` toggles (e.g. `gitBranch`, `contextBar`, `rateLimits`, `showTokens`).
+  See `config.json.example` for the full list.
+- No file needed for a quick test: `HUD_THEME=ember` overrides the theme, and
+  `HUD_CONFIG=/abs/path/config.json` points the HUD at a config elsewhere.
+
 ## Behind a proxy
 ```sh
 export HTTPS_PROXY=http://proxy.example.com:8080
@@ -93,6 +109,8 @@ git -C ~/.claude/hud pull
 - If a render fails, the renderer's stderr is kept as
   `cache/<session>/statusline.err` (cleared by the next successful render) —
   check it when the bar shows `[HUD] HUD error`.
-- Optional env: `HUD_CACHE_DIR` (override that cache/state dir; default is the HUD
-  install's own `cache/`), `HUD_CACHE_MAX_AGE_DAYS` (idle-session retention,
+- Optional env: `HUD_CONFIG` (path to the config file; default is the HUD
+  install's own `config.json`), `HUD_THEME` (`aurora` | `ember`, overrides
+  `config.json`), `HUD_CACHE_DIR` (override that cache/state dir; default is the
+  HUD install's own `cache/`), `HUD_CACHE_MAX_AGE_DAYS` (idle-session retention,
   default 14), `HUD_SYNC_REFRESH=1` (synchronous render), `HUD_DEBUG=1` (verbose).

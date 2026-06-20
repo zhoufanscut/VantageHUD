@@ -32,6 +32,11 @@ skimming. Add a term back (or a new one) when it earns its place; keep this shor
 
 ## Layout & config
 
+- **config.json** — the HUD's own user-config file at the install root
+  (`getHudConfigFile`, `src/lib/install-paths.js`; `HUD_CONFIG` overrides).
+  Optional, gitignored; `config.json.example` is the committed reference. Read
+  directly (`readHudConfig`), independent of Claude Code's `settings.json`. Its
+  top-level object **is** the config — no wrapper key.
 - **main** — the HUD's single render zone: the one status line. Element order is
   `DEFAULT_ELEMENT_ORDER.main` (`src/hud/types.js`); `layout.main` / `elementOrder`
   reorder it. (The HUD was formerly three zones — `line1` / `main` / `detail` — but
@@ -40,8 +45,8 @@ skimming. Add a term back (or a new one) when it earns its place; keep this shor
 ## Theming
 
 - **theme** — a named palette: `aurora` (default; cool slate) or `ember` (warm
-  gruvbox). Resolved at import in `themes.js`: `HUD_THEME` env > `settings.json`
-  `statusline.theme` > `DEFAULT_THEME`.
+  gruvbox). Resolved at import in `themes.js`: `HUD_THEME` env > `config.json`
+  `theme` > `DEFAULT_THEME`.
 - **palette** / **token** — the color *data* behind a theme: 14 named `[r,g,b]`
   **tokens** (`text`, `label`, `accent`, `gradLow/Mid/High`, …). Defined only in
   `THEMES` (`src/hud/themes.js`); every element colors through them.
@@ -79,7 +84,7 @@ The pairs most likely to make us talk past each other:
 
 | These look alike… | …but mean different things |
 | --- | --- |
-| `statusline` *(thing)* / `statusline` *(lowercase config key)* / `statusLine` *(capital-L hook key)* | the rendered line / the HUD's config block in `settings.json` / Claude Code's command-hook key in the README. |
+| `statusline` *(thing)* / `config.json` *(HUD config)* / `statusLine` *(capital-L hook key)* | the rendered line / the HUD's own config file at the install root (`getHudConfigFile`) / Claude Code's command-hook key in `settings.json` (README). The HUD's config is its **own** file — not a block inside `settings.json`. |
 | **render context** / **context window** (`ctx`) / "context" *(the chat)* | the object passed to `render()` / the model's token budget % / the conversation history. In code, "context" usually means the first. |
 | **AURORA** / **aurora** | `AURORA` = back-compat alias for the *active* `PALETTE` (any theme) / `aurora` = one specific theme name. |
 | **session key** / **session id** | the cache-folder name (sanitized, sometimes a checksum) / Claude Code's conversation UUID (one input to the key). |

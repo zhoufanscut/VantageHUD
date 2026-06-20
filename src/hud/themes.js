@@ -8,8 +8,8 @@
  *
  * ── Adding a theme ──────────────────────────────────────────────────────────
  * Add one entry to `THEMES` below with all 14 tokens, then select it via either
- *   • settings.json → `"statusline": { "theme": "<name>" }`
- *   • env override   → `HUD_THEME=<name>`  (handy for A/B testing a render)
+ *   • config.json  → `{ "theme": "<name>" }`
+ *   • env override  → `HUD_THEME=<name>`  (handy for A/B testing a render)
  * Nothing else needs to change — colors.js and every element pick it up.
  *
  * ── Token contract ──────────────────────────────────────────────────────────
@@ -29,8 +29,7 @@
  *   track    git: untracked
  */
 import { existsSync, readFileSync } from 'fs';
-import { join } from 'path';
-import { getClaudeConfigDir } from '../lib/config-dir.js';
+import { getHudConfigFile } from '../lib/install-paths.js';
 
 /** @typedef {[number, number, number]} Rgb */
 /** @typedef {Record<'text'|'label'|'faint'|'sep'|'opus'|'sonnet'|'haiku'|'accent'|'gradLow'|'gradMid'|'gradHigh'|'add'|'del'|'track', Rgb>} Palette */
@@ -84,7 +83,7 @@ export function listThemes() {
 }
 
 /**
- * Read `statusline.theme` from settings.json. Never throws.
+ * Read `theme` from the HUD's `config.json`. Never throws.
  *
  * Intentionally a minimal, stdlib-only read (not a reuse of
  * `state.js#readHudConfig`): this runs at import to pick the palette *before*
@@ -94,11 +93,11 @@ export function listThemes() {
  */
 function readConfiguredTheme() {
     try {
-        const file = join(getClaudeConfigDir(), 'settings.json');
+        const file = getHudConfigFile();
         if (!existsSync(file))
             return null;
-        const settings = JSON.parse(readFileSync(file, 'utf-8'));
-        const name = settings?.statusline?.theme;
+        const config = JSON.parse(readFileSync(file, 'utf-8'));
+        const name = config?.theme;
         return typeof name === 'string' ? name.toLowerCase().trim() : null;
     }
     catch {
@@ -108,7 +107,7 @@ function readConfiguredTheme() {
 
 /**
  * Resolve the active theme name.
- * Priority: `HUD_THEME` env > settings.json `statusline.theme` > `DEFAULT_THEME`.
+ * Priority: `HUD_THEME` env > config.json `theme` > `DEFAULT_THEME`.
  * An unknown name at any tier falls through to the next.
  *
  * Resolution happens at import (not render) on purpose: elements freeze

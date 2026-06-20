@@ -76,7 +76,7 @@ export const DEFAULT_HUD_CONFIG = {
     locale: 'en',
     // Color theme — DOCUMENTATION ONLY (not consumed at runtime). Registered
     // palettes live in `themes.js` ('aurora' | 'ember'); the active palette is
-    // resolved there at import (HUD_THEME env > settings.json `statusline.theme`
+    // resolved there at import (HUD_THEME env > config.json `theme`
     // > `DEFAULT_THEME`), since elements freeze their colors before the runtime
     // config is read. The authoritative default is `DEFAULT_THEME` in themes.js
     // — keep this in sync with it. Read the resolved name via `ACTIVE_THEME_NAME`.
@@ -88,23 +88,19 @@ export const DEFAULT_HUD_CONFIG = {
         gitStatus: true, // Show working-tree status by default
         model: true, // Show only when Claude Code statusline stdin provides a model
         modelFormat: 'versioned', // Preserve model version by default
+        effort: true, // Fold the thinking-effort level (high/medium/…) into the model element; set false to hide it
         pathLabel: true,
-        updateNotification: true, // Preserve existing update prompt behavior by default
         rateLimits: true, // Show rate limits by default
         contextBar: true,
         agents: true, // Show active-agent count
         backgroundTasks: true,
-        thinking: true,
-        thinkingFormat: 'text', // Text format for backward compatibility
         promptTime: false, // Hidden by default (low-signal element)
         sessionHealth: true,
         showSessionDuration: true,
-        showHealthIndicator: true,
         showTokens: false,
         useBars: false, // Disabled by default for backwards compatibility
         showCallCounts: true, // Show tool/agent/skill call counts by default (Issue #710)
         callCountsFormat: 'auto', // Preserve platform-based emoji/ASCII defaults unless explicitly overridden
-        sessionSummary: false, // Disabled by default - opt-in AI-generated session summary
         maxOutputLines: 4,
         safeMode: true, // Enabled by default to prevent terminal rendering corruption (Issue #346)
     },
