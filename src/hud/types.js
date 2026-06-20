@@ -104,7 +104,7 @@ export const DEFAULT_HUD_CONFIG = {
         apiKeySource: false, // Disabled by default
         hostname: false,
         profile: true, // Show profile name when CLAUDE_CONFIG_DIR is set
-        promptTime: true, // Show last prompt time by default
+        promptTime: false, // Hidden by default (low-signal element)
         sessionHealth: true,
         showSessionDuration: true,
         showHealthIndicator: true,
@@ -196,7 +196,7 @@ export const PRESET_CONFIGS = {
         apiKeySource: false,
         hostname: false,
         profile: true,
-        promptTime: true,
+        promptTime: false,
         sessionHealth: true,
         showSessionDuration: true,
         showHealthIndicator: true,
@@ -234,7 +234,7 @@ export const PRESET_CONFIGS = {
         apiKeySource: true,
         hostname: false,
         profile: true,
-        promptTime: true,
+        promptTime: false,
         sessionHealth: true,
         showSessionDuration: true,
         showHealthIndicator: true,
@@ -272,7 +272,7 @@ export const PRESET_CONFIGS = {
         apiKeySource: false,
         hostname: false,
         profile: true,
-        promptTime: true,
+        promptTime: false,
         sessionHealth: true,
         showSessionDuration: true,
         showHealthIndicator: true,
@@ -310,7 +310,7 @@ export const PRESET_CONFIGS = {
         apiKeySource: true,
         hostname: false,
         profile: true,
-        promptTime: true,
+        promptTime: false,
         sessionHealth: true,
         showSessionDuration: true,
         showHealthIndicator: true,
