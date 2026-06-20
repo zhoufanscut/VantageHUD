@@ -10,4 +10,5 @@ cache/
 .claude-statusline/
 
 # Local agent tooling scratch
+.claude/
 .omo/
