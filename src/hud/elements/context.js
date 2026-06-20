@@ -4,8 +4,8 @@
  * Renders context window usage display.
  */
 import { DEFAULT_HUD_LABELS } from '../types.js';
-import { RESET, fg, gradientColor, auroraLabel } from '../colors.js';
-const DIM = '\x1b[2m';
+import { RESET, fg, gradientColor, auroraLabel, AURORA } from '../colors.js';
+const TRACK = fg(AURORA.sep);
 function clampContextPercent(percent) {
     return Math.min(100, Math.max(0, Math.round(percent)));
 }
@@ -59,6 +59,6 @@ export function renderContextWithBar(percent, thresholds, barWidth = 10, labels 
     const filled = Math.round((safePercent / 100) * barWidth);
     const empty = barWidth - filled;
     const { color, suffix } = getContextDisplayStyle(safePercent, thresholds);
-    const bar = `${color}${'█'.repeat(filled)}${DIM}${'░'.repeat(empty)}${RESET}`;
+    const bar = `${color}${'█'.repeat(filled)}${TRACK}${'░'.repeat(empty)}${RESET}`;
     return `${auroraLabel(`${labels.context}:`)}[${bar}]${color}${safePercent}%${suffix}${RESET}`;
 }

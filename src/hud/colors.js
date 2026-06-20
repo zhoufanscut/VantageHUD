@@ -6,10 +6,7 @@
  */
 // ANSI escape codes
 export const RESET = '\x1b[0m';
-const DIM = '\x1b[2m';
 const BOLD = '\x1b[1m';
-const YELLOW = '\x1b[33m';
-const CYAN = '\x1b[36m';
 // ============================================================================
 // AURORA THEME — Truecolor engine
 // ============================================================================
@@ -105,6 +102,11 @@ export function lerpRgb(c1, c2, t) {
     ];
 }
 // -- Aurora palette ---------------------------------------------------------
+// THEME SEAM: this single object is the only place a color is defined. Every
+// element routes its color through these tokens (directly, or via the helpers
+// below) — none reach for a raw ANSI hue anymore. Because each render runs in
+// its own process, a future theme system only has to populate these tokens
+// from config before the elements import them, and the whole HUD reskins.
 export const AURORA = {
     // Structural text
     text: [200, 211, 232], // #c8d3e8 soft slate (path, primary)
@@ -116,6 +118,10 @@ export const AURORA = {
     sonnet: [143, 208, 216], // #8fd0d8 cyan-teal
     haiku: [168, 216, 184], // #a8d8b8 mint
     effort: [131, 144, 184], // #8390b8 steel-blue
+    // Identity accent for non-model values (repo / branch / host / key / skill).
+    // Same cyan-teal as the Sonnet tier today, but a separate token so a theme can
+    // recolor identities independently of the model-tier color.
+    accent: [143, 208, 216], // #8fd0d8 cyan-teal
     // Usage gradient stops: teal (low) → amber (mid) → rose (high)
     gradLow: [127, 212, 196], // #7fd4c4 desaturated teal
     gradMid: [227, 192, 138], // #e3c08a soft amber
@@ -140,15 +146,6 @@ export function gradientColor(percent) {
 // ============================================================================
 // Color Functions
 // ============================================================================
-export function yellow(text) {
-    return `${YELLOW}${text}${RESET}`;
-}
-export function cyan(text) {
-    return `${CYAN}${text}${RESET}`;
-}
-export function dim(text) {
-    return `${DIM}${text}${RESET}`;
-}
 export function bold(text) {
     return `${BOLD}${text}${RESET}`;
 }
@@ -187,10 +184,9 @@ export function getModelTierRgb(model) {
     return AURORA.sonnet;
 }
 /**
- * Get color for agent duration (warning/alert).
- * - <2min: normal (green)
- * - 2-5min: warning (yellow)
- * - >5min: alert (red)
+ * Get color for agent duration along the Aurora gradient.
+ * Fresh runs sit at the teal (low) end and glide through amber toward rose as
+ * they age (≈8min → full rose), matching ctx/limits instead of hard bands.
  */
 export function getDurationColor(durationMs) {
     const minutes = durationMs / 60000;
@@ -207,6 +203,21 @@ export function auroraLabel(text) {
 /** Even fainter slate (reset times, parentheticals). */
 export function auroraFaint(text) {
     return paint(AURORA.faint, text);
+}
+/** Aurora primary text tone (soft slate) for readable values. */
+export function auroraText(text) {
+    return paint(AURORA.text, text);
+}
+/** Aurora neutral cool accent for identity values: repo, branch, host, key, skill. */
+export function auroraAccent(text) {
+    return paint(AURORA.accent, text);
+}
+/**
+ * Aurora warning tone: muted amber for caution, muted rose for critical.
+ * Replaces the old raw yellow/red so warnings stay in-palette.
+ */
+export function auroraWarn(text, critical = false) {
+    return paint(critical ? AURORA.gradHigh : AURORA.gradMid, text);
 }
 /**
  * Session-health color as an Aurora gradient anchor.

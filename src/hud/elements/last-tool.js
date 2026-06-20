@@ -3,7 +3,7 @@
  *
  * Renders the name of the most recently called tool in this session.
  */
-import { dim } from '../colors.js';
+import { auroraLabel, auroraText } from '../colors.js';
 /**
  * Render last tool name.
  *
@@ -12,5 +12,5 @@ import { dim } from '../colors.js';
 export function renderLastTool(lastToolName) {
     if (!lastToolName)
         return null;
-    return `${dim('tool:')}${lastToolName}`;
+    return `${auroraLabel('tool:')}${auroraText(lastToolName)}`;
 }

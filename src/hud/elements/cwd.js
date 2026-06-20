@@ -6,7 +6,7 @@
  */
 import { homedir } from 'node:os';
 import { basename, dirname, join, sep } from 'node:path';
-import { dim } from '../colors.js';
+import { auroraFaint } from '../colors.js';
 /**
  * Wrap text in an OSC 8 terminal hyperlink.
  * Supported by: iTerm2, WezTerm, Kitty, Hyper, Windows Terminal, VTE-based terminals.
@@ -66,7 +66,7 @@ export function renderCwd(cwd, format = 'relative', useHyperlinks = false) {
         default:
             displayPath = cwd;
     }
-    const rendered = `${dim(displayPath)}`;
+    const rendered = auroraFaint(displayPath);
     if (useHyperlinks) {
         const url = pathToFileUrl(cwd);
         return osc8Link(url, rendered);

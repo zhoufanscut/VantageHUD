@@ -3,7 +3,7 @@
  *
  * Renders the last activated skill badge.
  */
-import { cyan } from '../colors.js';
+import { auroraLabel, auroraAccent } from '../colors.js';
 import { truncateToWidth } from '../../lib/string-width.js';
 /**
  * Truncate string to max visual width with ellipsis.
@@ -31,5 +31,5 @@ export function renderLastSkill(lastSkill) {
         return null;
     const argsDisplay = lastSkill.args ? `(${truncate(lastSkill.args, 15)})` : '';
     const displayName = getSkillDisplayName(lastSkill.name);
-    return cyan(`skill:${displayName}${argsDisplay}`);
+    return `${auroraLabel('skill:')}${auroraAccent(`${displayName}${argsDisplay}`)}`;
 }

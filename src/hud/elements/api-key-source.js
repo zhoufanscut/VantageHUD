@@ -10,7 +10,7 @@
  */
 import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
-import { dim, cyan } from '../colors.js';
+import { auroraLabel, auroraAccent } from '../colors.js';
 import { getClaudeConfigDir } from '../../lib/config-dir.js';
 /**
  * Check whether a settings file defines ANTHROPIC_API_KEY in its env block.
@@ -65,5 +65,5 @@ export function detectApiKeySource(cwd) {
 export function renderApiKeySource(source) {
     if (!source)
         return null;
-    return `${dim('key:')}${cyan(source)}`;
+    return `${auroraLabel('key:')}${auroraAccent(source)}`;
 }

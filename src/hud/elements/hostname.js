@@ -7,11 +7,11 @@
  * host when terminal tab titles are hidden behind tmux/screen splits.
  */
 import { hostname } from 'node:os';
-import { cyan } from '../colors.js';
+import { auroraLabel, auroraAccent } from '../colors.js';
 /**
  * Render the short hostname (FQDN stripped).
  *
- * @returns Cyan-colored "host:<name>" label, or null if the OS returns
+ * @returns Aurora "host:<name>" label, or null if the OS returns
  *          an empty hostname (e.g. misconfigured containers).
  */
 export function renderHostname() {
@@ -21,5 +21,5 @@ export function renderHostname() {
     const short = full.split('.')[0];
     if (!short)
         return null;
-    return cyan(`host:${short}`);
+    return `${auroraLabel('host:')}${auroraAccent(short)}`;
 }

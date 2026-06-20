@@ -4,9 +4,8 @@
  * Renders the active-agent multi-line display: a header count plus one detail
  * line per running agent.
  */
-import { dim, RESET, getModelTierColor, getDurationColor } from '../colors.js';
+import { RESET, getModelTierColor, getDurationColor, auroraLabel, auroraAccent, auroraFaint, auroraText } from '../colors.js';
 import { truncateToWidth } from '../../lib/string-width.js';
-const CYAN = '\x1b[36m';
 // ============================================================================
 // Agent Type Codes
 // ============================================================================
@@ -193,7 +192,7 @@ export function renderAgentsMultiLine(agents, maxLines = 5) {
         return { headerPart: null, detailLines: [] };
     }
     // Header part shows count for awareness
-    const headerPart = `agents:${CYAN}${running.length}${RESET}`;
+    const headerPart = `${auroraLabel('agents:')}${auroraAccent(String(running.length))}`;
     // Build detail lines
     const now = Date.now();
     const detailLines = [];
@@ -210,12 +209,12 @@ export function renderAgentsMultiLine(agents, maxLines = 5) {
         const desc = a.description || '...';
         // Use CJK-aware truncation (45 visual columns)
         const truncatedDesc = truncateToWidth(desc, 45);
-        detailLines.push(`${dim(prefix)} ${color}${code}${RESET} ${dim(shortName)}${durationColor}${duration}${RESET}  ${truncatedDesc}`);
+        detailLines.push(`${auroraFaint(prefix)} ${color}${code}${RESET} ${auroraFaint(shortName)}${durationColor}${duration}${RESET}  ${auroraText(truncatedDesc)}`);
     });
     // Add overflow indicator if needed
     if (running.length > maxLines) {
         const remaining = running.length - maxLines;
-        detailLines.push(`${dim(`└─ +${remaining} more agents...`)}`);
+        detailLines.push(auroraFaint(`└─ +${remaining} more agents...`));
     }
     return { headerPart, detailLines };
 }

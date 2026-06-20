@@ -3,12 +3,12 @@
  *
  * Renders 5-hour and weekly rate limit usage display.
  */
-import { RESET, fg, gradientColor, AURORA } from '../colors.js';
-const DIM = '\x1b[2m';
-const YELLOW = '\x1b[33m';
-// Aurora colors only: faint slate for "5h:" / "7d:" labels and reset parentheticals.
+import { RESET, fg, gradientColor, AURORA, auroraFaint, auroraWarn } from '../colors.js';
+// Aurora colors only: faint slate for "5h:" / "7d:" labels and reset parentheticals,
+// plus the hairline-slate empty-bar track.
 const LABEL = fg(AURORA.label);
 const FAINT = fg(AURORA.faint);
+const TRACK = fg(AURORA.sep);
 /**
  * Get color based on percentage — Aurora smooth gradient (teal→amber→rose),
  * replacing the old green/yellow/red traffic-light steps.
@@ -47,7 +47,7 @@ function formatResetTime(date) {
 export function renderRateLimits(limits, stale, sonnetThreshold = 0) {
     if (!limits)
         return null;
-    const staleMarker = stale ? `${DIM}*${RESET}` : '';
+    const staleMarker = stale ? auroraFaint('*') : '';
     const resetPrefix = stale ? '~' : '';
     // One window → faint "5h:" label + gradient percent + faint "(reset)".
     const fmt = (label, percent, resetsAt) => {
@@ -88,7 +88,7 @@ export function renderRateLimits(limits, stale, sonnetThreshold = 0) {
 export function renderRateLimitsWithBar(limits, barWidth = 8, stale, sonnetThreshold = 0) {
     if (!limits)
         return null;
-    const staleMarker = stale ? `${DIM}*${RESET}` : '';
+    const staleMarker = stale ? auroraFaint('*') : '';
     const resetPrefix = stale ? '~' : '';
     // One window → faint label + gradient block-bar + gradient percent + faint reset.
     const fmt = (label, percent, resetsAt) => {
@@ -96,7 +96,7 @@ export function renderRateLimitsWithBar(limits, barWidth = 8, stale, sonnetThres
         const color = getColor(pct);
         const filled = Math.round((pct / 100) * barWidth);
         const empty = barWidth - filled;
-        const bar = `${color}${'█'.repeat(filled)}${DIM}${'░'.repeat(empty)}${RESET}`;
+        const bar = `${color}${'█'.repeat(filled)}${TRACK}${'░'.repeat(empty)}${RESET}`;
         const reset = formatResetTime(resetsAt);
         const head = `${LABEL}${label}:${RESET}[${bar}]${color}${pct}%${RESET}${staleMarker}`;
         return reset ? `${head}${FAINT}(${resetPrefix}${reset})${RESET}` : head;
@@ -121,7 +121,7 @@ export function renderRateLimitsWithBar(limits, barWidth = 8, stale, sonnetThres
         const color = getColor(extra);
         const filled = Math.round((extra / 100) * barWidth);
         const empty = barWidth - filled;
-        const bar = `${color}${'█'.repeat(filled)}${DIM}${'░'.repeat(empty)}${RESET}`;
+        const bar = `${color}${'█'.repeat(filled)}${TRACK}${'░'.repeat(empty)}${RESET}`;
         const extraReset = formatResetTime(limits.extraUsageResetsAt);
         const dollarPart = `${FAINT}($${(limits.extraUsageSpentUsd ?? 0).toFixed(2)}/$${limits.extraUsageLimitUsd.toFixed(2)})${RESET}`;
         const head = `${LABEL}extra:${RESET}[${bar}]${color}${extra}%${RESET}${staleMarker}${dollarPart}`;
@@ -144,9 +144,9 @@ export function renderRateLimitsError(result) {
     if (result.error === 'rate_limited') {
         // Prefer rendering stale usage percentages when available; only show the 429 badge
         // when there is no cached rate limit data to display.
-        return result.rateLimits ? null : `${DIM}[API 429]${RESET}`;
+        return result.rateLimits ? null : auroraFaint('[API 429]');
     }
     if (result.error === 'auth')
-        return `${YELLOW}[API auth]${RESET}`;
-    return `${YELLOW}[API err]${RESET}`;
+        return auroraWarn('[API auth]');
+    return auroraWarn('[API err]');
 }
