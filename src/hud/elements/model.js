@@ -3,7 +3,7 @@
  *
  * Renders the current model name with thinking effort folded in.
  */
-import { paint, getModelTierRgb, AURORA } from '../colors.js';
+import { paint, AURORA } from '../colors.js';
 import { truncateToWidth } from '../../lib/string-width.js';
 /**
  * Extract version from a model ID string.
@@ -65,7 +65,8 @@ export function renderModel(modelId, format = 'versioned', effortLevel = null) {
     const name = formatModelName(modelId, format);
     if (!name)
         return null;
-    // Gentle, in-family tier tint (opus/sonnet/haiku) + muted steel-blue effort.
-    const model = paint(getModelTierRgb(modelId), name.toLowerCase());
-    return effortLevel ? `${model} ${paint(AURORA.effort, effortLevel)}` : model;
+    // Model name and thinking effort render as one unit in a single tone — the
+    // muted steel-blue effort color (no per-tier tint on the name anymore).
+    const text = effortLevel ? `${name.toLowerCase()} ${effortLevel}` : name.toLowerCase();
+    return paint(AURORA.effort, text);
 }

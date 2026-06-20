@@ -117,7 +117,7 @@ export const AURORA = {
     opus: [180, 164, 232], // #b4a4e8 periwinkle
     sonnet: [143, 208, 216], // #8fd0d8 cyan-teal
     haiku: [168, 216, 184], // #a8d8b8 mint
-    effort: [131, 144, 184], // #8390b8 steel-blue
+    effort: [131, 144, 184], // #8390b8 steel-blue (model name + thinking effort)
     // Identity accent for non-model values (repo / branch / host / key / skill).
     // Same cyan-teal as the Sonnet tier today, but a separate token so a theme can
     // recolor identities independently of the model-tier color.
@@ -170,19 +170,6 @@ export function getModelTierColor(model) {
         return fg(AURORA.haiku);
     return fg(AURORA.sonnet); // Unknown model
 }
-/** Aurora RGB triple for a model tier (for elements that compose their own SGR). */
-export function getModelTierRgb(model) {
-    if (!model)
-        return AURORA.sonnet;
-    const tier = model.toLowerCase();
-    if (tier.includes('opus'))
-        return AURORA.opus;
-    if (tier.includes('sonnet'))
-        return AURORA.sonnet;
-    if (tier.includes('haiku'))
-        return AURORA.haiku;
-    return AURORA.sonnet;
-}
 /**
  * Get color for agent duration along the Aurora gradient.
  * Fresh runs sit at the teal (low) end and glide through amber toward rose as
@@ -218,17 +205,4 @@ export function auroraAccent(text) {
  */
 export function auroraWarn(text, critical = false) {
     return paint(critical ? AURORA.gradHigh : AURORA.gradMid, text);
-}
-/**
- * Session-health color as an Aurora gradient anchor.
- * Maps health buckets onto the same teal→amber→rose ramp so the session
- * duration belongs to the same color story as ctx/limits.
- *   good → teal (low end), warning → amber (mid), critical → rose (high).
- */
-export function getSessionHealthColor(health) {
-    if (health === 'critical')
-        return fg(AURORA.gradHigh);
-    if (health === 'warning')
-        return fg(AURORA.gradMid);
-    return fg(AURORA.gradLow);
 }

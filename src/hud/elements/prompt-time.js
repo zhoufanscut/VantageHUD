@@ -9,7 +9,7 @@
  * Falls back to the last typed prompt, then a UserPromptSubmit hook timestamp
  * (hudState.lastPromptTimestamp), if the activity signal is unavailable.
  */
-import { paint, auroraFaint, AURORA } from '../colors.js';
+import { paint, gradientColor, auroraFaint, AURORA } from '../colors.js';
 /**
  * Anthropic prompt-cache TTL. Once the idle gap since the last prompt exceeds
  * this, the next turn re-reads the full context uncached (a cache miss), so the
@@ -44,9 +44,10 @@ export function renderPromptTime(promptTime, now) {
     if (now) {
         const elapsed = now.getTime() - promptTime.getTime();
         if (elapsed >= 0) {
-            // Teal while the prompt cache is still warm; rose once the 5-minute
-            // TTL has lapsed and the next turn will miss the cache.
-            const color = elapsed >= CACHE_TTL_MS ? AURORA.gradHigh : AURORA.gradLow;
+            // Continuous teal→amber→rose ramp across the 5-min cache TTL: warm
+            // teal when fresh, amber mid-way, rose once the cache has lapsed —
+            // the same ramp as ctx/limits/session.
+            const color = gradientColor((elapsed / CACHE_TTL_MS) * 100);
             // Icon left unpainted so it renders as a native-color emoji, matching
             // the raw tool/agent/skill icons in call-counts (which apply no SGR).
             return `⌚${paint(color, formatElapsed(elapsed))}`;
