@@ -41,10 +41,16 @@ Claude Code → statusline.sh → find-node.sh → statusline.mjs → src/hud/in
 An element is a pure function `export function renderXxx(args) → string | null` (return `null` to render nothing; the string is a fragment with **no separators and no newlines** — `render.js` joins fragments with `" | "`). `src/hud/elements/agents.js` is the only multi-line element: it returns `{ headerPart, detailLines }`.
 
 To add one, touch these files (in order):
-1. `src/hud/elements/<name>.js` — the render function. Use color helpers from `src/hud/colors.js` (`paint`, `auroraLabel`, `auroraFaint`, `AURORA.*`), never raw escape codes.
+1. `src/hud/elements/<name>.js` — the render function. Use color helpers from `src/hud/colors.js` (`paint`, `auroraLabel`, `auroraFaint`, `PALETTE.*`), never raw escape codes. (`AURORA` is a back-compat alias for `PALETTE`.)
 2. `src/hud/render.js` — import it, guard on `enabledElements.<name>`, and store the result via `rendered.set("<name>", el)` (inline) or `renderedDetail.set("<name>", [el])` (detail line).
 3. `src/hud/types.js` — add the enable flag to `DEFAULT_HUD_CONFIG.elements` and place `"<name>"` in `DEFAULT_ELEMENT_ORDER` (`line1` / `main` / `detail`).
 4. `src/hud/index.js` — only if the element needs new data: extract it and add a field to the `context` object.
+
+## Adding or changing a theme
+
+- Palettes (the color **data**) live in **`src/hud/themes.js`** as the `THEMES` registry; **`src/hud/colors.js`** is the rendering **engine** (color-depth detection, `fg`/`paint`, gradient math) and exports the active palette as **`PALETTE`**. To add a theme, add one entry to `THEMES` with all 14 tokens (the file header documents each token's role) — **no other file changes**. Every element already routes through `PALETTE`/the `aurora*` helpers.
+- Active theme is resolved **at import** in `themes.js#resolveThemeName`: `HUD_THEME` env > `settings.json` `statusline.theme` > `DEFAULT_THEME` (`aurora`). It must be import-time, not render-time, because elements freeze `fg(PALETTE.x)` into module-level constants before `main()` reads the runtime config. `HUD_THEME=<name>` is the quick way to A/B a render.
+- Built-in themes: `aurora` (cool slate, the original — current default) and `ember` (warm gruvbox). `DEFAULT_THEME` lives in `themes.js`; the documented config default also lives in `DEFAULT_HUD_CONFIG.theme` (`src/hud/types.js`).
 
 ## Conventions & gotchas
 

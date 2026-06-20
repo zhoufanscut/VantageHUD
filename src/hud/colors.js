@@ -4,17 +4,19 @@
  * Terminal color codes for statusline rendering.
  * Based on claude-hud reference implementation.
  */
+import { ACTIVE_PALETTE, ACTIVE_THEME_NAME } from './themes.js';
 // ANSI escape codes
 export const RESET = '\x1b[0m';
 const BOLD = '\x1b[1m';
 // ============================================================================
-// AURORA THEME — Truecolor engine
+// THEME ENGINE — Truecolor
 // ============================================================================
 //
-// A single cohesive cool palette in the Nord / Tokyo-Night family: desaturated
-// slate text with soft cyan-teal-blue accents. Usage values glide along a smooth
-// teal → amber → rose gradient instead of hard traffic-light steps, so nothing is
-// ever jarring. Everything degrades gracefully: truecolor → 256-color → basic 16.
+// Palettes (the color *data*) live in `themes.js`; this file is the engine that
+// turns a palette token into an escape sequence and degrades gracefully:
+// truecolor → 256-color → basic 16. The active theme — slate-cool "aurora" or
+// warm "ember", selected via `HUD_THEME` / settings.json — is resolved there and
+// surfaced here as `PALETTE`.
 /**
  * Detect terminal color depth once per process.
  *   2 → 24-bit truecolor   (COLORTERM=truecolor|24bit)
@@ -91,7 +93,7 @@ function lerp(a, b, t) {
 }
 /**
  * Interpolate between two [r,g,b] stops by t (0..1) in plain RGB space.
- * Aurora's stops are close in luminance, so RGB lerp stays smooth and calm.
+ * The themed stops are close in luminance, so RGB lerp stays smooth and calm.
  */
 export function lerpRgb(c1, c2, t) {
     const k = Math.min(1, Math.max(0, t));
@@ -101,47 +103,29 @@ export function lerpRgb(c1, c2, t) {
         Math.round(lerp(c1[2], c2[2], k)),
     ];
 }
-// -- Aurora palette ---------------------------------------------------------
-// THEME SEAM: this single object is the only place a color is defined. Every
-// element routes its color through these tokens (directly, or via the helpers
-// below) — none reach for a raw ANSI hue anymore. Because each render runs in
-// its own process, a future theme system only has to populate these tokens
-// from config before the elements import them, and the whole HUD reskins.
-export const AURORA = {
-    // Structural text
-    text: [200, 211, 232], // #c8d3e8 soft slate (path, primary)
-    label: [126, 138, 168], // #7e8aa8 muted steel (ctx:/5h: labels)
-    faint: [110, 120, 150], // #6e7896 reset-time / parens
-    sep: [72, 80, 106], // #48506a hairline separator dot
-    // Model tier tints (same cool family, gently distinct)
-    opus: [180, 164, 232], // #b4a4e8 periwinkle
-    sonnet: [143, 208, 216], // #8fd0d8 cyan-teal
-    haiku: [168, 216, 184], // #a8d8b8 mint
-    effort: [131, 144, 184], // #8390b8 steel-blue (model name + thinking effort)
-    // Identity accent for non-model values (repo / branch / host / key / skill).
-    // Same cyan-teal as the Sonnet tier today, but a separate token so a theme can
-    // recolor identities independently of the model-tier color.
-    accent: [143, 208, 216], // #8fd0d8 cyan-teal
-    // Usage gradient stops: teal (low) → amber (mid) → rose (high)
-    gradLow: [127, 212, 196], // #7fd4c4 desaturated teal
-    gradMid: [227, 192, 138], // #e3c08a soft amber
-    gradHigh: [224, 144, 158], // #e0909e muted rose
-    // Git accents (kept in-family)
-    add: [143, 208, 184], // #8fd0b8 mint-green (staged / ahead)
-    del: [224, 144, 158], // #e0909e rose (modified / behind)
-    track: [143, 196, 216], // #8fc4d8 soft cyan (untracked)
-};
+// -- Active palette ----------------------------------------------------------
+// THEME SEAM: every element routes its color through these tokens (directly, or
+// via the helpers below) — none reach for a raw ANSI hue. The palette is chosen
+// in `themes.js` (env / settings.json / default) before any element imports it,
+// so swapping `theme` reskins the whole HUD. Add new palettes in `themes.js`.
+export const PALETTE = ACTIVE_PALETTE;
+/** The resolved theme name for this process (handy under HUD_DEBUG). */
+export const THEME_NAME = ACTIVE_THEME_NAME;
+// Back-compat alias for the active `PALETTE` (historical name from when
+// "aurora" was the only theme). Existing imports keep working; new code should
+// prefer `PALETTE`.
+export const AURORA = PALETTE;
 /**
- * Aurora usage gradient: map a 0..100 percentage to a calm color that glides
- * teal → amber → rose. Two linear segments meet at the 50% midpoint, so the
+ * Usage gradient: map a 0..100 percentage to a color that glides
+ * low → mid → high. Two linear segments meet at the 50% midpoint, so the
  * color visibly changes with state while never snapping between bands.
  */
 export function gradientColor(percent) {
     const p = Math.min(100, Math.max(0, percent));
     if (p <= 50) {
-        return lerpRgb(AURORA.gradLow, AURORA.gradMid, p / 50);
+        return lerpRgb(PALETTE.gradLow, PALETTE.gradMid, p / 50);
     }
-    return lerpRgb(AURORA.gradMid, AURORA.gradHigh, (p - 50) / 50);
+    return lerpRgb(PALETTE.gradMid, PALETTE.gradHigh, (p - 50) / 50);
 }
 // ============================================================================
 // Color Functions
@@ -153,56 +137,54 @@ export function bold(text) {
 // Model Tier Colors (for agent visualization)
 // ============================================================================
 /**
- * Get color for model tier (Aurora: gentle in-family tints).
- * - Opus: periwinkle
- * - Sonnet: cyan-teal
- * - Haiku: mint
+ * Get color for model tier (gentle in-family tints from the active palette).
+ * - Opus / Sonnet / Haiku map to their palette tokens; unknown → Sonnet.
  */
 export function getModelTierColor(model) {
     if (!model)
-        return fg(AURORA.sonnet); // Default/unknown
+        return fg(PALETTE.sonnet); // Default/unknown
     const tier = model.toLowerCase();
     if (tier.includes('opus'))
-        return fg(AURORA.opus);
+        return fg(PALETTE.opus);
     if (tier.includes('sonnet'))
-        return fg(AURORA.sonnet);
+        return fg(PALETTE.sonnet);
     if (tier.includes('haiku'))
-        return fg(AURORA.haiku);
-    return fg(AURORA.sonnet); // Unknown model
+        return fg(PALETTE.haiku);
+    return fg(PALETTE.sonnet); // Unknown model
 }
 /**
- * Get color for agent duration along the Aurora gradient.
- * Fresh runs sit at the teal (low) end and glide through amber toward rose as
- * they age (≈8min → full rose), matching ctx/limits instead of hard bands.
+ * Get color for agent duration along the usage gradient.
+ * Fresh runs sit at the low end and glide through mid toward high as they age
+ * (≈8min → full high), matching ctx/limits instead of hard bands.
  */
 export function getDurationColor(durationMs) {
     const minutes = durationMs / 60000;
-    // Map duration onto the Aurora gradient (≈8min → full rose).
+    // Map duration onto the gradient (≈8min → full high).
     return fg(gradientColor((minutes / 8) * 100));
 }
 // ============================================================================
-// AURORA — shared element helpers
+// Shared element helpers (operate on the active palette)
 // ============================================================================
-/** A faint slate hairline label (Aurora's quiet "ctx:" / "5h:" prefix tone). */
+/** A faint hairline label tone (the quiet "ctx:" / "5h:" prefix). */
 export function auroraLabel(text) {
-    return paint(AURORA.label, text);
+    return paint(PALETTE.label, text);
 }
-/** Even fainter slate (reset times, parentheticals). */
+/** Even fainter (reset times, parentheticals). */
 export function auroraFaint(text) {
-    return paint(AURORA.faint, text);
+    return paint(PALETTE.faint, text);
 }
-/** Aurora primary text tone (soft slate) for readable values. */
+/** Primary text tone for readable values. */
 export function auroraText(text) {
-    return paint(AURORA.text, text);
+    return paint(PALETTE.text, text);
 }
-/** Aurora neutral cool accent for identity values: repo, branch, host, key, skill. */
+/** Neutral identity accent: repo, branch, host, key, skill. */
 export function auroraAccent(text) {
-    return paint(AURORA.accent, text);
+    return paint(PALETTE.accent, text);
 }
 /**
- * Aurora warning tone: muted amber for caution, muted rose for critical.
- * Replaces the old raw yellow/red so warnings stay in-palette.
+ * Warning tone: muted mid for caution, muted high for critical.
+ * Stays in-palette instead of reaching for raw yellow/red.
  */
 export function auroraWarn(text, critical = false) {
-    return paint(critical ? AURORA.gradHigh : AURORA.gradMid, text);
+    return paint(critical ? PALETTE.gradHigh : PALETTE.gradMid, text);
 }

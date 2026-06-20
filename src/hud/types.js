@@ -77,6 +77,13 @@ export const DEFAULT_HUD_USAGE_POLL_INTERVAL_MS = 90 * 1000;
 export const DEFAULT_HUD_CONFIG = {
     preset: 'focused',
     locale: 'en',
+    // Color theme — DOCUMENTATION ONLY (not consumed at runtime). Registered
+    // palettes live in `themes.js` ('aurora' | 'ember'); the active palette is
+    // resolved there at import (HUD_THEME env > settings.json `statusline.theme`
+    // > `DEFAULT_THEME`), since elements freeze their colors before the runtime
+    // config is read. The authoritative default is `DEFAULT_THEME` in themes.js
+    // — keep this in sync with it. Read the resolved name via `ACTIVE_THEME_NAME`.
+    theme: 'aurora',
     labels: DEFAULT_HUD_LABELS,
     elements: {
         cwd: false, // Disabled by default for backward compatibility
