@@ -4,8 +4,9 @@
  * Renders 5-hour and weekly rate limit usage display.
  */
 import { RESET, fg, gradientColor, AURORA, auroraFaint, auroraWarn } from '../colors.js';
-// Aurora colors only: faint slate for "5h:" / "7d:" labels and reset parentheticals,
-// plus the hairline-slate empty-bar track.
+// Aurora colors only: steel "5h:"/"7d:" labels AND the reset-time parentheticals
+// (the latter share the call-count tone, AURORA.label), faint slate for the
+// $spent/$limit parenthetical, and a hairline-slate empty-bar track.
 const LABEL = fg(AURORA.label);
 const FAINT = fg(AURORA.faint);
 const TRACK = fg(AURORA.sep);
@@ -54,7 +55,7 @@ export function renderRateLimits(limits, stale, sonnetThreshold = 0) {
         const pct = Math.min(100, Math.max(0, Math.round(percent)));
         const reset = formatResetTime(resetsAt);
         const head = `${LABEL}${label}:${RESET}${getColor(pct)}${pct}%${RESET}${staleMarker}`;
-        return reset ? `${head}${FAINT}(${resetPrefix}${reset})${RESET}` : head;
+        return reset ? `${head}${LABEL}(${resetPrefix}${reset})${RESET}` : head;
     };
     const parts = [fmt('5h', limits.fiveHourPercent, limits.fiveHourResetsAt)];
     if (limits.weeklyPercent != null) {
@@ -76,7 +77,7 @@ export function renderRateLimits(limits, stale, sonnetThreshold = 0) {
         const extraReset = formatResetTime(limits.extraUsageResetsAt);
         const dollarPart = `${FAINT}($${(limits.extraUsageSpentUsd ?? 0).toFixed(2)}/$${limits.extraUsageLimitUsd.toFixed(2)})${RESET}`;
         const extraHead = `${LABEL}extra:${RESET}${getColor(extra)}${extra}%${RESET}${staleMarker}${dollarPart}`;
-        parts.push(extraReset ? `${extraHead}${FAINT}(${resetPrefix}${extraReset})${RESET}` : extraHead);
+        parts.push(extraReset ? `${extraHead}${LABEL}(${resetPrefix}${extraReset})${RESET}` : extraHead);
     }
     return parts.join(' ');
 }
@@ -99,7 +100,7 @@ export function renderRateLimitsWithBar(limits, barWidth = 8, stale, sonnetThres
         const bar = `${color}${'█'.repeat(filled)}${TRACK}${'░'.repeat(empty)}${RESET}`;
         const reset = formatResetTime(resetsAt);
         const head = `${LABEL}${label}:${RESET}[${bar}]${color}${pct}%${RESET}${staleMarker}`;
-        return reset ? `${head}${FAINT}(${resetPrefix}${reset})${RESET}` : head;
+        return reset ? `${head}${LABEL}(${resetPrefix}${reset})${RESET}` : head;
     };
     const parts = [fmt('5h', limits.fiveHourPercent, limits.fiveHourResetsAt)];
     if (limits.weeklyPercent != null) {
@@ -125,7 +126,7 @@ export function renderRateLimitsWithBar(limits, barWidth = 8, stale, sonnetThres
         const extraReset = formatResetTime(limits.extraUsageResetsAt);
         const dollarPart = `${FAINT}($${(limits.extraUsageSpentUsd ?? 0).toFixed(2)}/$${limits.extraUsageLimitUsd.toFixed(2)})${RESET}`;
         const head = `${LABEL}extra:${RESET}[${bar}]${color}${extra}%${RESET}${staleMarker}${dollarPart}`;
-        parts.push(extraReset ? `${head}${FAINT}(${resetPrefix}${extraReset})${RESET}` : head);
+        parts.push(extraReset ? `${head}${LABEL}(${resetPrefix}${extraReset})${RESET}` : head);
     }
     return parts.join(' ');
 }

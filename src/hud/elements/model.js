@@ -3,7 +3,7 @@
  *
  * Renders the current model name with thinking effort folded in.
  */
-import { paint, AURORA } from '../colors.js';
+import { paint, gradientColor } from '../colors.js';
 import { truncateToWidth } from '../../lib/string-width.js';
 /**
  * Extract version from a model ID string.
@@ -59,14 +59,25 @@ export function formatModelName(modelId, format = 'short') {
     return shortName;
 }
 /**
+ * Map a thinking-effort level onto the shared teal→amber→rose gauge ramp (the
+ * same ramp as ctx / session / limits), inverted so more effort reads calmer:
+ * max → teal, xhigh → teal-amber, high → amber, medium → amber-rose, low → rose.
+ * Unknown or absent levels fall back to the max (teal) end.
+ */
+const EFFORT_RANK = { low: 100, medium: 75, high: 50, xhigh: 25, max: 0 };
+function effortColor(level) {
+    const pct = level == null ? null : EFFORT_RANK[String(level).toLowerCase()];
+    return gradientColor(pct == null ? EFFORT_RANK.max : pct);
+}
+/**
  * Render model element.
  */
 export function renderModel(modelId, format = 'versioned', effortLevel = null) {
     const name = formatModelName(modelId, format);
     if (!name)
         return null;
-    // Model name and thinking effort render as one unit in a single tone — the
-    // muted steel-blue effort color (no per-tier tint on the name anymore).
+    // Model name + thinking effort render as one unit, colored by the effort
+    // level on the shared gauge ramp (low→teal … max→rose), matching ctx/session.
     const text = effortLevel ? `${name.toLowerCase()} ${effortLevel}` : name.toLowerCase();
-    return paint(AURORA.effort, text);
+    return paint(effortColor(effortLevel), text);
 }
