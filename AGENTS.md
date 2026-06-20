@@ -40,12 +40,12 @@ Claude Code → statusline.sh → find-node.sh → statusline.mjs → src/hud/in
 
 ## Adding or changing a statusline element
 
-An element is a pure function `export function renderXxx(args) → string | null` (return `null` to render nothing; the string is a fragment with **no separators and no newlines** — `render.js` joins fragments with `" | "`). `src/hud/elements/agents.js` is the only multi-line element: it returns `{ headerPart, detailLines }`.
+An element is a pure function `export function renderXxx(args) → string | null` (return `null` to render nothing; the string is a fragment with **no separators and no newlines** — `render.js` joins fragments with `" | "`). The HUD renders a **single line**, so every element is an inline fragment.
 
 To add one, touch these files (in order):
 1. `src/hud/elements/<name>.js` — the render function. Use color helpers from `src/hud/colors.js` (`paint`, `auroraLabel`, `auroraFaint`, `PALETTE.*`), never raw escape codes. (`AURORA` is a back-compat alias for `PALETTE`.)
-2. `src/hud/render.js` — import it, guard on `enabledElements.<name>`, and store the result via `rendered.set("<name>", el)` (inline) or `renderedDetail.set("<name>", [el])` (detail line).
-3. `src/hud/types.js` — add the enable flag to `DEFAULT_HUD_CONFIG.elements` and place `"<name>"` in `DEFAULT_ELEMENT_ORDER` (`line1` / `main` / `detail`).
+2. `src/hud/render.js` — import it, guard on `enabledElements.<name>`, and store the result via `rendered.set("<name>", el)`.
+3. `src/hud/types.js` — add the enable flag to `DEFAULT_HUD_CONFIG.elements` and place `"<name>"` in `DEFAULT_ELEMENT_ORDER.main`.
 4. `src/hud/index.js` — only if the element needs new data: extract it and add a field to the `context` object.
 
 ## Adding or changing a theme

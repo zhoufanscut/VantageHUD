@@ -4,26 +4,18 @@
  * Composes statusline output from render context.
  */
 import { DEFAULT_HUD_CONFIG, DEFAULT_ELEMENT_ORDER, DEFAULT_HUD_LABELS } from "./types.js";
-import { bold, paint, AURORA } from "./colors.js";
+import { paint, AURORA } from "./colors.js";
 import { stringWidth, getCharWidth } from "../lib/string-width.js";
-import { renderAgentsMultiLine } from "./elements/agents.js";
-import { renderTodosWithCurrent } from "./elements/todos.js";
-import { renderLastSkill } from "./elements/skills.js";
+import { renderAgents } from "./elements/agents.js";
 import { renderContext, renderContextWithBar } from "./elements/context.js";
 import { renderBackground } from "./elements/background.js";
 import { renderRateLimits, renderRateLimitsWithBar, renderRateLimitsError } from "./elements/limits.js";
-import { renderPermission } from "./elements/permission.js";
 import { renderSession } from "./elements/session.js";
 import { renderTokenUsage } from "./elements/token-usage.js";
 import { renderPromptTime } from "./elements/prompt-time.js";
-import { renderCwd } from "./elements/cwd.js";
-import { renderHostname } from "./elements/hostname.js";
 import { renderGitRepo, renderGitBranch, renderGitStatus } from "./elements/git.js";
 import { renderModel } from "./elements/model.js";
-import { renderApiKeySource } from "./elements/api-key-source.js";
 import { renderCallCounts } from "./elements/call-counts.js";
-import { renderContextLimitWarning, renderPayloadLimitWarning, } from "./elements/context-warning.js";
-import { renderLastTool } from "./elements/last-tool.js";
 /**
  * ANSI escape sequence regex (matches SGR and other CSI sequences).
  * Used to skip escape codes when measuring/truncating visible width.
@@ -182,18 +174,7 @@ export async function render(context, config) {
     // Each element is rendered independently and stored by name.
     // The layout (or DEFAULT_ELEMENT_ORDER) determines final ordering.
     const rendered = new Map();
-    const renderedDetail = new Map();
-    // -- line1-group elements (default: git info line) --
-    if (enabledElements.hostname) {
-        const hostnameElement = renderHostname();
-        if (hostnameElement)
-            rendered.set("hostname", hostnameElement);
-    }
-    if (enabledElements.cwd) {
-        const cwdElement = renderCwd(context.cwd, enabledElements.cwdFormat || "relative", enabledElements.useHyperlinks ?? false);
-        if (cwdElement)
-            rendered.set("cwd", cwdElement);
-    }
+    // -- main-line elements --
     if (enabledElements.gitRepo) {
         const gitRepoElement = renderGitRepo(context.cwd);
         if (gitRepoElement)
@@ -220,15 +201,6 @@ export async function render(context, config) {
             rendered.set("model", modelElement);
     }
 
-    if (enabledElements.apiKeySource && context.apiKeySource) {
-        const keySource = renderApiKeySource(context.apiKeySource);
-        if (keySource)
-            rendered.set("apiKeySource", keySource);
-    }
-    if (enabledElements.profile && context.profileName) {
-        rendered.set("profile", bold(`profile:${context.profileName}`));
-    }
-    // -- main-group elements (default: main statusline) --
     // show the working-folder path here (replaces the former version label),
     // shortening the $HOME prefix to ~ to keep it compact.
     if (enabledElements.pathLabel && context.cwd) {
@@ -256,11 +228,6 @@ export async function render(context, config) {
                 rendered.set("rateLimits", errorIndicator);
         }
     }
-    if (enabledElements.permissionStatus && context.pendingPermission) {
-        const permission = renderPermission(context.pendingPermission);
-        if (permission)
-            rendered.set("permission", permission);
-    }
     if (enabledElements.promptTime) {
         const prompt = renderPromptTime(context.promptTime, new Date());
         if (prompt)
@@ -279,11 +246,6 @@ export async function render(context, config) {
         if (tokenUsage)
             rendered.set("tokens", tokenUsage);
     }
-    if (enabledElements.lastSkill ?? true) {
-        const lastSkillElement = renderLastSkill(context.lastSkill);
-        if (lastSkillElement)
-            rendered.set("lastSkill", lastSkillElement);
-    }
     if (enabledElements.contextBar) {
         const ctx = enabledElements.useBars
             ? renderContextWithBar(context.contextPercent, config.thresholds, 10, hudLabels)
@@ -291,15 +253,11 @@ export async function render(context, config) {
         if (ctx)
             rendered.set("contextBar", ctx);
     }
-    // Active agents - multi-line display (header count + per-agent detail lines)
+    // Active agents - count only (single-line HUD)
     if (enabledElements.agents) {
-        const maxLines = enabledElements.agentsMaxLines || 5;
-        const result = renderAgentsMultiLine(context.activeAgents, maxLines);
-        if (result.headerPart)
-            rendered.set("agents", result.headerPart);
-        if (result.detailLines.length > 0) {
-            renderedDetail.set("agents", result.detailLines);
-        }
+        const agentsEl = renderAgents(context.activeAgents);
+        if (agentsEl)
+            rendered.set("agents", agentsEl);
     }
     if (enabledElements.backgroundTasks) {
         const bg = renderBackground(context.backgroundTasks, hudLabels);
@@ -312,97 +270,26 @@ export async function render(context, config) {
         if (counts)
             rendered.set("callCounts", counts);
     }
-    if (enabledElements.showLastTool === true) {
-        const tool = renderLastTool(context.lastToolName ?? null);
-        if (tool)
-            rendered.set("lastTool", tool);
-    }
-    // -- detail-group elements --
-    const ctxWarning = renderContextLimitWarning(context.contextPercent, config.contextLimitWarning.threshold, config.contextLimitWarning.autoCompact);
-    if (ctxWarning)
-        renderedDetail.set("contextWarning", [ctxWarning]);
-    const payloadWarning = renderPayloadLimitWarning(context.payloadEstimate);
-    if (payloadWarning)
-        renderedDetail.set("payloadWarning", [payloadWarning]);
-    if (enabledElements.todos) {
-        const todos = renderTodosWithCurrent(context.todos);
-        if (todos)
-            renderedDetail.set("todos", [todos]);
-    }
-    // ── Assemble output using layout order ─────────────────────────────
+    // ── Assemble output (single line) ──────────────────────────────────
     const safeArray = (v, fallback) => Array.isArray(v) ? v : fallback;
-    const effectiveLayout = {
-        line1: safeArray(config.layout?.line1, DEFAULT_ELEMENT_ORDER.line1),
-        // `layout.main` remains the advanced authoritative layout control.
-        // `elementOrder` is a narrow convenience alias for the main HUD line only.
-        main: safeArray(config.layout?.main, buildMainElementOrder(config.elementOrder)),
-        detail: safeArray(config.layout?.detail, DEFAULT_ELEMENT_ORDER.detail),
-    };
-    /** Collect inline elements in layout order.
-     *  Also picks up detail-origin elements moved to an inline group —
-     *  their detail lines are joined into a single inline string. */
+    // Single-line HUD: only the `main` zone renders. `layout.main` is the advanced
+    // authoritative ordering control; `elementOrder` is a convenience alias for it.
+    const mainOrder = safeArray(config.layout?.main, buildMainElementOrder(config.elementOrder));
+    /** Collect inline elements in layout order. */
     function collectInline(order) {
         const result = [];
         for (const name of order) {
             const el = rendered.get(name);
-            if (el) {
+            if (el)
                 result.push(el);
-            }
-            else {
-                // Detail elements moved to an inline group render as joined inline
-                const lines = renderedDetail.get(name);
-                if (lines && lines.length > 0)
-                    result.push(lines.join(" "));
-            }
         }
         return result;
     }
-    /** Collect detail lines in layout order.
-     *  Also picks up inline elements moved to the detail group —
-     *  they become individual detail lines when placed here. */
-    function collectDetailLines(order) {
-        const result = [];
-        for (const name of order) {
-            const lines = renderedDetail.get(name);
-            if (lines)
-                result.push(...lines);
-            // Inline elements moved to the detail group render as detail lines
-            if (!lines) {
-                const inline = rendered.get(name);
-                if (inline)
-                    result.push(inline);
-            }
-        }
-        return result;
-    }
-    const gitElements = collectInline(effectiveLayout.line1);
-    const elements = collectInline(effectiveLayout.main);
-    // Detail lines from the detail group layout order.
-    // Elements like 'agents' appear in both main (inline) and detail (detail lines),
-    // preserving legacy ordering: agents detail, contextWarning, todos.
-    const detailLines = collectDetailLines(effectiveLayout.detail);
-    // Compose output
-    const outputLines = [];
-    const gitInfoLine = gitElements.length > 0 ? gitElements.join(DIM_SEPARATOR) : null;
+    const elements = collectInline(mainOrder);
+    // Compose output (single line)
     const headerLine = elements.length > 0 ? elements.join(DIM_SEPARATOR) : null;
-    const gitPosition = config.elements.gitInfoPosition ?? "above";
-    if (gitPosition === "above") {
-        if (gitInfoLine) {
-            outputLines.push(gitInfoLine);
-        }
-        if (headerLine) {
-            outputLines.push(headerLine);
-        }
-    }
-    else {
-        if (headerLine) {
-            outputLines.push(headerLine);
-        }
-        if (gitInfoLine) {
-            outputLines.push(gitInfoLine);
-        }
-    }
-    const widthAdjustedLines = applyMaxWidthByMode([...outputLines, ...detailLines], config.maxWidth, config.wrapMode);
+    const outputLines = headerLine ? [headerLine] : [];
+    const widthAdjustedLines = applyMaxWidthByMode(outputLines, config.maxWidth, config.wrapMode);
     // Apply max output line limit after wrapping so wrapped output still respects maxOutputLines.
     const limitedLines = limitOutputLines(widthAdjustedLines, config.elements.maxOutputLines);
     // Ensure line-limit indicator and all other lines still respect maxWidth.

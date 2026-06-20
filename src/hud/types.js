@@ -60,18 +60,16 @@ export function resolveHudLabels(locale, labels) {
     };
 }
 /**
- * Default element order matching the current hardcoded order in render.ts.
+ * Default element order for the single-line HUD (the `main` zone).
  * Used as fallback when no layout is configured.
  */
 export const DEFAULT_ELEMENT_ORDER = {
-    line1: ['hostname', 'cwd', 'apiKeySource', 'profile'],
     main: [
-        'pathLabel', 'model', 'rateLimits', 'permission',
+        'pathLabel', 'model', 'rateLimits',
         'contextBar', 'tokens', 'session', 'promptTime',
         'agents', 'background',
-        'callCounts', 'gitRepo', 'gitBranch', 'gitStatus', 'lastSkill', 'lastTool',
+        'callCounts', 'gitRepo', 'gitBranch', 'gitStatus',
     ],
-    detail: ['agents', 'contextWarning', 'payloadWarning', 'todos'],
 };
 export const DEFAULT_HUD_USAGE_POLL_INTERVAL_MS = 90 * 1000;
 export const DEFAULT_HUD_CONFIG = {
@@ -86,31 +84,19 @@ export const DEFAULT_HUD_CONFIG = {
     theme: 'aurora',
     labels: DEFAULT_HUD_LABELS,
     elements: {
-        cwd: false, // Disabled by default for backward compatibility
-        cwdFormat: 'relative',
-        useHyperlinks: false,
         gitRepo: true, // Show repository name by default
         gitBranch: true, // Show branch (and worktree suffix) by default
         gitStatus: true, // Show working-tree status by default
-        gitInfoPosition: 'above', // Git info above main HUD line (backward compatible)
         model: true, // Show only when Claude Code statusline stdin provides a model
         modelFormat: 'versioned', // Preserve model version by default
         pathLabel: true,
         updateNotification: true, // Preserve existing update prompt behavior by default
         rateLimits: true, // Show rate limits by default
         contextBar: true,
-        agents: true,
-        agentsFormat: 'multiline', // Multi-line for rich agent visualization
-        agentsMaxLines: 5, // Show up to 5 agent detail lines
+        agents: true, // Show active-agent count
         backgroundTasks: true,
-        todos: true,
-        lastSkill: true,
-        permissionStatus: false, // Disabled: heuristic-based, causes false positives
         thinking: true,
         thinkingFormat: 'text', // Text format for backward compatibility
-        apiKeySource: false, // Disabled by default
-        hostname: false,
-        profile: true, // Show profile name when CLAUDE_CONFIG_DIR is set
         promptTime: false, // Hidden by default (low-signal element)
         sessionHealth: true,
         showSessionDuration: true,
@@ -119,7 +105,6 @@ export const DEFAULT_HUD_CONFIG = {
         useBars: false, // Disabled by default for backwards compatibility
         showCallCounts: true, // Show tool/agent/skill call counts by default (Issue #710)
         callCountsFormat: 'auto', // Preserve platform-based emoji/ASCII defaults unless explicitly overridden
-        showLastTool: false,
         sessionSummary: false, // Disabled by default - opt-in AI-generated session summary
         maxOutputLines: 4,
         safeMode: true, // Enabled by default to prevent terminal rendering corruption (Issue #346)
@@ -140,31 +125,19 @@ export const DEFAULT_HUD_CONFIG = {
 };
 export const PRESET_CONFIGS = {
     minimal: {
-        cwd: false,
-        cwdFormat: 'folder',
-        useHyperlinks: false,
         gitRepo: false,
         gitBranch: false,
         gitStatus: false,
-        gitInfoPosition: 'above',
         model: true,
         modelFormat: 'versioned',
         pathLabel: true,
         updateNotification: true,
         rateLimits: true,
-        lastSkill: true,
         contextBar: false,
         agents: true,
-        agentsFormat: 'count',
-        agentsMaxLines: 0,
         backgroundTasks: false,
-        todos: true,
-        permissionStatus: false,
         thinking: false,
         thinkingFormat: 'text',
-        apiKeySource: false,
-        hostname: false,
-        profile: true,
         promptTime: false,
         sessionHealth: false,
         showSessionDuration: true,
@@ -172,37 +145,24 @@ export const PRESET_CONFIGS = {
         showTokens: false,
         useBars: false,
         showCallCounts: false,
-        showLastTool: false,
         sessionSummary: false,
         maxOutputLines: 2,
         safeMode: true,
     },
     focused: {
-        cwd: false,
-        cwdFormat: 'relative',
-        useHyperlinks: false,
         gitRepo: false,
         gitBranch: true,
         gitStatus: true,
-        gitInfoPosition: 'above',
         model: true,
         modelFormat: 'versioned',
         pathLabel: true,
         updateNotification: true,
         rateLimits: true,
-        lastSkill: true,
         contextBar: true,
         agents: true,
-        agentsFormat: 'multiline',
-        agentsMaxLines: 3,
         backgroundTasks: true,
-        todos: true,
-        permissionStatus: false,
         thinking: true,
         thinkingFormat: 'text',
-        apiKeySource: false,
-        hostname: false,
-        profile: true,
         promptTime: false,
         sessionHealth: true,
         showSessionDuration: true,
@@ -210,37 +170,24 @@ export const PRESET_CONFIGS = {
         showTokens: false,
         useBars: true,
         showCallCounts: true,
-        showLastTool: false,
         sessionSummary: false, // Opt-in: sends transcript to claude -p
         maxOutputLines: 4,
         safeMode: true,
     },
     full: {
-        cwd: false,
-        cwdFormat: 'relative',
-        useHyperlinks: false,
         gitRepo: true,
         gitBranch: true,
         gitStatus: true,
-        gitInfoPosition: 'above',
         model: true,
         modelFormat: 'versioned',
         pathLabel: true,
         updateNotification: true,
         rateLimits: true,
-        lastSkill: true,
         contextBar: true,
         agents: true,
-        agentsFormat: 'multiline',
-        agentsMaxLines: 10,
         backgroundTasks: true,
-        todos: true,
-        permissionStatus: false,
         thinking: true,
         thinkingFormat: 'text',
-        apiKeySource: true,
-        hostname: false,
-        profile: true,
         promptTime: false,
         sessionHealth: true,
         showSessionDuration: true,
@@ -248,37 +195,24 @@ export const PRESET_CONFIGS = {
         showTokens: false,
         useBars: true,
         showCallCounts: true,
-        showLastTool: false,
         sessionSummary: false, // Opt-in: sends transcript to claude -p
         maxOutputLines: 12,
         safeMode: true,
     },
     opencode: {
-        cwd: false,
-        cwdFormat: 'relative',
-        useHyperlinks: false,
         gitRepo: false,
         gitBranch: true,
         gitStatus: false,
-        gitInfoPosition: 'above',
         model: true,
         modelFormat: 'versioned',
         pathLabel: true,
         updateNotification: true,
         rateLimits: false,
-        lastSkill: true,
         contextBar: true,
         agents: true,
-        agentsFormat: 'codes',
-        agentsMaxLines: 0,
         backgroundTasks: false,
-        todos: true,
-        permissionStatus: false,
         thinking: true,
         thinkingFormat: 'text',
-        apiKeySource: false,
-        hostname: false,
-        profile: true,
         promptTime: false,
         sessionHealth: true,
         showSessionDuration: true,
@@ -286,37 +220,24 @@ export const PRESET_CONFIGS = {
         showTokens: false,
         useBars: false,
         showCallCounts: true,
-        showLastTool: false,
         sessionSummary: false,
         maxOutputLines: 4,
         safeMode: true,
     },
     dense: {
-        cwd: false,
-        cwdFormat: 'relative',
-        useHyperlinks: false,
         gitRepo: true,
         gitBranch: true,
         gitStatus: true,
-        gitInfoPosition: 'above',
         model: true,
         modelFormat: 'versioned',
         pathLabel: true,
         updateNotification: true,
         rateLimits: true,
-        lastSkill: true,
         contextBar: true,
         agents: true,
-        agentsFormat: 'multiline',
-        agentsMaxLines: 5,
         backgroundTasks: true,
-        todos: true,
-        permissionStatus: false,
         thinking: true,
         thinkingFormat: 'text',
-        apiKeySource: true,
-        hostname: false,
-        profile: true,
         promptTime: false,
         sessionHealth: true,
         showSessionDuration: true,
@@ -324,7 +245,6 @@ export const PRESET_CONFIGS = {
         showTokens: false,
         useBars: true,
         showCallCounts: true,
-        showLastTool: false,
         sessionSummary: false, // Opt-in: sends transcript to claude -p
         maxOutputLines: 6,
         safeMode: true,

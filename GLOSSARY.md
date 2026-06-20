@@ -28,17 +28,14 @@ skimming. Add a term back (or a new one) when it earns its place; keep this shor
 - **element** — a pure render function `renderXxx(args) → string | null`, one per
   file in `src/hud/elements/`. Returns `null` to render nothing.
 - **fragment** — the string an element returns: **no separators, no newlines**.
-  `render.js` joins fragments with ` | `.
-- **detail line** — a full extra line *below* the main line (agents, todos,
-  warnings), vs an inline fragment. `agents.js` is the only element that emits one,
-  via `{ headerPart, detailLines }`.
+  `render.js` joins fragments with ` | ` into the single status line.
 
 ## Layout & config
 
-- **line1 / main / detail** — the three render zones (`DEFAULT_ELEMENT_ORDER`,
-  `src/hud/types.js`). `line1` = top line (above `main` by default); `main` = the
-  primary status line; `detail` = the multi-line extras under it. User config can
-  reorder them.
+- **main** — the HUD's single render zone: the one status line. Element order is
+  `DEFAULT_ELEMENT_ORDER.main` (`src/hud/types.js`); `layout.main` / `elementOrder`
+  reorder it. (The HUD was formerly three zones — `line1` / `main` / `detail` — but
+  is now single-line, so only `main` remains.)
 - **preset** — a named bundle of element toggles: `minimal | focused | full |
   opencode | dense`. Default `focused` (`PRESET_CONFIGS`, `types.js`).
 
@@ -89,7 +86,6 @@ The pairs most likely to make us talk past each other:
 | **AURORA** / **aurora** | `AURORA` = back-compat alias for the *active* `PALETTE` (any theme) / `aurora` = one specific theme name. |
 | **session key** / **session id** | the cache-folder name (sanitized, sometimes a checksum) / Claude Code's conversation UUID (one input to the key). |
 | **element** / **enable flag** | the `renderXxx()` function / the config boolean (often same name) that gates it. |
-| `gitInfoPosition` / where git renders | the flag positions the whole **`line1`** zone above/below `main` (binary: `"above"` vs not); by default **git is inline in `main`**, not on `line1` — the name is legacy. |
 | `DEFAULT_HUD_CONFIG.theme` / the real switch | that field is **documentation-only**; the active theme is resolved in `themes.js` (`HUD_THEME` / `settings.json`). |
 | **HUD** / **statusline.sh** / **statusline.mjs** | the project / the shell caching wrapper / the Node entry point. |
 | `src/lib/` / `src/utils/`, `src/cli/utils/`, `src/platform/` | `src/lib/` is the current home for shared utils; the others are the **old** locations it moved from — import from `../lib/…`. |

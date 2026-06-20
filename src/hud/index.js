@@ -10,12 +10,9 @@ import { parseTranscript } from "./transcript.js";
 import { readHudState, readHudConfig, getRunningTasks, writeHudState, initializeHUDState, } from "./state.js";
 import { getUsage } from "./usage-api.js";
 import { render } from "./render.js";
-import { detectApiKeySource } from "./elements/api-key-source.js";
 import { sanitizeOutput } from "./sanitize.js";
-import { estimatePayloadFromTranscriptPath } from "./payload-estimate.js";
 import { resolveToWorktreeRoot, resolveTranscriptPath, sessionCacheFile } from "../lib/worktree-paths.js";
 import { atomicWriteJsonSync } from "../lib/atomic-write.js";
-import { basename } from "path";
 /**
  * Extract session ID (UUID) from a transcript path.
  */
@@ -164,7 +161,6 @@ async function main() {
                 contextPercent = contextFromUsage;
             }
         }
-        const payloadEstimate = estimatePayloadFromTranscriptPath(resolvedTranscriptPath);
         // Build render context
         const context = {
             contextPercent,
@@ -172,12 +168,9 @@ async function main() {
             modelId: getModelId(stdin),
             effortLevel: getEffortLevel(stdin),
             activeAgents: transcriptData.agents.filter((a) => a.status === "running"),
-            todos: transcriptData.todos,
             backgroundTasks: getRunningTasks(hudState),
             cwd,
-            lastSkill: transcriptData.lastActivatedSkill || null,
             rateLimitsResult,
-            pendingPermission: transcriptData.pendingPermission || null,
             sessionHealth: await calculateSessionHealth(sessionStart, contextPercent),
             lastRequestTokenUsage: transcriptData.lastRequestTokenUsage || null,
             sessionTotalTokens: transcriptData.sessionTotalTokens ?? null,
@@ -192,14 +185,6 @@ async function main() {
                 ?? (hudState?.lastPromptTimestamp
                     ? new Date(hudState.lastPromptTimestamp)
                     : null),
-            apiKeySource: config.elements.apiKeySource
-                ? detectApiKeySource(cwd)
-                : null,
-            profileName: process.env.CLAUDE_CONFIG_DIR
-                ? basename(process.env.CLAUDE_CONFIG_DIR).replace(/^\./, "")
-                : null,
-            lastToolName: transcriptData.lastToolName,
-            payloadEstimate,
         };
         // Debug: log data if HUD_DEBUG is set
         if (process.env.HUD_DEBUG) {
