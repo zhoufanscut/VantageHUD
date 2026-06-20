@@ -2,6 +2,8 @@
 
 Self-contained Claude Code statusline (HUD). Reads one JSON payload on stdin, prints the status line on stdout. Pure Node built-ins, ESM, **zero dependencies**. See `README.md` for end-user setup/proxy/env docs — this file is the agent-specific map.
 
+**Shared vocabulary lives in [`GLOSSARY.md`](GLOSSARY.md)** — read it if a term here is unfamiliar (element, fragment, preset, palette/token, session key, render context, safeMode, …). It also flags the easy-to-confuse pairs (`statusline` vs `statusLine`, `AURORA` alias vs the `aurora` theme, render context vs context window). When you add an element/theme/preset, add its term there too.
+
 ## Source of truth & build (read first)
 
 - **The `.js` files under `src/` ARE the source. Edit them directly.** They look like transpiled TypeScript (JSDoc `@param` types, `??`, a comment in `src/hud/types.js` referencing a non-existent `render.ts`), but there is **no `tsconfig`, no `.ts` files, no build step, no `node_modules`**. Do not look for or create a build pipeline; do not introduce `.ts`.
