@@ -1,38 +1,41 @@
 /**
  * HUD - Theme Registry
  *
- * A theme is a flat palette object: 14 `[r,g,b]` tokens that every statusline
+ * A theme is a flat palette object: 11 `[r,g,b]` tokens that every statusline
  * element routes its color through (via `src/hud/colors.js`). `colors.js` is the
  * rendering *engine* (color-depth detection, `fg`/`paint`, gradient math); this
  * file is the *data* — the only place palettes are defined.
  *
  * ── Adding a theme ──────────────────────────────────────────────────────────
- * Add one entry to `THEMES` below with all 14 tokens, then select it via either
+ * Add one entry to `THEMES` below with all 11 tokens, then select it via either
  *   • config.json  → `{ "theme": "<name>" }`
  *   • env override  → `HUD_THEME=<name>`  (handy for A/B testing a render)
  * Nothing else needs to change — colors.js and every element pick it up.
  *
- * ── Token contract ──────────────────────────────────────────────────────────
- *   text     primary readable text (path, values)
- *   label    muted prefix labels (`ctx:`, `5h:`)
- *   faint    even quieter (reset times, parentheticals)
- *   sep      hairline separator dot / gauge track
- *   opus     model tier — Opus
- *   sonnet   model tier — Sonnet
- *   haiku    model tier — Haiku
- *   accent   identity values (repo, branch, host, key, skill)
- *   gradLow  usage gauge — low  (0%)
+ * ── Token contract (11 tokens) ──────────────────────────────────────────────
+ * Each line is what the token actually paints today (verified against the
+ * element files), not an aspirational role.
+ *   text     path text — the only consumer
+ *   label    workhorse muted tone: every `xxx:` prefix, `(reset)` tails, and the
+ *            count numbers in callCounts / the promptTime fallback
+ *   faint    quietest tone: `($spent/$limit)`, the stale `*`, `prompt:` fallback,
+ *            `[API 429]`
+ *   sep      the ` | ` separator and the empty gauge-bar track (`░`)
+ *   accent   model name at max effort, and the `agents:N` count
+ *   gradLow  usage-gauge low end (0%) — ALSO the static value tone for
+ *            repo: / branch: / token:, so the gauge-low color and the
+ *            identity-value color cannot diverge
  *   gradMid  usage gauge — mid  (50%)
  *   gradHigh usage gauge — high (100%)
- *   add      git: staged / ahead (positive)
- *   del      git: modified / behind (negative)
- *   track    git: untracked
+ *   add      git: staged / ahead — glyph + number (positive)
+ *   del      git: modified / behind — glyph + number (negative)
+ *   track    git: untracked — glyph + number
  */
 import { existsSync, readFileSync } from 'fs';
 import { getHudConfigFile } from '../lib/install-paths.js';
 
 /** @typedef {[number, number, number]} Rgb */
-/** @typedef {Record<'text'|'label'|'faint'|'sep'|'opus'|'sonnet'|'haiku'|'accent'|'gradLow'|'gradMid'|'gradHigh'|'add'|'del'|'track', Rgb>} Palette */
+/** @typedef {Record<'text'|'label'|'faint'|'sep'|'accent'|'gradLow'|'gradMid'|'gradHigh'|'add'|'del'|'track', Rgb>} Palette */
 
 /** @type {Record<string, Palette>} */
 export const THEMES = {
@@ -43,9 +46,6 @@ export const THEMES = {
         label: [143, 208, 216], // #8fd0d8 cyan-teal
         faint: [110, 120, 150], // #6e7896 quiet slate
         sep: [72, 80, 106], // #48506a hairline
-        opus: [180, 164, 232], // #b4a4e8 periwinkle
-        sonnet: [143, 208, 216], // #8fd0d8 cyan-teal
-        haiku: [168, 216, 184], // #a8d8b8 mint
         accent: [143, 208, 216], // #8fd0d8 cyan-teal
         gradLow: [127, 212, 196], // #7fd4c4 teal
         gradMid: [227, 192, 138], // #e3c08a amber
@@ -61,9 +61,6 @@ export const THEMES = {
         label: [168, 153, 132], // #a89984 tan
         faint: [146, 131, 116], // #928374 warm gray
         sep: [102, 92, 84], // #665c54 brown hairline
-        opus: [211, 134, 155], // #d3869b purple
-        sonnet: [142, 192, 124], // #8ec07c aqua
-        haiku: [184, 187, 38], // #b8bb26 green
         accent: [142, 192, 124], // #8ec07c aqua
         gradLow: [152, 151, 26], // #98971a green
         gradMid: [250, 189, 47], // #fabd2f gold

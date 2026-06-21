@@ -20,7 +20,7 @@ echo '{"session_id":"t","cwd":"'"$HOME"'/example","effort":{"level":"high"},"mod
   | HUD_SYNC_REFRESH=1 sh statusline.sh statusline.mjs
 ```
 
-Expect one line containing `opus 4.8 high`. `HUD_SYNC_REFRESH=1` forces a synchronous render (skips the background-cache hot path); `HUD_DEBUG=1` adds stderr diagnostics. To exercise the renderer alone: `... | node statusline.mjs`.
+Expect one line containing `opus 4.8:high`. `HUD_SYNC_REFRESH=1` forces a synchronous render (skips the background-cache hot path); `HUD_DEBUG=1` adds stderr diagnostics. To exercise the renderer alone: `... | node statusline.mjs`.
 
 ## Execution flow (not obvious from filenames)
 
@@ -51,7 +51,7 @@ To add one, touch these files (in order):
 
 ## Adding or changing a theme
 
-- Palettes (the color **data**) live in **`src/hud/themes.js`** as the `THEMES` registry; **`src/hud/colors.js`** is the rendering **engine** (color-depth detection, `fg`/`paint`, gradient math) and exports the active palette as **`PALETTE`**. To add a theme, add one entry to `THEMES` with all 14 tokens (the file header documents each token's role) — **no other file changes**. Every element already routes through `PALETTE`/the `aurora*` helpers.
+- Palettes (the color **data**) live in **`src/hud/themes.js`** as the `THEMES` registry; **`src/hud/colors.js`** is the rendering **engine** (color-depth detection, `fg`/`paint`, gradient math) and exports the active palette as **`PALETTE`**. To add a theme, add one entry to `THEMES` with all 11 tokens (the file header documents each token's role) — **no other file changes**. Every element already routes through `PALETTE`/the `aurora*` helpers.
 - Active theme is resolved **at import** in `themes.js#resolveThemeName`: `HUD_THEME` env > `config.json` `theme` > `DEFAULT_THEME` (`aurora`). It must be import-time, not render-time, because elements freeze `fg(PALETTE.x)` into module-level constants before `main()` reads the runtime config. `HUD_THEME=<name>` is the quick way to A/B a render.
 - Built-in themes: `aurora` (cool slate, the original — current default) and `ember` (warm gruvbox). `DEFAULT_THEME` lives in `themes.js`; the documented config default also lives in `DEFAULT_HUD_CONFIG.theme` (`src/hud/types.js`).
 

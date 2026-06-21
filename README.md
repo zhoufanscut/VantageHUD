@@ -2,7 +2,7 @@
 
 A self-contained [Claude Code](https://claude.com/claude-code) statusline (HUD).
 From the JSON Claude Code pipes to the `statusLine` command it renders the
-working folder, the model with thinking effort (`opus 4.8 max`), context %,
+working folder, the model with thinking effort (`opus 4.8:max`), context %,
 rate limits, git info, session time, and more.
 
 - **No dependencies.** Pure Node built-ins — no `node_modules`, no native code.
@@ -69,7 +69,7 @@ cd ~/.claude/hud
 echo '{"session_id":"t","cwd":"'"$HOME"'/example","effort":{"level":"high"},"model":{"id":"claude-opus-4-8","display_name":"Opus 4.8"}}' \
   | HUD_SYNC_REFRESH=1 sh statusline.sh statusline.mjs
 ```
-Expected: a single line containing `opus 4.8 high` (the leading
+Expected: a single line containing `opus 4.8:high` (the leading
 path is your working directory).
 
 ## Configure (optional)

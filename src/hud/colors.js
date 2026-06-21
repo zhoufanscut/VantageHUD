@@ -7,7 +7,6 @@
 import { ACTIVE_PALETTE, ACTIVE_THEME_NAME } from './themes.js';
 // ANSI escape codes
 export const RESET = '\x1b[0m';
-const BOLD = '\x1b[1m';
 // ============================================================================
 // THEME ENGINE — Truecolor
 // ============================================================================
@@ -126,41 +125,6 @@ export function gradientColor(percent) {
         return lerpRgb(PALETTE.gradLow, PALETTE.gradMid, p / 50);
     }
     return lerpRgb(PALETTE.gradMid, PALETTE.gradHigh, (p - 50) / 50);
-}
-// ============================================================================
-// Color Functions
-// ============================================================================
-export function bold(text) {
-    return `${BOLD}${text}${RESET}`;
-}
-// ============================================================================
-// Model Tier Colors (for agent visualization)
-// ============================================================================
-/**
- * Get color for model tier (gentle in-family tints from the active palette).
- * - Opus / Sonnet / Haiku map to their palette tokens; unknown → Sonnet.
- */
-export function getModelTierColor(model) {
-    if (!model)
-        return fg(PALETTE.sonnet); // Default/unknown
-    const tier = model.toLowerCase();
-    if (tier.includes('opus'))
-        return fg(PALETTE.opus);
-    if (tier.includes('sonnet'))
-        return fg(PALETTE.sonnet);
-    if (tier.includes('haiku'))
-        return fg(PALETTE.haiku);
-    return fg(PALETTE.sonnet); // Unknown model
-}
-/**
- * Get color for agent duration along the usage gradient.
- * Fresh runs sit at the low end and glide through mid toward high as they age
- * (≈8min → full high), matching ctx/limits instead of hard bands.
- */
-export function getDurationColor(durationMs) {
-    const minutes = durationMs / 60000;
-    // Map duration onto the gradient (≈8min → full high).
-    return fg(gradientColor((minutes / 8) * 100));
 }
 // ============================================================================
 // Shared element helpers (operate on the active palette)

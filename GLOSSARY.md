@@ -47,7 +47,7 @@ skimming. Add a term back (or a new one) when it earns its place; keep this shor
 - **theme** — a named palette: `aurora` (default; cool slate) or `ember` (warm
   gruvbox). Resolved at import in `themes.js`: `HUD_THEME` env > `config.json`
   `theme` > `DEFAULT_THEME`.
-- **palette** / **token** — the color *data* behind a theme: 14 named `[r,g,b]`
+- **palette** / **token** — the color *data* behind a theme: 11 named `[r,g,b]`
   **tokens** (`text`, `label`, `accent`, `gradLow/Mid/High`, …). Defined only in
   `THEMES` (`src/hud/themes.js`); every element colors through them.
 
