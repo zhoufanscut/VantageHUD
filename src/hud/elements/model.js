@@ -36,26 +36,27 @@ function extractVersion(modelId) {
     return null;
 }
 /**
- * Map a thinking-effort level onto a fixed five-step teal→amber→rose scale,
- * inverted so more effort reads calmer: max → accent (cyan-teal),
- * xhigh → teal-amber, high → amber, medium → amber-rose, low → rose.
+ * Map a thinking-effort level onto the three usage-gauge tokens, inverted so
+ * more effort reads calmer — the ramp spans gradLow→gradMid→gradHigh end to end:
+ * max → gradLow (teal), xhigh → teal-amber, high → gradMid (amber),
+ * medium → amber-rose, low → gradHigh (rose).
  *
  * Effort is a discrete setting, not a measurement, so it owns an explicit
  * per-level table rather than routing through the (now three-tier) usage gauge —
  * that keeps all five levels as distinct hues, which a tier snap would collapse
  * (high and xhigh would both land in the gauge's calm band). Absent or unknown
- * levels fall back to the max (accent) end.
+ * levels fall back to the max (gradLow) end.
  */
 const EFFORT_COLOR = {
     low: PALETTE.gradHigh, // rose — least effort, loudest
     medium: lerpRgb(PALETTE.gradMid, PALETTE.gradHigh, 0.5), // amber-rose
     high: PALETTE.gradMid, // amber
     xhigh: lerpRgb(PALETTE.gradLow, PALETTE.gradMid, 0.5), // teal-amber
-    max: PALETTE.accent, // cyan-teal accent — most effort, calmest
+    max: PALETTE.gradLow, // gauge calm end (teal) — most effort, calmest
 };
 function effortColor(level) {
     const key = level == null ? 'max' : String(level).toLowerCase();
-    return EFFORT_COLOR[key] ?? PALETTE.accent;
+    return EFFORT_COLOR[key] ?? PALETTE.gradLow;
 }
 /**
  * Derive the key: the model family.
@@ -89,8 +90,8 @@ function modelFamilyKey(source) {
  * Format: opus:high (short, default) · opus 4.8:high (versioned) · claude-opus-4-8:high (full) · opus (no effort level)
  *
  * Key uses the faint label tone (like `repo:`); the effort value is colored on
- * the effort ramp (max→accent … low→rose). When no effort level is present the
- * colon is dropped and the family alone renders on the ramp's calm (accent) end.
+ * the effort ramp (max→gradLow … low→gradHigh). When no effort level is present
+ * the colon is dropped and the family alone renders on the ramp's calm (gradLow) end.
  */
 export function renderModel(modelId, format = 'short', effortLevel = null) {
     const family = modelFamilyKey(modelId);

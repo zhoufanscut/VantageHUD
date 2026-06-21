@@ -1,18 +1,18 @@
 /**
  * HUD - Theme Registry
  *
- * A theme is a flat palette object: 11 `[r,g,b]` tokens that every statusline
+ * A theme is a flat palette object: 10 `[r,g,b]` tokens that every statusline
  * element routes its color through (via `src/hud/colors.js`). `colors.js` is the
  * rendering *engine* (color-depth detection, `fg`/`paint`, gradient math); this
  * file is the *data* — the only place palettes are defined.
  *
  * ── Adding a theme ──────────────────────────────────────────────────────────
- * Add one entry to `THEMES` below with all 11 tokens, then select it via either
+ * Add one entry to `THEMES` below with all 10 tokens, then select it via either
  *   • config.json  → `{ "theme": "<name>" }`
  *   • env override  → `HUD_THEME=<name>`  (handy for A/B testing a render)
  * Nothing else needs to change — colors.js and every element pick it up.
  *
- * ── Token contract (11 tokens) ──────────────────────────────────────────────
+ * ── Token contract (10 tokens) ──────────────────────────────────────────────
  * Each line is what the token actually paints today (verified against the
  * element files), not an aspirational role.
  *   text     path text — the only consumer
@@ -21,10 +21,9 @@
  *   faint    quietest tone: `($spent/$limit)`, the stale `*`, `prompt:` fallback,
  *            `[API 429]`
  *   sep      the ` | ` separator and the empty gauge-bar track (`░`)
- *   accent   model name at max effort, and the `agents:N` count
  *   gradLow  usage tier "calm" (< 70%) — ALSO the static value tone for
- *            repo: / branch: / token:, so the calm-tier color and the
- *            identity-value color cannot diverge
+ *            repo: / branch: / token: (so the calm-tier and identity-value
+ *            colors cannot diverge) AND the effort ramp's calm (max) end
  *   gradMid  usage tier "watch" (70–84%)
  *   gradHigh usage tier "alert" (≥ 85%)
  *   add      git: staged / ahead — glyph + number (positive)
@@ -35,7 +34,7 @@ import { existsSync, readFileSync } from 'fs';
 import { getHudConfigFile } from '../lib/install-paths.js';
 
 /** @typedef {[number, number, number]} Rgb */
-/** @typedef {Record<'text'|'label'|'faint'|'sep'|'accent'|'gradLow'|'gradMid'|'gradHigh'|'add'|'del'|'track', Rgb>} Palette */
+/** @typedef {Record<'text'|'label'|'faint'|'sep'|'gradLow'|'gradMid'|'gradHigh'|'add'|'del'|'track', Rgb>} Palette */
 
 /** @type {Record<string, Palette>} */
 export const THEMES = {
@@ -46,7 +45,6 @@ export const THEMES = {
         label: [143, 208, 216], // #8fd0d8 cyan-teal
         faint: [110, 120, 150], // #6e7896 quiet slate
         sep: [72, 80, 106], // #48506a hairline
-        accent: [143, 208, 216], // #8fd0d8 cyan-teal
         gradLow: [127, 212, 196], // #7fd4c4 teal
         gradMid: [227, 192, 138], // #e3c08a amber
         gradHigh: [224, 144, 158], // #e0909e rose
@@ -61,7 +59,6 @@ export const THEMES = {
         label: [168, 153, 132], // #a89984 tan
         faint: [146, 131, 116], // #928374 warm gray
         sep: [102, 92, 84], // #665c54 brown hairline
-        accent: [142, 192, 124], // #8ec07c aqua
         gradLow: [152, 151, 26], // #98971a green
         gradMid: [250, 189, 47], // #fabd2f gold
         gradHigh: [251, 73, 52], // #fb4934 red
