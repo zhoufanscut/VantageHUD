@@ -80,9 +80,11 @@ export const DEFAULT_HUD_CONFIG = {
     theme: 'aurora',
     labels: DEFAULT_HUD_LABELS,
     elements: {
-        // ── Display elements, in render order (mirrors DEFAULT_ELEMENT_ORDER.main) ──
+        // ── Display elements, in render order (mirrors DEFAULT_ELEMENT_ORDER.main);
+        //    `effort` is a model sub-toggle kept beside `model` ──
         pathLabel: true,
         model: true, // Show only when Claude Code statusline stdin provides a model
+        effort: true, // Fold the thinking-effort level (high/medium/…) into the model element; set false to hide it
         rateLimits: true, // Show rate limits by default
         contextBar: true,
         showTokens: true, // tokens element — On by default; users can disable in config.json
@@ -94,7 +96,6 @@ export const DEFAULT_HUD_CONFIG = {
         gitStatus: true, // Show working-tree status by default
         // ── Behavioral options / sub-toggles (not standalone display elements) ──
         modelFormat: 'versioned', // Preserve model version by default
-        effort: true, // Fold the thinking-effort level (high/medium/…) into the model element; set false to hide it
         useBars: false, // Disabled by default for backwards compatibility
         callCountsFormat: 'auto', // Preserve platform-based emoji/ASCII defaults unless explicitly overridden
         maxOutputLines: 4,

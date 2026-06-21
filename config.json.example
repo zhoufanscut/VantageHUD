@@ -4,6 +4,7 @@
   "elements": {
     "pathLabel": true,
     "model": true,
+    "effort": true,
     "rateLimits": true,
     "contextBar": true,
     "showTokens": true,
@@ -14,7 +15,6 @@
     "gitBranch": true,
     "gitStatus": true,
     "modelFormat": "versioned",
-    "effort": true,
     "useBars": false,
     "callCountsFormat": "auto",
     "maxOutputLines": 4,
