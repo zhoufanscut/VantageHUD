@@ -13,6 +13,7 @@
  */
 import { existsSync, readFileSync, writeFileSync, renameSync, unlinkSync } from 'fs';
 import { getClaudeConfigDir } from '../lib/config-dir.js';
+import { getCacheDir } from '../lib/worktree-paths.js';
 import { join } from 'path';
 import { atomicWriteFileSync, atomicWriteJsonSync } from '../lib/atomic-write.js';
 import { execFileSync } from 'child_process';
@@ -64,16 +65,21 @@ export function isAnthropicHost(urlString) {
     }
 }
 /**
- * Get the legacy (pre-split) cache file path
+ * Get the legacy (pre-split) cache file path.
+ *
+ * Lives at the cache root (not a per-session subfolder): the usage cache is
+ * shared across all sessions — one rate-limit backoff state per account.
  */
 function getLegacyCachePath() {
-    return join(getClaudeConfigDir(), 'plugins', 'claude-statusline', '.usage-cache.json');
+    return join(getCacheDir(), '.usage-cache.json');
 }
 /**
- * Get the provider-specific cache file path
+ * Get the provider-specific cache file path. Shared across sessions, so it sits
+ * at the cache root alongside `.last-prune` — the pattern-specific pruner in
+ * statusline.sh never matches `.usage-cache-*.json`, so it is not evicted.
  */
 function getCachePath(source) {
-    return join(getClaudeConfigDir(), 'plugins', 'claude-statusline', `.usage-cache-${source}.json`);
+    return join(getCacheDir(), `.usage-cache-${source}.json`);
 }
 /**
  * Migrate legacy single-file cache to provider-specific file.
