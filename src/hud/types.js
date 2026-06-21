@@ -100,7 +100,6 @@ export const DEFAULT_HUD_CONFIG = {
         // ── Behavioral options / sub-toggles (not standalone display elements) ──
         modelFormat: 'versioned', // Preserve model version by default
         effort: true, // Fold the thinking-effort level (high/medium/…) into the model element; set false to hide it
-        showSessionDuration: true,
         useBars: false, // Disabled by default for backwards compatibility
         callCountsFormat: 'auto', // Preserve platform-based emoji/ASCII defaults unless explicitly overridden
         maxOutputLines: 4,

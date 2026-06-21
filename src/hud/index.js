@@ -56,17 +56,12 @@ function mergeStdinRateLimits(stdinRateLimits, usageResult) {
     };
 }
 /**
- * Calculate session health from session start time and context usage.
+ * Build the sessionHealth data (session duration) from the session start time.
  */
-async function calculateSessionHealth(sessionStart, contextPercent) {
+function calculateSessionHealth(sessionStart) {
     const durationMs = sessionStart ? Date.now() - sessionStart.getTime() : 0;
     const durationMinutes = Math.floor(durationMs / 60_000);
-    let health = "healthy";
-    if (durationMinutes > 120 || contextPercent > 85)
-        health = "critical";
-    else if (durationMinutes > 60 || contextPercent > 70)
-        health = "warning";
-    return { durationMinutes, messageCount: 0, health };
+    return { durationMinutes };
 }
 /**
  * Main HUD entry point
@@ -171,7 +166,7 @@ async function main() {
             backgroundTasks: getRunningTasks(hudState),
             cwd,
             rateLimitsResult,
-            sessionHealth: await calculateSessionHealth(sessionStart, contextPercent),
+            sessionHealth: calculateSessionHealth(sessionStart),
             lastRequestTokenUsage: transcriptData.lastRequestTokenUsage || null,
             sessionTotalTokens: transcriptData.sessionTotalTokens ?? null,
             toolCallCount: transcriptData.toolCallCount,

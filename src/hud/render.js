@@ -234,12 +234,9 @@ export async function render(context, config) {
             rendered.set("promptTime", prompt);
     }
     if (enabledElements.sessionHealth && context.sessionHealth) {
-        const showDuration = enabledElements.showSessionDuration ?? true;
-        if (showDuration) {
-            const session = renderSession(context.sessionHealth);
-            if (session)
-                rendered.set("session", session);
-        }
+        const session = renderSession(context.sessionHealth);
+        if (session)
+            rendered.set("session", session);
     }
     if (enabledElements.showTokens === true) {
         const tokenUsage = renderTokenUsage(context.sessionTotalTokens, hudLabels);

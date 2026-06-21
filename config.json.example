@@ -15,7 +15,6 @@
     "gitStatus": true,
     "modelFormat": "versioned",
     "effort": true,
-    "showSessionDuration": true,
     "useBars": false,
     "callCountsFormat": "auto",
     "maxOutputLines": 4,

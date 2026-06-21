@@ -1,7 +1,7 @@
 /**
  * HUD - Session Health Element
  *
- * Renders session duration and health indicator.
+ * Renders session duration.
  */
 import { paint, gradientColor, auroraLabel } from '../colors.js';
 /**
@@ -10,8 +10,7 @@ import { paint, gradientColor, auroraLabel } from '../colors.js';
  * Format: session:45m  (faint label + continuous Aurora-gradient duration)
  *
  * Color rides the same teal→amber→rose ramp as ctx/limits, mapping session age
- * onto 0–100 (8h → full rose, amber at the 4h midpoint) instead of discrete
- * health buckets.
+ * onto 0–100 (8h → full rose, amber at the 4h midpoint).
  */
 export function renderSession(session) {
     if (!session)
