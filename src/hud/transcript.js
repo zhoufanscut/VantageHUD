@@ -1,24 +1,19 @@
 /**
  * HUD - Transcript Parser
  *
- * Parse JSONL transcript from Claude Code to extract agents and todos.
- * Based on claude-hud reference implementation.
+ * Parse JSONL transcript from Claude Code to extract tool/skill counts, token
+ * usage, todos, and prompt-cache age. Based on claude-hud reference implementation.
  *
  * Performance optimizations:
- * - Tail-based parsing: reads only the last ~500KB of large transcripts
- * - Bounded agent map: caps at 50 agents during parsing
- * - Early termination: stops when enough running agents found
+ * - Tail-based parsing: reads only the last few MB of large transcripts
  */
 import { createReadStream, existsSync, statSync, openSync, readSync, closeSync, } from "fs";
 import { createInterface } from "readline";
 import { basename } from "path";
 // Performance constants
-// 4MB tail window: enough to catch the full tool_use → tool_result → task-notification
-// chain for agent-heavy sessions (typically ~30-50KB per agent call, so 4MB covers
-// ~80-130 agents). The previous 512KB window lost completion signals for older
-// agents in long sessions, leaving them stuck as "running" in the HUD.
+// 4MB tail window: large enough that token-usage and prompt-cache-age signals for
+// long sessions still fall inside the parsed window.
 const MAX_TAIL_BYTES = 4 * 1024 * 1024;
-const MAX_AGENT_MAP_SIZE = 100; // Cap agent tracking
 /**
  * Tools known to require permission approval in Claude Code.
  * Only these tools will trigger the "APPROVE?" indicator.
@@ -44,10 +39,9 @@ const PERMISSION_THRESHOLD_MS = 3000; // 3 seconds
 const pendingPermissionMap = new Map();
 const transcriptCache = new Map();
 const TRANSCRIPT_CACHE_MAX_SIZE = 20;
-export async function parseTranscript(transcriptPath, options) {
+export async function parseTranscript(transcriptPath) {
     pendingPermissionMap.clear();
     const result = {
-        agents: [],
         todos: [],
         lastActivatedSkill: undefined,
         toolCallCount: 0,
@@ -66,14 +60,12 @@ export async function parseTranscript(transcriptPath, options) {
         cacheKey = `${transcriptPath}:${stat.size}:${stat.mtimeMs}`;
         const cached = transcriptCache.get(transcriptPath);
         if (cached?.cacheKey === cacheKey) {
-            return finalizeTranscriptResult(cloneTranscriptData(cached.baseResult), options, cached.pendingPermissions);
+            return finalizeTranscriptResult(cloneTranscriptData(cached.baseResult), cached.pendingPermissions);
         }
     }
     catch {
         return result;
     }
-    const agentMap = new Map();
-    const backgroundAgentMap = new Map();
     const latestTodos = [];
     const sessionTokenTotals = {
         inputTokens: 0,
@@ -92,7 +84,7 @@ export async function parseTranscript(transcriptPath, options) {
                     continue;
                 try {
                     const entry = JSON.parse(line);
-                    processEntry(entry, agentMap, latestTodos, result, MAX_AGENT_MAP_SIZE, backgroundAgentMap, sessionTokenTotals, observedSessionIds);
+                    processEntry(entry, latestTodos, result, sessionTokenTotals, observedSessionIds);
                 }
                 catch {
                     // Skip malformed lines
@@ -113,7 +105,7 @@ export async function parseTranscript(transcriptPath, options) {
                     continue;
                 try {
                     const entry = JSON.parse(line);
-                    processEntry(entry, agentMap, latestTodos, result, MAX_AGENT_MAP_SIZE, backgroundAgentMap, sessionTokenTotals, observedSessionIds);
+                    processEntry(entry, latestTodos, result, sessionTokenTotals, observedSessionIds);
                 }
                 catch {
                     // Skip malformed lines
@@ -123,20 +115,14 @@ export async function parseTranscript(transcriptPath, options) {
         }
     }
     catch {
-        return finalizeTranscriptResult(result, options, []);
+        return finalizeTranscriptResult(result, []);
     }
-    const running = Array.from(agentMap.values()).filter((a) => a.status === "running");
-    const completed = Array.from(agentMap.values()).filter((a) => a.status === "completed");
-    result.agents = [
-        ...running,
-        ...completed.slice(-(10 - running.length)),
-    ].slice(0, 10);
     result.todos = latestTodos;
     if (sessionTotalsReliable && sessionTokenTotals.seenUsage) {
         result.sessionTotalTokens = sessionTokenTotals.inputTokens + sessionTokenTotals.outputTokens;
     }
     const pendingPermissions = Array.from(pendingPermissionMap.values()).map(clonePendingPermission);
-    const finalized = finalizeTranscriptResult(result, options, pendingPermissions);
+    const finalized = finalizeTranscriptResult(result, pendingPermissions);
     if (cacheKey) {
         if (transcriptCache.size >= TRANSCRIPT_CACHE_MAX_SIZE) {
             transcriptCache.clear();
@@ -165,11 +151,6 @@ function clonePendingPermission(permission) {
 function cloneTranscriptData(result) {
     return {
         ...result,
-        agents: result.agents.map((agent) => ({
-            ...agent,
-            startTime: new Date(agent.startTime.getTime()),
-            endTime: cloneDate(agent.endTime),
-        })),
         todos: result.todos.map((todo) => ({ ...todo })),
         sessionStart: cloneDate(result.sessionStart),
         lastPromptTime: cloneDate(result.lastPromptTime),
@@ -188,19 +169,8 @@ function cloneTranscriptData(result) {
             : undefined,
     };
 }
-function finalizeTranscriptResult(result, options, pendingPermissions) {
-    const staleMinutes = options?.staleTaskThresholdMinutes ?? 30;
-    const staleAgentThresholdMs = staleMinutes * 60 * 1000;
+function finalizeTranscriptResult(result, pendingPermissions) {
     const now = Date.now();
-    for (const agent of result.agents) {
-        if (agent.status === "running") {
-            const runningTime = now - agent.startTime.getTime();
-            if (runningTime > staleAgentThresholdMs) {
-                agent.status = "completed";
-                agent.endTime = new Date(agent.startTime.getTime() + staleAgentThresholdMs);
-            }
-        }
-    }
     result.pendingPermission = undefined;
     for (const permission of pendingPermissions) {
         const age = now - permission.timestamp.getTime();
@@ -234,43 +204,6 @@ function readTailLines(filePath, fileSize, maxBytes) {
     return lines;
 }
 /**
- * Extract background agent ID from "Async agent launched" message
- */
-function extractBackgroundAgentId(content) {
-    const text = typeof content === "string"
-        ? content
-        : content.find((c) => c.type === "text")?.text || "";
-    // Pattern: "agentId: a8de3dd"
-    const match = text.match(/agentId:\s*([a-zA-Z0-9]+)/);
-    return match ? match[1] : null;
-}
-/**
- * Parse TaskOutput result for completion status.
- *
- * Claude Code emits completion as a `<task-notification>` block with
- * hyphen-cased tags (`<task-id>`, `<tool-use-id>`, `<status>`). Accept
- * both hyphen and underscore variants for defence in depth.
- */
-function parseTaskOutputResult(content) {
-    const text = typeof content === "string"
-        ? content
-        : content.find((c) => c.type === "text")?.text || "";
-    // Hyphen variant (real Claude Code format) first, underscore fallback second.
-    const taskIdMatch = text.match(/<task-id>([^<]+)<\/task-id>/) ||
-        text.match(/<task_id>([^<]+)<\/task_id>/);
-    const statusMatch = text.match(/<status>([^<]+)<\/status>/);
-    const toolUseIdMatch = text.match(/<tool-use-id>([^<]+)<\/tool-use-id>/) ||
-        text.match(/<tool_use_id>([^<]+)<\/tool_use_id>/);
-    if (taskIdMatch && statusMatch) {
-        return {
-            taskId: taskIdMatch[1],
-            toolUseId: toolUseIdMatch ? toolUseIdMatch[1] : null,
-            status: statusMatch[1],
-        };
-    }
-    return null;
-}
-/**
  * Extract a human-readable target summary from tool input.
  */
 function extractTargetSummary(input, toolName) {
@@ -298,7 +231,7 @@ function extractTargetSummary(input, toolName) {
 /**
  * Process a single transcript entry
  */
-function processEntry(entry, agentMap, latestTodos, result, maxAgentMapSize = 50, backgroundAgentMap, sessionTokenTotals, observedSessionIds) {
+function processEntry(entry, latestTodos, result, sessionTokenTotals, observedSessionIds) {
     const timestamp = entry.timestamp ? new Date(entry.timestamp) : new Date();
     if (entry.sessionId) {
         observedSessionIds?.add(entry.sessionId);
@@ -329,42 +262,14 @@ function processEntry(entry, agentMap, latestTodos, result, maxAgentMapSize = 50
         result.lastActivityTime = timestamp;
     }
     const content = entry.message?.content;
-    // Claude Code emits background-agent completion as a user-role message with
-    // string-shaped content: `<task-notification>...<tool-use-id>...</tool-use-id>
-    // ...<status>completed</status>...</task-notification>`. The block-based
-    // parser below only handles array-shaped content, so we handle the string
-    // case up front — otherwise background agents (subagents launched with
-    // run_in_background, Explore/Plan/general-purpose, etc.) never transition
-    // from "running" to "completed" in the HUD.
+    // String-shaped user content carries the most recent real user-typed prompt.
+    // Assistant turns and tool results use array content; task-notifications and
+    // slash-command / command-output entries (<command-name>, <local-command-stdout>,
+    // <local-command-caveat>, …) are string-content user entries that start with
+    // "<". Requiring a real timestamp avoids the new Date() fallback poisoning the
+    // gauge. Entries are chronological, so the last wins.
     if (typeof content === "string") {
-        if (content.includes("<task-notification>") || content.includes("<task_id>") || content.includes("<task-id>")) {
-            const taskOutput = parseTaskOutputResult(content);
-            if (taskOutput && taskOutput.status === "completed") {
-                // Prefer direct tool-use-id lookup (skips the backgroundAgentMap
-                // indirection). Fall back to the legacy agentId → tool_use_id mapping.
-                let toolUseId;
-                if (taskOutput.toolUseId) {
-                    toolUseId = taskOutput.toolUseId;
-                }
-                else if (backgroundAgentMap) {
-                    toolUseId = backgroundAgentMap.get(taskOutput.taskId);
-                }
-                if (toolUseId) {
-                    const agent = agentMap.get(toolUseId);
-                    if (agent && agent.status === "running") {
-                        agent.status = "completed";
-                        agent.endTime = timestamp;
-                    }
-                }
-            }
-        }
-        else if (entry.timestamp && entry.type === "user" && !entry.isMeta && !entry.isCompactSummary && !content.trimStart().startsWith("<")) {
-            // Most recent real user-typed prompt. Assistant turns and tool results
-            // use array content; task-notifications are handled above; slash-command
-            // and command-output entries (<command-name>, <local-command-stdout>,
-            // <local-command-caveat>, …) are string-content user entries that start
-            // with "<". Requiring a real timestamp avoids the new Date() fallback
-            // poisoning the gauge. Entries are chronological, so the last wins.
+        if (entry.timestamp && entry.type === "user" && !entry.isMeta && !entry.isCompactSummary && !content.trimStart().startsWith("<")) {
             result.lastPromptTime = timestamp;
         }
         return;
@@ -378,34 +283,6 @@ function processEntry(entry, agentMap, latestTodos, result, maxAgentMapSize = 50
             result.lastToolName = block.name;
             if (block.name === "Task" || block.name === "proxy_Task" || block.name === "Agent") {
                 result.agentCallCount++;
-                const input = block.input;
-                const agentEntry = {
-                    id: block.id,
-                    type: input?.subagent_type ?? "unknown",
-                    model: input?.model,
-                    description: input?.description,
-                    status: "running",
-                    startTime: timestamp,
-                };
-                // Bounded agent map: evict oldest completed agents if at capacity
-                if (agentMap.size >= maxAgentMapSize) {
-                    // Find and remove oldest completed agent
-                    let oldestCompleted = null;
-                    let oldestTime = Infinity;
-                    for (const [id, agent] of agentMap) {
-                        if (agent.status === "completed" && agent.startTime) {
-                            const time = agent.startTime.getTime();
-                            if (time < oldestTime) {
-                                oldestTime = time;
-                                oldestCompleted = id;
-                            }
-                        }
-                    }
-                    if (oldestCompleted) {
-                        agentMap.delete(oldestCompleted);
-                    }
-                }
-                agentMap.set(block.id, agentEntry);
             }
             else if (block.name === "TodoWrite" || block.name === "proxy_TodoWrite") {
                 const input = block.input;
@@ -440,72 +317,9 @@ function processEntry(entry, agentMap, latestTodos, result, maxAgentMapSize = 50
                 });
             }
         }
-        // Track tool_result to mark agents as completed
+        // Clear pending permissions when the tool_result for that tool arrives.
         if (block.type === "tool_result" && block.tool_use_id) {
-            // Clear from pending permissions when tool_result arrives
             pendingPermissionMap.delete(block.tool_use_id);
-            const agent = agentMap.get(block.tool_use_id);
-            if (agent) {
-                const blockContent = block.content;
-                // Check if this is a background agent launch result.
-                //
-                // The real "Async agent launched successfully" notification is a
-                // short (~400B), standalone tool_result whose text STARTS with the
-                // exact phrase. A completed foreground agent result can easily
-                // contain the same phrase quoted elsewhere (e.g. an investigation
-                // report that cites a previous launch message), so a naive
-                // `.includes()` check misclassifies legitimate completions as
-                // background launches and leaves them stuck as "running" in the HUD.
-                //
-                // Require the text to START WITH "Async agent launched" (after
-                // trimming leading whitespace) — nothing else qualifies.
-                const ASYNC_LAUNCH_PREFIX = "Async agent launched";
-                const startsWithAsyncLaunch = (text) => !!text && text.trimStart().startsWith(ASYNC_LAUNCH_PREFIX);
-                const isBackgroundLaunch = typeof blockContent === "string"
-                    ? startsWithAsyncLaunch(blockContent)
-                    : Array.isArray(blockContent) &&
-                        blockContent.length > 0 &&
-                        typeof blockContent[0] === "object" &&
-                        blockContent[0] !== null &&
-                        blockContent[0].type === "text" &&
-                        startsWithAsyncLaunch(blockContent[0].text);
-                if (isBackgroundLaunch) {
-                    // Extract and store the background agent ID mapping
-                    if (backgroundAgentMap && blockContent) {
-                        const bgAgentId = extractBackgroundAgentId(blockContent);
-                        if (bgAgentId) {
-                            backgroundAgentMap.set(bgAgentId, block.tool_use_id);
-                        }
-                    }
-                    // Keep status as 'running'
-                }
-                else {
-                    // Foreground agent completed
-                    agent.status = "completed";
-                    agent.endTime = timestamp;
-                }
-            }
-            // Check if this is a TaskOutput result showing completion
-            if (block.content) {
-                const taskOutput = parseTaskOutputResult(block.content);
-                if (taskOutput && taskOutput.status === "completed") {
-                    // Prefer direct tool-use-id lookup; fall back to the legacy agentId mapping.
-                    let toolUseId;
-                    if (taskOutput.toolUseId) {
-                        toolUseId = taskOutput.toolUseId;
-                    }
-                    else if (backgroundAgentMap) {
-                        toolUseId = backgroundAgentMap.get(taskOutput.taskId);
-                    }
-                    if (toolUseId) {
-                        const bgAgent = agentMap.get(toolUseId);
-                        if (bgAgent && bgAgent.status === "running") {
-                            bgAgent.status = "completed";
-                            bgAgent.endTime = timestamp;
-                        }
-                    }
-                }
-            }
         }
     }
 }

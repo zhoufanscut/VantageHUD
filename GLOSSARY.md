@@ -20,8 +20,8 @@ skimming. Add a term back (or a new one) when it earns its place; keep this shor
   render (`session_id`, `cwd`, `model`, `effort`, `context_window`, …). The sole
   live input (`src/hud/stdin.js`).
 - **transcript** — the conversation log (`.jsonl`); parsed (`src/hud/transcript.js`)
-  for agents, todos, tokens, last tool/skill. A *second* input, distinct from the
-  payload.
+  for tool/agent/skill counts, todos, tokens, last tool/skill. A *second* input,
+  distinct from the payload.
 - **render context** — the object `index.js#main()` assembles from payload +
   transcript + state + usage API and hands to `render()`. **Not** the model's
   context window (see *Easy to confuse*).

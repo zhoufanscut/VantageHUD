@@ -9,7 +9,6 @@ export const DEFAULT_HUD_LABELS = {
     tool: 'T',
     agent: 'A',
     skill: 'S',
-    background: 'bg',
     thinking: 'thinking',
     model: 'Model',
     staged: '+',
@@ -26,7 +25,6 @@ export const HUD_LOCALE_LABELS = {
         tool: '工具',
         agent: '智能体',
         skill: '技能',
-        background: '后台',
         thinking: '思考',
         model: '模型',
         staged: '已暂存',
@@ -67,7 +65,6 @@ export const DEFAULT_ELEMENT_ORDER = {
     main: [
         'pathLabel', 'model', 'rateLimits',
         'contextBar', 'tokens', 'session', 'promptTime',
-        'agents', 'background',
         'callCounts', 'gitRepo', 'gitBranch', 'gitStatus',
     ],
 };
@@ -91,8 +88,6 @@ export const DEFAULT_HUD_CONFIG = {
         showTokens: true, // tokens element — On by default; users can disable in config.json
         sessionHealth: true, // session element
         promptTime: true, // On by default; users can disable in config.json
-        agents: false, // Off by default — only "running" mid-turn, which the statusline never re-renders during (see AGENTS.md refresh model)
-        backgroundTasks: false, // background element — off by default; state.backgroundTasks is only ever populated by an external hook; none ships
         showCallCounts: true, // callCounts element — tool/agent/skill counts (Issue #710)
         gitRepo: true, // Show repository name by default
         gitBranch: true, // Show branch (and worktree suffix) by default
@@ -111,7 +106,6 @@ export const DEFAULT_HUD_CONFIG = {
         contextCritical: 85,
         sonnetWeeklyVisibility: 80, // Hide the Sonnet weekly (sn) bucket until its usage % reaches this (0 = always show)
     },
-    staleTaskThresholdMinutes: 10,
     contextLimitWarning: {
         threshold: 80,
         autoCompact: false,

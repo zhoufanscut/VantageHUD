@@ -6,9 +6,7 @@
 import { DEFAULT_HUD_CONFIG, DEFAULT_ELEMENT_ORDER, DEFAULT_HUD_LABELS } from "./types.js";
 import { paint, AURORA } from "./colors.js";
 import { stringWidth, getCharWidth } from "../lib/string-width.js";
-import { renderAgents } from "./elements/agents.js";
 import { renderContext, renderContextWithBar } from "./elements/context.js";
-import { renderBackground } from "./elements/background.js";
 import { renderRateLimits, renderRateLimitsWithBar, renderRateLimitsError } from "./elements/limits.js";
 import { renderSession } from "./elements/session.js";
 import { renderTokenUsage } from "./elements/token-usage.js";
@@ -249,17 +247,6 @@ export async function render(context, config) {
             : renderContext(context.contextPercent, config.thresholds, hudLabels);
         if (ctx)
             rendered.set("contextBar", ctx);
-    }
-    // Active agents - count only (single-line HUD)
-    if (enabledElements.agents) {
-        const agentsEl = renderAgents(context.activeAgents);
-        if (agentsEl)
-            rendered.set("agents", agentsEl);
-    }
-    if (enabledElements.backgroundTasks) {
-        const bg = renderBackground(context.backgroundTasks, hudLabels);
-        if (bg)
-            rendered.set("background", bg);
     }
     const showCounts = enabledElements.showCallCounts ?? true;
     if (showCounts) {

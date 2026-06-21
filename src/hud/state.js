@@ -1,14 +1,13 @@
 /**
  * HUD - State Management
  *
- * Manages HUD state file for background task tracking.
+ * Manages the per-session HUD state file (session start timestamp, etc.).
  */
 import { existsSync, readFileSync } from "fs";
 import { sessionCacheFile, ensureSessionCacheDir } from "../lib/worktree-paths.js";
 import { getHudConfigFile } from "../lib/install-paths.js";
 import { atomicWriteJsonSync } from "../lib/atomic-write.js";
 import { DEFAULT_HUD_CONFIG, isHudLocale, resolveHudLabels, } from "./types.js";
-import { cleanupStaleBackgroundTasks, markOrphanedTasksAsStale, } from "./background-cleanup.js";
 // ============================================================================
 // Path Helpers
 // ============================================================================
@@ -56,17 +55,6 @@ export function writeHudState(state, directory, sessionId) {
         return false;
     }
 }
-/**
- * Get running background tasks from state
- */
-export function getRunningTasks(state) {
-    // The state file is also written by external hooks (e.g. a UserPromptSubmit
-    // hook adding lastPromptTimestamp), so backgroundTasks may be absent — and
-    // its entries are untrusted too (a null entry must not throw).
-    if (!state || !Array.isArray(state.backgroundTasks))
-        return [];
-    return state.backgroundTasks.filter((task) => task?.status === "running");
-}
 // ============================================================================
 // HUD Config Operations
 // ============================================================================
@@ -112,8 +100,6 @@ function mergeWithDefaults(config) {
             ...DEFAULT_HUD_CONFIG.thresholds,
             ...config.thresholds,
         },
-        staleTaskThresholdMinutes: config.staleTaskThresholdMinutes ??
-            DEFAULT_HUD_CONFIG.staleTaskThresholdMinutes,
         contextLimitWarning: {
             ...DEFAULT_HUD_CONFIG.contextLimitWarning,
             ...config.contextLimitWarning,
@@ -127,16 +113,4 @@ function mergeWithDefaults(config) {
         ...(config.maxWidth != null ? { maxWidth: config.maxWidth } : {}),
         ...(config.layout ? { layout: config.layout } : {}),
     };
-}
-/**
- * Initialize HUD state with cleanup of stale/orphaned tasks.
- * Should be called on HUD startup.
- */
-export async function initializeHUDState(directory, sessionId) {
-    // Clean up stale background tasks from previous sessions
-    const removedStale = await cleanupStaleBackgroundTasks(undefined, directory, sessionId);
-    const markedOrphaned = await markOrphanedTasksAsStale(directory, sessionId);
-    if (removedStale > 0 || markedOrphaned > 0) {
-        console.error(`HUD cleanup: removed ${removedStale} stale tasks, marked ${markedOrphaned} orphaned tasks`);
-    }
 }

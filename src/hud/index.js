@@ -7,7 +7,7 @@
  */
 import { readStdin, writeStdinCache, readStdinCache, getContextPercent, getContextPercentFromUsage, getModelId, getModelName, getEffortLevel, getRateLimitsFromStdin, stabilizeContextPercent, } from "./stdin.js";
 import { parseTranscript } from "./transcript.js";
-import { readHudState, readHudConfig, getRunningTasks, writeHudState, initializeHUDState, } from "./state.js";
+import { readHudState, readHudConfig, writeHudState, } from "./state.js";
 import { getUsage } from "./usage-api.js";
 import { render } from "./render.js";
 import { sanitizeOutput } from "./sanitize.js";
@@ -84,7 +84,7 @@ async function main() {
         stdin = stabilizeContextPercent(stdin, previousStdinCache);
         writeStdinCache(stdin, sessionKey);
         const cwd = resolveToWorktreeRoot(stdin.cwd || undefined);
-        // Read configuration (before transcript parsing so we can use staleTaskThresholdMinutes)
+        // Read configuration.
         // Clone to avoid mutating shared DEFAULT_HUD_CONFIG when applying runtime width detection
         const config = { ...readHudConfig() };
         // Auto-detect terminal width if not explicitly configured (#1726)
@@ -102,13 +102,9 @@ async function main() {
         }
         // Resolve worktree-mismatched transcript paths (issue #1094)
         const resolvedTranscriptPath = resolveTranscriptPath(stdin.transcript_path, cwd);
-        // Parse transcript for agents and todos
-        const transcriptData = await parseTranscript(resolvedTranscriptPath, {
-            staleTaskThresholdMinutes: config.staleTaskThresholdMinutes,
-        });
-        // Initialize HUD state (cleanup stale/orphaned tasks)
-        await initializeHUDState(cwd, sessionKey);
-        // Read HUD state for background tasks
+        // Parse transcript for tool/skill counts, tokens, todos, and prompt-cache age
+        const transcriptData = await parseTranscript(resolvedTranscriptPath);
+        // Read HUD state (persists the real session start across tail-parsing resets)
         const hudState = readHudState(cwd, sessionKey);
         // Persist session start time to survive tail-parsing resets (#528)
         // When tail parsing kicks in for large transcripts, sessionStart comes from
@@ -129,7 +125,6 @@ async function main() {
             // First time seeing session start (or new session) - persist it
             const stateToWrite = hudState || {
                 timestamp: new Date().toISOString(),
-                backgroundTasks: [],
             };
             stateToWrite.sessionStartTimestamp = sessionStart.toISOString();
             stateToWrite.sessionId = sessionKey;
@@ -162,8 +157,6 @@ async function main() {
             modelName: getModelName(stdin),
             modelId: getModelId(stdin),
             effortLevel: getEffortLevel(stdin),
-            activeAgents: transcriptData.agents.filter((a) => a.status === "running"),
-            backgroundTasks: getRunningTasks(hudState),
             cwd,
             rateLimitsResult,
             sessionHealth: calculateSessionHealth(sessionStart),
