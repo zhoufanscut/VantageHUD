@@ -1,27 +1,22 @@
 /**
  * HUD - Token Usage Element
  *
- * Renders last-request input/output token usage from transcript metadata.
+ * Renders the cumulative session token total as a single key:value fragment.
  */
 import { DEFAULT_HUD_LABELS } from '../types.js';
 import { formatTokenCount } from '../../lib/formatting.js';
-import { auroraLabel, auroraText, auroraFaint } from '../colors.js';
-export function renderTokenUsage(usage, sessionTotalTokens, labels = DEFAULT_HUD_LABELS) {
-    if (!usage)
+import { paint, auroraLabel, AURORA } from '../colors.js';
+/**
+ * Render the session token total.
+ *
+ * Format: token:12.3k  (faint label + slate value, matching repo:/branch:)
+ *
+ * `total` is the cumulative input+output across the session; formatTokenCount
+ * keeps the same k/M abbreviation thresholds (<1k raw, <1M → k, ≥1M → M).
+ * Returns null when there is nothing to show.
+ */
+export function renderTokenUsage(total, labels = DEFAULT_HUD_LABELS) {
+    if (!total || total <= 0)
         return null;
-    const hasUsage = usage.inputTokens > 0 || usage.outputTokens > 0;
-    if (!hasUsage)
-        return null;
-    // Label in steel, the primary i/o figure in readable slate, secondary
-    // reasoning/session totals in faint slate so they recede.
-    const parts = [
-        `${auroraLabel(`${labels.tokens}:`)}${auroraText(`i${formatTokenCount(usage.inputTokens)}/o${formatTokenCount(usage.outputTokens)}`)}`,
-    ];
-    if (usage.reasoningTokens && usage.reasoningTokens > 0) {
-        parts.push(auroraFaint(`r${formatTokenCount(usage.reasoningTokens)}`));
-    }
-    if (sessionTotalTokens && sessionTotalTokens > 0) {
-        parts.push(auroraFaint(`s${formatTokenCount(sessionTotalTokens)}`));
-    }
-    return parts.join(' ');
+    return `${auroraLabel(`${labels.tokens}:`)}${paint(AURORA.gradLow, formatTokenCount(total))}`;
 }

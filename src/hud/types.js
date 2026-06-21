@@ -5,7 +5,7 @@
  */
 export const DEFAULT_HUD_LABELS = {
     context: 'ctx',
-    tokens: 'tok',
+    tokens: 'token',
     tool: 'T',
     agent: 'A',
     skill: 'S',
@@ -83,23 +83,25 @@ export const DEFAULT_HUD_CONFIG = {
     theme: 'aurora',
     labels: DEFAULT_HUD_LABELS,
     elements: {
+        // ── Display elements, in render order (mirrors DEFAULT_ELEMENT_ORDER.main) ──
+        pathLabel: true,
+        model: true, // Show only when Claude Code statusline stdin provides a model
+        rateLimits: true, // Show rate limits by default
+        contextBar: true,
+        showTokens: true, // tokens element — On by default; users can disable in config.json
+        sessionHealth: true, // session element
+        promptTime: true, // On by default; users can disable in config.json
+        agents: false, // Off by default — only "running" mid-turn, which the statusline never re-renders during (see AGENTS.md refresh model)
+        backgroundTasks: false, // background element — off by default; state.backgroundTasks is only ever populated by an external hook; none ships
+        showCallCounts: true, // callCounts element — tool/agent/skill counts (Issue #710)
         gitRepo: true, // Show repository name by default
         gitBranch: true, // Show branch (and worktree suffix) by default
         gitStatus: true, // Show working-tree status by default
-        model: true, // Show only when Claude Code statusline stdin provides a model
+        // ── Behavioral options / sub-toggles (not standalone display elements) ──
         modelFormat: 'versioned', // Preserve model version by default
         effort: true, // Fold the thinking-effort level (high/medium/…) into the model element; set false to hide it
-        pathLabel: true,
-        rateLimits: true, // Show rate limits by default
-        contextBar: true,
-        agents: true, // Show active-agent count
-        backgroundTasks: true,
-        promptTime: false, // Hidden by default (low-signal element)
-        sessionHealth: true,
         showSessionDuration: true,
-        showTokens: false,
         useBars: false, // Disabled by default for backwards compatibility
-        showCallCounts: true, // Show tool/agent/skill call counts by default (Issue #710)
         callCountsFormat: 'auto', // Preserve platform-based emoji/ASCII defaults unless explicitly overridden
         maxOutputLines: 4,
         safeMode: true, // Enabled by default to prevent terminal rendering corruption (Issue #346)

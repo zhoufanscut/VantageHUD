@@ -242,7 +242,7 @@ export async function render(context, config) {
         }
     }
     if (enabledElements.showTokens === true) {
-        const tokenUsage = renderTokenUsage(context.lastRequestTokenUsage, context.sessionTotalTokens, hudLabels);
+        const tokenUsage = renderTokenUsage(context.sessionTotalTokens, hudLabels);
         if (tokenUsage)
             rendered.set("tokens", tokenUsage);
     }
