@@ -82,6 +82,8 @@ cp ~/.claude/hud/config.json.example ~/.claude/hud/config.json
   `settings.json`, and separate from the `statusLine` hook key from step 3. Every
   key is optional; omit any and its built-in default applies. `config.json` is
   gitignored, so `git pull` never clobbers your settings.
+- **Edits apply on the next status-line refresh** — no Claude Code restart
+  needed. The HUD notices `config.json` changed (by mtime) and re-renders.
 - Common knobs: `theme` (`aurora` | `ember`), `locale` (`en` | `zh-CN`), and the
   `elements` toggles (e.g. `gitBranch`, `contextBar`, `rateLimits`, `showTokens`).
   See `config.json.example` for the full list.

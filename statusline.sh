@@ -16,6 +16,10 @@ SCRIPT_DIR=$(cd "$SCRIPT_DIR" 2>/dev/null && pwd -P) || SCRIPT_DIR=.
 # Cache lives inside this folder so the statusline is fully relocatable.
 CACHE_DIR=${HUD_CACHE_DIR:-"$SCRIPT_DIR/cache"}
 HUD_SCRIPT=${1:-"$SCRIPT_DIR/statusline.mjs"}
+# User config path, mirroring Node's getHudConfigFile(): HUD_CONFIG override
+# else <install>/config.json. Used to invalidate the render cache when the
+# config changes (see config_newer_than).
+HUD_CONFIG_FILE=${HUD_CONFIG:-"$SCRIPT_DIR/config.json"}
 INPUT_TMP="$CACHE_DIR/stdin.$$.tmp"
 LOCK_STALE_SECONDS=${HUD_LOCK_STALE_SECONDS:-10}
 
@@ -40,6 +44,20 @@ is_stale_path() {
   [ -n "$path_mtime" ] || return 1
   [ "$now" -gt 0 ] || return 1
   [ $((now - path_mtime)) -gt "$LOCK_STALE_SECONDS" ] || return 1
+}
+
+# True when the user config was modified more recently than the reference file
+# (a cached render), meaning that render predates the current config and is
+# stale. Returns false (cache still valid) when there is no config file or
+# either mtime is unreadable, so a missing/unreadable config never forces a
+# re-render. POSIX test has no -nt, hence the explicit mtime comparison.
+config_newer_than() {
+  [ -f "$HUD_CONFIG_FILE" ] || return 1
+  cfg_mtime=$(file_mtime "$HUD_CONFIG_FILE")
+  [ -n "$cfg_mtime" ] || return 1
+  ref_mtime=$(file_mtime "$1")
+  [ -n "$ref_mtime" ] || return 1
+  [ "$cfg_mtime" -gt "$ref_mtime" ]
 }
 
 cleanup_empty_temp_files() {
@@ -217,8 +235,10 @@ refresh_cache() {
   trap - EXIT HUP INT TERM
 }
 
-# Hot path: return immediately from the last successful render for this session.
-if [ -s "$OUTPUT_FILE" ]; then
+# Hot path: return immediately from the last successful render for this session
+# — unless config.json changed since that render, in which case fall through to
+# a synchronous refresh so the edit shows on this frame, not the next.
+if [ -s "$OUTPUT_FILE" ] && ! config_newer_than "$OUTPUT_FILE"; then
   cat "$OUTPUT_FILE" 2>/dev/null || printf '[HUD] Starting...\n'
   # Refresh in background for the next frame.
   if try_acquire_lock; then
@@ -231,15 +251,22 @@ if [ -s "$OUTPUT_FILE" ]; then
   exit 0
 fi
 
-# First render for this session: do a synchronous refresh so the user
-# sees the real HUD from the first frame. Claude Code v2.1.x does not
-# re-poll the statusLine until user interaction, so an async background
-# refresh leaves the pane stuck on "[HUD] Starting..." until they type.
+# Synchronous refresh: either the first render for this session, or config.json
+# changed since the last render. Claude Code v2.1.x does not re-poll the
+# statusLine until user interaction, so an async background refresh leaves the
+# pane stuck on the old frame (or "[HUD] Starting...") until they type.
 if [ -s "$INPUT_FILE" ] && try_acquire_lock; then
   refresh_cache
   if [ -s "$OUTPUT_FILE" ]; then
     cat "$OUTPUT_FILE" 2>/dev/null && exit 0
   fi
+fi
+
+# Synchronous refresh was unavailable (lock held or render failed). Prefer the
+# last good line — even if it predates a config edit — over the placeholder, so
+# an existing HUD never flashes back to "[HUD] Starting...".
+if [ -s "$OUTPUT_FILE" ]; then
+  cat "$OUTPUT_FILE" 2>/dev/null && exit 0
 fi
 
 printf '[HUD] Starting...\n'
