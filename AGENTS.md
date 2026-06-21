@@ -20,7 +20,7 @@ echo '{"session_id":"t","cwd":"'"$HOME"'/example","effort":{"level":"high"},"mod
   | HUD_SYNC_REFRESH=1 sh statusline.sh statusline.mjs
 ```
 
-Expect one line containing `opus 4.8:high`. `HUD_SYNC_REFRESH=1` forces a synchronous render (skips the background-cache hot path); `HUD_DEBUG=1` adds stderr diagnostics. To exercise the renderer alone: `... | node statusline.mjs`.
+Expect one line containing `opus:high`. `HUD_SYNC_REFRESH=1` forces a synchronous render (skips the background-cache hot path); `HUD_DEBUG=1` adds stderr diagnostics. To exercise the renderer alone: `... | node statusline.mjs`.
 
 ## Execution flow (not obvious from filenames)
 

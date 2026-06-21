@@ -14,7 +14,7 @@
     "gitRepo": true,
     "gitBranch": true,
     "gitStatus": true,
-    "modelFormat": "versioned",
+    "modelFormat": "short",
     "useBars": false,
     "callCountsFormat": "auto",
     "maxOutputLines": 4,

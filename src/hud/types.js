@@ -95,7 +95,7 @@ export const DEFAULT_HUD_CONFIG = {
         gitBranch: true, // Show branch (and worktree suffix) by default
         gitStatus: true, // Show working-tree status by default
         // ── Behavioral options / sub-toggles (not standalone display elements) ──
-        modelFormat: 'versioned', // Preserve model version by default
+        modelFormat: 'short', // model element label: 'short' (opus) | 'versioned' (opus 4.8) | 'full' (raw id)
         useBars: false, // Disabled by default for backwards compatibility
         callCountsFormat: 'auto', // Preserve platform-based emoji/ASCII defaults unless explicitly overridden
         maxOutputLines: 4,

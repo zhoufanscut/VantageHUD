@@ -2,7 +2,7 @@
 
 A self-contained [Claude Code](https://claude.com/claude-code) statusline (HUD).
 From the JSON Claude Code pipes to the `statusLine` command it renders the
-working folder, the model with thinking effort (`opus 4.8:max`), context %,
+working folder, the model with thinking effort (`opus:max`), context %,
 rate limits, git info, session time, and more.
 
 - **No dependencies.** Pure Node built-ins — no `node_modules`, no native code.
@@ -69,7 +69,7 @@ cd ~/.claude/hud
 echo '{"session_id":"t","cwd":"'"$HOME"'/example","effort":{"level":"high"},"model":{"id":"claude-opus-4-8","display_name":"Opus 4.8"}}' \
   | HUD_SYNC_REFRESH=1 sh statusline.sh statusline.mjs
 ```
-Expected: a single line containing `opus 4.8:high` (the leading
+Expected: a single line containing `opus:high` (the leading
 path is your working directory).
 
 ## Configure (optional)
@@ -87,6 +87,9 @@ cp ~/.claude/hud/config.json.example ~/.claude/hud/config.json
 - Common knobs: `theme` (`aurora` | `ember`), `locale` (`en` | `zh-CN`), and the
   `elements` toggles (e.g. `gitBranch`, `contextBar`, `rateLimits`, `showTokens`).
   See `config.json.example` for the full list.
+- `modelFormat` (inside `elements`) sets how the model name reads: `short`
+  (`opus`, the default), `versioned` (`opus 4.8`), or `full` (raw id,
+  `claude-opus-4-8`). The `:effort` suffix is a separate `effort` toggle.
 - No file needed for a quick test: `HUD_THEME=ember` overrides the theme, and
   `HUD_CONFIG=/abs/path/config.json` points the HUD at a config elsewhere.
 

@@ -61,7 +61,7 @@ skimming. Add a term back (or a new one) when it earns its place; keep this shor
   session gets its own `cache/<session>/` subfolder. Resolve via
   `src/lib/worktree-paths.js` — never hardcode.
 - **smoke test** — the only verification (no tests/linter/CI): pipe a sample
-  payload through `statusline.sh`, expect a line containing `opus 4.8 high`. See
+  payload through `statusline.sh`, expect a line containing `opus high`. See
   `AGENTS.md` › Verification.
 
 ## Common elements

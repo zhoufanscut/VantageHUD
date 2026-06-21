@@ -2,7 +2,7 @@
  * HUD - Model Element
  *
  * Renders the current model as a key:value fragment — model family as the key,
- * thinking effort as the value (e.g. `opus 4.8:high`). The key uses the faint
+ * thinking effort as the value (e.g. `opus:high`). The key uses the faint
  * label tone (like `repo:`); the value rides the effort ramp so the effort
  * stays readable at a glance.
  */
@@ -86,13 +86,13 @@ function modelFamilyKey(source) {
 /**
  * Render the model:effort fragment.
  *
- * Format: opus 4.8:high (versioned) · opus:high (short) · opus (no effort level)
+ * Format: opus:high (short, default) · opus 4.8:high (versioned) · claude-opus-4-8:high (full) · opus (no effort level)
  *
  * Key uses the faint label tone (like `repo:`); the effort value is colored on
  * the effort ramp (max→accent … low→rose). When no effort level is present the
  * colon is dropped and the family alone renders on the ramp's calm (accent) end.
  */
-export function renderModel(modelId, format = 'versioned', effortLevel = null) {
+export function renderModel(modelId, format = 'short', effortLevel = null) {
     const family = modelFamilyKey(modelId);
     if (!family)
         return null;
