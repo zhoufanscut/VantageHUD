@@ -6,7 +6,7 @@
  * label tone (like `repo:`); the value rides the effort ramp so the effort
  * stays readable at a glance.
  */
-import { paint, gradientColor, auroraLabel, PALETTE } from '../colors.js';
+import { paint, lerpRgb, auroraLabel, PALETTE } from '../colors.js';
 import { truncateToWidth } from '../../lib/string-width.js';
 /**
  * Extract version from a model ID or display name.
@@ -36,20 +36,26 @@ function extractVersion(modelId) {
     return null;
 }
 /**
- * Map a thinking-effort level onto the shared teal→amber→rose gauge ramp (the
- * same ramp as ctx / session / limits), inverted so more effort reads calmer:
- * max → accent (cyan-teal), xhigh → teal-amber, high → amber, medium → amber-rose, low → rose.
- * Absent or unknown levels fall back to the max (accent) end.
+ * Map a thinking-effort level onto a fixed five-step teal→amber→rose scale,
+ * inverted so more effort reads calmer: max → accent (cyan-teal),
+ * xhigh → teal-amber, high → amber, medium → amber-rose, low → rose.
+ *
+ * Effort is a discrete setting, not a measurement, so it owns an explicit
+ * per-level table rather than routing through the (now three-tier) usage gauge —
+ * that keeps all five levels as distinct hues, which a tier snap would collapse
+ * (high and xhigh would both land in the gauge's calm band). Absent or unknown
+ * levels fall back to the max (accent) end.
  */
-const EFFORT_RANK = { low: 100, medium: 75, high: 50, xhigh: 25, max: 0 };
+const EFFORT_COLOR = {
+    low: PALETTE.gradHigh, // rose — least effort, loudest
+    medium: lerpRgb(PALETTE.gradMid, PALETTE.gradHigh, 0.5), // amber-rose
+    high: PALETTE.gradMid, // amber
+    xhigh: lerpRgb(PALETTE.gradLow, PALETTE.gradMid, 0.5), // teal-amber
+    max: PALETTE.accent, // cyan-teal accent — most effort, calmest
+};
 function effortColor(level) {
     const key = level == null ? 'max' : String(level).toLowerCase();
-    const pct = EFFORT_RANK[key];
-    // Max effort — and any absent/unknown level, which falls back to max — uses the
-    // theme's accent tone (cyan-teal in aurora) rather than the gradient's teal end.
-    if (pct == null || key === 'max')
-        return PALETTE.accent;
-    return gradientColor(pct);
+    return EFFORT_COLOR[key] ?? PALETTE.accent;
 }
 /**
  * Derive the key: the model family.

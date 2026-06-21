@@ -44,9 +44,9 @@ export function renderPromptTime(promptTime, now) {
     if (now) {
         const elapsed = now.getTime() - promptTime.getTime();
         if (elapsed >= 0) {
-            // Continuous teal→amber→rose ramp across the 5-min cache TTL: warm
-            // teal when fresh, amber mid-way, rose once the cache has lapsed —
-            // the same ramp as ctx/limits/session.
+            // Three-tier teal→amber→rose snap across the 5-min cache TTL: teal
+            // when fresh, amber from ~3.5min (70%), rose from ~4.25min (85%) —
+            // the same tiers as ctx/limits/session.
             const color = gradientColor((elapsed / CACHE_TTL_MS) * 100);
             // Icon left unpainted so it renders as a native-color emoji, matching
             // the raw tool/agent/skill icons in call-counts (which apply no SGR).

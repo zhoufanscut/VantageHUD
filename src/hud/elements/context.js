@@ -22,8 +22,9 @@ function getContextSeverity(safePercent, thresholds) {
     return 'normal';
 }
 function getContextDisplayStyle(safePercent, thresholds) {
-    // Aurora colors only: the color glides continuously along the teal→amber→rose
-    // gradient; the textual suffix stays threshold-based and unchanged from before.
+    // Aurora colors only: the color snaps across three tiers (teal/amber/rose)
+    // at 70/85 — the same cut points as contextWarning/contextCritical, so the
+    // color flips in step with the threshold-based textual suffix.
     const severity = getContextSeverity(safePercent, thresholds);
     const color = fg(gradientColor(safePercent));
     switch (severity) {

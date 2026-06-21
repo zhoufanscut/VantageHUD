@@ -22,11 +22,11 @@
  *            `[API 429]`
  *   sep      the ` | ` separator and the empty gauge-bar track (`░`)
  *   accent   model name at max effort, and the `agents:N` count
- *   gradLow  usage-gauge low end (0%) — ALSO the static value tone for
- *            repo: / branch: / token:, so the gauge-low color and the
+ *   gradLow  usage tier "calm" (< 70%) — ALSO the static value tone for
+ *            repo: / branch: / token:, so the calm-tier color and the
  *            identity-value color cannot diverge
- *   gradMid  usage gauge — mid  (50%)
- *   gradHigh usage gauge — high (100%)
+ *   gradMid  usage tier "watch" (70–84%)
+ *   gradHigh usage tier "alert" (≥ 85%)
  *   add      git: staged / ahead — glyph + number (positive)
  *   del      git: modified / behind — glyph + number (negative)
  *   track    git: untracked — glyph + number

@@ -11,8 +11,8 @@ const LABEL = fg(AURORA.label);
 const FAINT = fg(AURORA.faint);
 const TRACK = fg(AURORA.sep);
 /**
- * Get color based on percentage — Aurora smooth gradient (teal→amber→rose),
- * replacing the old green/yellow/red traffic-light steps.
+ * Get color based on percentage — Aurora three-tier snap (teal <70 / amber
+ * 70–84 / rose ≥85), replacing the old green/yellow/red traffic-light steps.
  */
 function getColor(percent) {
     return fg(gradientColor(percent));

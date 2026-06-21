@@ -7,10 +7,10 @@ import { paint, gradientColor, auroraLabel } from '../colors.js';
 /**
  * Render session duration.
  *
- * Format: session:45m  (faint label + continuous Aurora-gradient duration)
+ * Format: session:45m  (faint label + tiered Aurora duration color)
  *
- * Color rides the same teal→amber→rose ramp as ctx/limits, mapping session age
- * onto 0–100 (8h → full rose, amber at the 4h midpoint).
+ * Color snaps across the same teal→amber→rose tiers as ctx/limits, mapping
+ * session age onto 0–100 (8h → 100%): teal <5.6h, amber 5.6–6.8h, rose ≥6.8h.
  */
 export function renderSession(session) {
     if (!session)

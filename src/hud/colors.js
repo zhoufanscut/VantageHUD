@@ -114,17 +114,29 @@ export const THEME_NAME = ACTIVE_THEME_NAME;
 // "aurora" was the only theme). Existing imports keep working; new code should
 // prefer `PALETTE`.
 export const AURORA = PALETTE;
+// Three usage tiers share the palette's gauge tokens; the default cut points
+// mirror the context thresholds (warning 70 / critical 85), so an element's
+// color and its threshold-driven text (e.g. ctx's COMPRESS?/CRITICAL) agree.
+const TIER_STOPS = [PALETTE.gradLow, PALETTE.gradMid, PALETTE.gradHigh];
+const TIER_BOUNDS = [70, 85];
 /**
- * Usage gradient: map a 0..100 percentage to a color that glides
- * low → mid → high. Two linear segments meet at the 50% midpoint, so the
- * color visibly changes with state while never snapping between bands.
+ * Usage tier color: snap a 0..100 percentage into one of three discrete bands —
+ * calm (< 70) → gradLow, watch (70..84) → gradMid, alert (>= 85) → gradHigh.
+ *
+ * Categorical, not continuous, on purpose: the eye reads a fixed hue as a state
+ * faster than it judges position along a smooth ramp, and three flat bands look
+ * identical across truecolor / 256 / 16-color (a continuous lerp quantizes into
+ * ragged, uneven steps once it leaves truecolor). Callers may pass custom
+ * `bounds` (ascending cut points) when their semantics differ from 70/85.
  */
-export function gradientColor(percent) {
+export function gradientColor(percent, bounds = TIER_BOUNDS) {
     const p = Math.min(100, Math.max(0, percent));
-    if (p <= 50) {
-        return lerpRgb(PALETTE.gradLow, PALETTE.gradMid, p / 50);
-    }
-    return lerpRgb(PALETTE.gradMid, PALETTE.gradHigh, (p - 50) / 50);
+    let tier = 0;
+    while (tier < bounds.length && p >= bounds[tier])
+        tier++;
+    // Clamp into TIER_STOPS: a caller passing more cut points than there are
+    // tiers must never index past the table (fg(undefined) would throw).
+    return TIER_STOPS[Math.min(tier, TIER_STOPS.length - 1)];
 }
 // ============================================================================
 // Shared element helpers (operate on the active palette)
