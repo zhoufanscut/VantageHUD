@@ -5,7 +5,7 @@
  */
 import { DEFAULT_HUD_LABELS } from '../types.js';
 import { formatTokenCount } from '../../lib/formatting.js';
-import { paint, auroraLabel, AURORA } from '../colors.js';
+import { paint, paintLabel, PALETTE } from '../colors.js';
 /**
  * Render the session token total.
  *
@@ -18,5 +18,5 @@ import { paint, auroraLabel, AURORA } from '../colors.js';
 export function renderTokenUsage(total, labels = DEFAULT_HUD_LABELS) {
     if (!total || total <= 0)
         return null;
-    return `${auroraLabel(`${labels.tokens}:`)}${paint(AURORA.gradLow, formatTokenCount(total))}`;
+    return `${paintLabel(`${labels.tokens}:`)}${paint(PALETTE.gradLow, formatTokenCount(total))}`;
 }

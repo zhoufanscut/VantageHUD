@@ -6,7 +6,7 @@
  * label tone (like `repo:`); the value rides the effort ramp so the effort
  * stays readable at a glance.
  */
-import { paint, lerpRgb, auroraLabel, PALETTE } from '../colors.js';
+import { paint, lerpRgb, paintLabel, PALETTE } from '../colors.js';
 import { truncateToWidth } from '../../lib/string-width.js';
 /**
  * Extract version from a model ID or display name.
@@ -108,5 +108,5 @@ export function renderModel(modelId, format = 'versioned', effortLevel = null) {
     }
     if (!effortLevel)
         return paint(effortColor(null), key);
-    return `${auroraLabel(`${key}:`)}${paint(effortColor(effortLevel), String(effortLevel).toLowerCase())}`;
+    return `${paintLabel(`${key}:`)}${paint(effortColor(effortLevel), String(effortLevel).toLowerCase())}`;
 }

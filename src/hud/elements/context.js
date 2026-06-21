@@ -4,8 +4,8 @@
  * Renders context window usage display.
  */
 import { DEFAULT_HUD_LABELS } from '../types.js';
-import { RESET, fg, gradientColor, auroraLabel, AURORA } from '../colors.js';
-const TRACK = fg(AURORA.sep);
+import { RESET, fg, gradientColor, paintLabel, PALETTE } from '../colors.js';
+const TRACK = fg(PALETTE.sep);
 function clampContextPercent(percent) {
     return Math.min(100, Math.max(0, Math.round(percent)));
 }
@@ -22,7 +22,7 @@ function getContextSeverity(safePercent, thresholds) {
     return 'normal';
 }
 function getContextDisplayStyle(safePercent, thresholds) {
-    // Aurora colors only: the color snaps across three tiers (teal/amber/rose)
+    // The color snaps across three tiers (teal/amber/rose by default)
     // at 70/85 — the same cut points as contextWarning/contextCritical, so the
     // color flips in step with the threshold-based textual suffix.
     const severity = getContextSeverity(safePercent, thresholds);
@@ -48,7 +48,7 @@ function getContextDisplayStyle(safePercent, thresholds) {
 export function renderContext(percent, thresholds, labels = DEFAULT_HUD_LABELS) {
     const safePercent = clampContextPercent(percent);
     const { color, suffix } = getContextDisplayStyle(safePercent, thresholds);
-    return `${auroraLabel(`${labels.context}:`)}${color}${safePercent}%${suffix}${RESET}`;
+    return `${paintLabel(`${labels.context}:`)}${color}${safePercent}%${suffix}${RESET}`;
 }
 /**
  * Render context window with visual bar.
@@ -61,5 +61,5 @@ export function renderContextWithBar(percent, thresholds, barWidth = 10, labels 
     const empty = barWidth - filled;
     const { color, suffix } = getContextDisplayStyle(safePercent, thresholds);
     const bar = `${color}${'█'.repeat(filled)}${TRACK}${'░'.repeat(empty)}${RESET}`;
-    return `${auroraLabel(`${labels.context}:`)}[${bar}]${color}${safePercent}%${suffix}${RESET}`;
+    return `${paintLabel(`${labels.context}:`)}[${bar}]${color}${safePercent}%${suffix}${RESET}`;
 }

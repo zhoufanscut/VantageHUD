@@ -110,10 +110,6 @@ export function lerpRgb(c1, c2, t) {
 export const PALETTE = ACTIVE_PALETTE;
 /** The resolved theme name for this process (handy under HUD_DEBUG). */
 export const THEME_NAME = ACTIVE_THEME_NAME;
-// Back-compat alias for the active `PALETTE` (historical name from when
-// "aurora" was the only theme). Existing imports keep working; new code should
-// prefer `PALETTE`.
-export const AURORA = PALETTE;
 // Three usage tiers share the palette's gauge tokens; the default cut points
 // mirror the context thresholds (warning 70 / critical 85), so an element's
 // color and its threshold-driven text (e.g. ctx's COMPRESS?/CRITICAL) agree.
@@ -142,25 +138,17 @@ export function gradientColor(percent, bounds = TIER_BOUNDS) {
 // Shared element helpers (operate on the active palette)
 // ============================================================================
 /** A faint hairline label tone (the quiet "ctx:" / "5h:" prefix). */
-export function auroraLabel(text) {
+export function paintLabel(text) {
     return paint(PALETTE.label, text);
 }
 /** Even fainter (reset times, parentheticals). */
-export function auroraFaint(text) {
+export function paintFaint(text) {
     return paint(PALETTE.faint, text);
-}
-/** Primary text tone for readable values. */
-export function auroraText(text) {
-    return paint(PALETTE.text, text);
-}
-/** Neutral identity accent: repo, branch, host, key, skill. */
-export function auroraAccent(text) {
-    return paint(PALETTE.accent, text);
 }
 /**
  * Warning tone: muted mid for caution, muted high for critical.
  * Stays in-palette instead of reaching for raw yellow/red.
  */
-export function auroraWarn(text, critical = false) {
+export function paintWarn(text, critical = false) {
     return paint(critical ? PALETTE.gradHigh : PALETTE.gradMid, text);
 }

@@ -9,7 +9,7 @@
  * Falls back to the last typed prompt, then a UserPromptSubmit hook timestamp
  * (hudState.lastPromptTimestamp), if the activity signal is unavailable.
  */
-import { paint, gradientColor, auroraFaint, AURORA } from '../colors.js';
+import { paint, gradientColor, paintFaint, PALETTE } from '../colors.js';
 /**
  * Anthropic prompt-cache TTL. Once the idle gap since the last prompt exceeds
  * this, the next turn re-reads the full context uncached (a cache miss), so the
@@ -56,5 +56,5 @@ export function renderPromptTime(promptTime, now) {
     const hours = String(promptTime.getHours()).padStart(2, '0');
     const minutes = String(promptTime.getMinutes()).padStart(2, '0');
     const seconds = String(promptTime.getSeconds()).padStart(2, '0');
-    return `${auroraFaint('prompt:')}${paint(AURORA.label, `${hours}:${minutes}:${seconds}`)}`;
+    return `${paintFaint('prompt:')}${paint(PALETTE.label, `${hours}:${minutes}:${seconds}`)}`;
 }

@@ -3,15 +3,15 @@
  *
  * Renders 5-hour and weekly rate limit usage display.
  */
-import { RESET, fg, gradientColor, AURORA, auroraFaint, auroraWarn } from '../colors.js';
-// Aurora colors only: steel "5h:"/"7d:" labels AND the reset-time parentheticals
-// (the latter share the call-count tone, AURORA.label), faint slate for the
+import { RESET, fg, gradientColor, PALETTE, paintFaint, paintWarn } from '../colors.js';
+// Palette tokens: steel "5h:"/"7d:" labels AND the reset-time parentheticals
+// (the latter share the call-count tone, PALETTE.label), faint slate for the
 // $spent/$limit parenthetical, and a hairline-slate empty-bar track.
-const LABEL = fg(AURORA.label);
-const FAINT = fg(AURORA.faint);
-const TRACK = fg(AURORA.sep);
+const LABEL = fg(PALETTE.label);
+const FAINT = fg(PALETTE.faint);
+const TRACK = fg(PALETTE.sep);
 /**
- * Get color based on percentage — Aurora three-tier snap (teal <70 / amber
+ * Get color based on percentage — three-tier palette snap (teal <70 / amber
  * 70–84 / rose ≥85), replacing the old green/yellow/red traffic-light steps.
  */
 function getColor(percent) {
@@ -48,7 +48,7 @@ function formatResetTime(date) {
 export function renderRateLimits(limits, stale, sonnetThreshold = 0) {
     if (!limits)
         return null;
-    const staleMarker = stale ? auroraFaint('*') : '';
+    const staleMarker = stale ? paintFaint('*') : '';
     const resetPrefix = stale ? '~' : '';
     // One window → faint "5h:" label + gradient percent + faint "(reset)".
     const fmt = (label, percent, resetsAt) => {
@@ -89,7 +89,7 @@ export function renderRateLimits(limits, stale, sonnetThreshold = 0) {
 export function renderRateLimitsWithBar(limits, barWidth = 8, stale, sonnetThreshold = 0) {
     if (!limits)
         return null;
-    const staleMarker = stale ? auroraFaint('*') : '';
+    const staleMarker = stale ? paintFaint('*') : '';
     const resetPrefix = stale ? '~' : '';
     // One window → faint label + gradient block-bar + gradient percent + faint reset.
     const fmt = (label, percent, resetsAt) => {
@@ -145,9 +145,9 @@ export function renderRateLimitsError(result) {
     if (result.error === 'rate_limited') {
         // Prefer rendering stale usage percentages when available; only show the 429 badge
         // when there is no cached rate limit data to display.
-        return result.rateLimits ? null : auroraFaint('[API 429]');
+        return result.rateLimits ? null : paintFaint('[API 429]');
     }
     if (result.error === 'auth')
-        return auroraWarn('[API auth]');
-    return auroraWarn('[API err]');
+        return paintWarn('[API auth]');
+    return paintWarn('[API err]');
 }

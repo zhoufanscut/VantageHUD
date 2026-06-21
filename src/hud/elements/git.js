@@ -6,7 +6,7 @@
 import { execFileSync } from 'node:child_process';
 import { realpathSync } from 'node:fs';
 import { resolve, basename } from 'node:path';
-import { paint, auroraLabel, AURORA } from '../colors.js';
+import { paint, paintLabel, PALETTE } from '../colors.js';
 import { DEFAULT_HUD_LABELS } from '../types.js';
 const CACHE_TTL_MS = 30_000;
 const repoCache = new Map();
@@ -129,7 +129,7 @@ export function renderGitRepo(cwd) {
     const repo = getGitRepoName(cwd);
     if (!repo)
         return null;
-    return `${auroraLabel('repo:')}${paint(AURORA.gradLow, repo)}`;
+    return `${paintLabel('repo:')}${paint(PALETTE.gradLow, repo)}`;
 }
 /**
  * Render git branch element.
@@ -145,9 +145,9 @@ export function renderGitBranch(cwd) {
         return null;
     const wtInfo = getWorktreeInfo(cwd);
     if (wtInfo.isWorktree && wtInfo.worktreeName) {
-        return `${auroraLabel('branch:')}${paint(AURORA.gradLow, branch)} ${auroraLabel('(wt:')}${paint(AURORA.gradLow, wtInfo.worktreeName)}${auroraLabel(')')}`;
+        return `${paintLabel('branch:')}${paint(PALETTE.gradLow, branch)} ${paintLabel('(wt:')}${paint(PALETTE.gradLow, wtInfo.worktreeName)}${paintLabel(')')}`;
     }
-    return `${auroraLabel('branch:')}${paint(AURORA.gradLow, branch)}`;
+    return `${paintLabel('branch:')}${paint(PALETTE.gradLow, branch)}`;
 }
 /**
  * Get git working tree status counts.
@@ -219,14 +219,14 @@ export function renderGitStatus(cwd, labels = DEFAULT_HUD_LABELS) {
     }
     const parts = [];
     if (staged > 0)
-        parts.push(paint(AURORA.add, `${labels.staged}${staged}`));
+        parts.push(paint(PALETTE.add, `${labels.staged}${staged}`));
     if (modified > 0)
-        parts.push(paint(AURORA.del, `${labels.modified}${modified}`));
+        parts.push(paint(PALETTE.del, `${labels.modified}${modified}`));
     if (untracked > 0)
-        parts.push(paint(AURORA.track, `${labels.untracked}${untracked}`));
+        parts.push(paint(PALETTE.track, `${labels.untracked}${untracked}`));
     if (ahead > 0)
-        parts.push(paint(AURORA.add, `${labels.ahead}${ahead}`));
+        parts.push(paint(PALETTE.add, `${labels.ahead}${ahead}`));
     if (behind > 0)
-        parts.push(paint(AURORA.del, `${labels.behind}${behind}`));
+        parts.push(paint(PALETTE.del, `${labels.behind}${behind}`));
     return parts.join(' ');
 }

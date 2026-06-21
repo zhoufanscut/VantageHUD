@@ -12,7 +12,7 @@
 // WSL terminals may also lack emoji support.
 import { isWSL } from '../../lib/platform.js';
 import { DEFAULT_HUD_LABELS } from '../types.js';
-import { paint, AURORA } from '../colors.js';
+import { paint, PALETTE } from '../colors.js';
 function shouldUseAscii(format = 'auto') {
     if (format === 'ascii')
         return true;
@@ -41,8 +41,8 @@ function getIcons(format = 'auto', labels = DEFAULT_HUD_LABELS) {
 export function renderCallCounts(toolCalls, agentInvocations, skillUsages, format = 'auto', labels = DEFAULT_HUD_LABELS) {
     const parts = [];
     const icons = getIcons(format, labels);
-    // Counts sit quietly in muted slate so they recede into the Aurora field.
-    const count = (n) => paint(AURORA.label, String(n));
+    // Counts sit quietly in muted slate so they recede into the rest of the line.
+    const count = (n) => paint(PALETTE.label, String(n));
     if (toolCalls > 0) {
         parts.push(`${icons.tool}${count(toolCalls)}`);
     }

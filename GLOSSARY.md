@@ -86,7 +86,6 @@ The pairs most likely to make us talk past each other:
 | --- | --- |
 | `statusline` *(thing)* / `config.json` *(HUD config)* / `statusLine` *(capital-L hook key)* | the rendered line / the HUD's own config file at the install root (`getHudConfigFile`) / Claude Code's command-hook key in `settings.json` (README). The HUD's config is its **own** file — not a block inside `settings.json`. |
 | **render context** / **context window** (`ctx`) / "context" *(the chat)* | the object passed to `render()` / the model's token budget % / the conversation history. In code, "context" usually means the first. |
-| **AURORA** / **aurora** | `AURORA` = back-compat alias for the *active* `PALETTE` (any theme) / `aurora` = one specific theme name. |
 | **session key** / **session id** | the cache-folder name (sanitized, sometimes a checksum) / Claude Code's conversation UUID (one input to the key). |
 | **element** / **enable flag** | the `renderXxx()` function / the config boolean (often same name) that gates it. |
 | `DEFAULT_HUD_CONFIG.theme` / the real switch | that field is **documentation-only**; the active theme is resolved in `themes.js` (`HUD_THEME` / `settings.json`). |

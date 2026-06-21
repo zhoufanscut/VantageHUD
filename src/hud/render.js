@@ -4,7 +4,7 @@
  * Composes statusline output from render context.
  */
 import { DEFAULT_HUD_CONFIG, DEFAULT_ELEMENT_ORDER, DEFAULT_HUD_LABELS } from "./types.js";
-import { paint, AURORA } from "./colors.js";
+import { paint, PALETTE } from "./colors.js";
 import { stringWidth, getCharWidth } from "../lib/string-width.js";
 import { renderContext, renderContextWithBar } from "./elements/context.js";
 import { renderRateLimits, renderRateLimitsWithBar, renderRateLimitsError } from "./elements/limits.js";
@@ -20,8 +20,8 @@ import { renderCallCounts } from "./elements/call-counts.js";
  */
 const ANSI_REGEX = /\x1b\[[0-9;]*[a-zA-Z]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/;
 const PLAIN_SEPARATOR = " | ";
-// Aurora colors only: keep the " | " separator, tint it Aurora's hairline slate.
-const DIM_SEPARATOR = paint(AURORA.sep, PLAIN_SEPARATOR);
+// Tint the " | " separator with the active palette's hairline slate.
+const DIM_SEPARATOR = paint(PALETTE.sep, PLAIN_SEPARATOR);
 function buildMainElementOrder(elementOrder) {
     if (!Array.isArray(elementOrder) || elementOrder.length === 0) {
         return DEFAULT_ELEMENT_ORDER.main;
@@ -206,8 +206,8 @@ export async function render(context, config) {
         const shortCwd = home && (context.cwd === home || context.cwd.startsWith(home + "/"))
             ? "~" + context.cwd.slice(home.length)
             : context.cwd;
-        // Aurora colors only: same bold path text, tinted soft slate.
-        rendered.set("pathLabel", `\x1b[1m${paint(AURORA.text, shortCwd)}`);
+        // Same bold path text, tinted with the palette's soft slate.
+        rendered.set("pathLabel", `\x1b[1m${paint(PALETTE.text, shortCwd)}`);
     }
     // Rate limits (5h and weekly) - data takes priority over error indicator.
     if (enabledElements.rateLimits && context.rateLimitsResult) {
