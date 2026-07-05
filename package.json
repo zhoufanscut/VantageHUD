@@ -3,7 +3,7 @@
   "version": "0.3.0",
   "private": true,
   "type": "module",
-  "description": "Self-contained Claude Code statusline (HUD) — no external dependencies.",
+  "description": "A small, self-contained statusline for Claude Code.",
   "engines": {
     "node": ">=14.17"
   }

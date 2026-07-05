@@ -1,7 +1,7 @@
 # claude-statusline
 
-A self-contained [Claude Code](https://claude.com/claude-code) statusline (HUD).
-From the JSON Claude Code pipes to the `statusLine` command it renders the
+A small, self-contained [Claude Code](https://claude.com/claude-code) statusline
+(HUD). From the JSON Claude Code pipes to the `statusLine` command it renders the
 working folder, the model with thinking effort (`opus:max`), context %,
 rate limits, git info, session time, and more.
 
