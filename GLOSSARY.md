@@ -72,6 +72,11 @@ skimming. Add a term back (or a new one) when it earns its place; keep this shor
 - **rate limits** / **buckets** — usage windows: five-hour (`5h`), seven-day
   (`7d`), Opus/Sonnet weekly, monthly. From the payload + the usage API
   (`src/hud/usage-api.js`).
+- **token** / **subagents dir** / **teammate tokens** — the `token:` element's
+  session token total (`sessionTotalTokens`) / `<lead-transcript>/subagents/` where
+  Claude Code stores each Agent-tool teammate's own `agent-*.jsonl` transcript /
+  the tokens those teammates spend, which `src/hud/subagents.js` folds into
+  `token:` so it reflects the whole run, not just the lead thread.
 - **safeMode** — default `true` (forced on Windows): strips non-SGR ANSI and swaps
   Unicode bars for ASCII (`src/hud/sanitize.js`). Changes the output, so worth
   naming.

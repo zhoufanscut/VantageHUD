@@ -11,9 +11,11 @@ import { paint, paintLabel, PALETTE } from '../colors.js';
  *
  * Format: token:12.3k  (faint label + slate value, matching repo:/branch:)
  *
- * `total` is the cumulative input+output across the session; formatTokenCount
- * keeps the same k/M abbreviation thresholds (<1k raw, <1M → k, ≥1M → M).
- * Returns null when there is nothing to show.
+ * `total` is the cumulative input+output across the session — including tokens
+ * spent by teammates/subagents in their own transcripts, folded in by
+ * subagents.js so the figure reflects the whole run, not just the lead thread.
+ * formatTokenCount keeps the same k/M abbreviation thresholds (<1k raw, <1M → k,
+ * ≥1M → M). Returns null when there is nothing to show.
  */
 export function renderTokenUsage(total, labels = DEFAULT_HUD_LABELS) {
     if (!total || total <= 0)

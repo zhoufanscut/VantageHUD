@@ -253,10 +253,16 @@ function processEntry(entry, latestTodos, result, sessionTokenTotals, observedSe
     // round-trip that re-reads (and refreshes the TTL on) the prompt cache —
     // typed prompts, tool_results (incl. AskUserQuestion answers), and assistant
     // turns alike. Track the most recent one so promptTime reflects true cache
-    // age, not just the last thing the user typed. Sidechain (subagent) entries
-    // touch a *separate* context/cache, so they're excluded. Entries are
-    // chronological; the last wins. A real timestamp is required to avoid the
-    // new Date() fallback poisoning the gauge.
+    // age, not just the last thing the user typed. Entries are chronological;
+    // the last wins. A real timestamp is required to avoid the new Date()
+    // fallback poisoning the gauge.
+    //
+    // Current Claude Code writes each teammate/subagent to its own transcript
+    // under <lead>/subagents/ (see subagents.js), so the lead transcript parsed
+    // here holds no inline `isSidechain` entries. The guard is kept for older
+    // transcripts (and forward-compat) where sidechains appeared inline and
+    // would otherwise touch a separate cache yet poison the lead's cache-age
+    // gauge.
     if (entry.timestamp && !entry.isSidechain && !entry.isMeta &&
         (entry.type === "user" || entry.type === "assistant")) {
         result.lastActivityTime = timestamp;

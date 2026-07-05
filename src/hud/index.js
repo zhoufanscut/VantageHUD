@@ -7,6 +7,7 @@
  */
 import { readStdin, writeStdinCache, readStdinCache, getContextPercent, getContextPercentFromUsage, getModelId, getModelName, getEffortLevel, getRateLimitsFromStdin, stabilizeContextPercent, } from "./stdin.js";
 import { parseTranscript } from "./transcript.js";
+import { sumSubagentTokens } from "./subagents.js";
 import { readHudState, readHudConfig, writeHudState, } from "./state.js";
 import { getUsage } from "./usage-api.js";
 import { render } from "./render.js";
@@ -151,6 +152,16 @@ async function main() {
                 contextPercent = contextFromUsage;
             }
         }
+        // Fold teammate/subagent token usage into the session total. Teammates
+        // spawned via the Agent tool write their own transcripts under
+        // <lead>/subagents/ that this session's transcript never sees, so
+        // `token:` would otherwise undercount every multi-agent run. Only enrich
+        // a trustworthy lead total (leave null → hidden as-is), and mirror the
+        // lead's accounting (input+output per turn). Memoized per file on disk.
+        const leadTotalTokens = transcriptData.sessionTotalTokens;
+        const sessionTotalTokens = leadTotalTokens != null
+            ? leadTotalTokens + sumSubagentTokens(resolvedTranscriptPath, sessionKey)
+            : null;
         // Build render context
         const context = {
             contextPercent,
@@ -161,7 +172,7 @@ async function main() {
             rateLimitsResult,
             sessionHealth: calculateSessionHealth(sessionStart),
             lastRequestTokenUsage: transcriptData.lastRequestTokenUsage || null,
-            sessionTotalTokens: transcriptData.sessionTotalTokens ?? null,
+            sessionTotalTokens,
             toolCallCount: transcriptData.toolCallCount,
             agentCallCount: transcriptData.agentCallCount,
             skillCallCount: transcriptData.skillCallCount,

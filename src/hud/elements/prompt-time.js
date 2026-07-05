@@ -5,7 +5,9 @@
  * (teal while warm, rose once the 5-min cache TTL lapses). The timestamp is the
  * transcript's most recent main-thread user/assistant turn — typed prompts,
  * tool_results (incl. AskUserQuestion answers), and assistant responses all count,
- * since each re-reads and refreshes the prompt cache; subagent sidechains don't.
+ * since each re-reads and refreshes the prompt cache; teammate/subagent turns
+ * (which Claude Code records in their own separate transcripts) never touch the
+ * lead's cache and so are excluded.
  * Falls back to the last typed prompt, then a UserPromptSubmit hook timestamp
  * (hudState.lastPromptTimestamp), if the activity signal is unavailable.
  */
