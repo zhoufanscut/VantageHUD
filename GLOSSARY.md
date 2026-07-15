@@ -74,8 +74,10 @@ skimming. Add a term back (or a new one) when it earns its place; keep this shor
   (`src/hud/usage-api.js`).
 - **token** / **subagents dir** / **teammate tokens** — the `token:` element's
   session token total (`sessionTotalTokens`) / `<lead-transcript>/subagents/` where
-  Claude Code stores each Agent-tool teammate's own `agent-*.jsonl` transcript /
-  the tokens those teammates spend, which `src/hud/subagents.js` folds into
+  Claude Code stores each subagent's own `agent-*.jsonl` transcript — flat for
+  Agent-tool teammates, but nested under `workflows/wf_<id>/` for Workflow-tool
+  ("ultracode") agents, which is why `src/hud/subagents.js` walks it recursively /
+  the tokens those subagents spend, which that module folds into
   `token:` so it reflects the whole run, not just the lead thread.
 - **safeMode** — default `true` (forced on Windows): strips non-SGR ANSI and swaps
   Unicode bars for ASCII (`src/hud/sanitize.js`). Changes the output, so worth
