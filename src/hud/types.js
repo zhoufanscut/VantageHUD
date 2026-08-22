@@ -14,6 +14,7 @@ export const DEFAULT_HUD_LABELS = {
     staged: '+',
     modified: '!',
     untracked: '?',
+    conflict: '✗',
     ahead: '⇡',
     behind: '⇣',
 };
@@ -30,6 +31,7 @@ export const HUD_LOCALE_LABELS = {
         staged: '已暂存',
         modified: '已修改',
         untracked: '未跟踪',
+        conflict: '冲突',
         ahead: '领先',
         behind: '落后',
     },

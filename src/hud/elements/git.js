@@ -6,7 +6,7 @@
 import { execFileSync } from 'node:child_process';
 import { realpathSync } from 'node:fs';
 import { resolve, basename } from 'node:path';
-import { paint, paintLabel, PALETTE } from '../colors.js';
+import { paint, paintLabel, paintWarn, PALETTE } from '../colors.js';
 import { DEFAULT_HUD_LABELS } from '../types.js';
 const CACHE_TTL_MS = 30_000;
 const repoCache = new Map();
@@ -152,11 +152,25 @@ export function renderGitBranch(cwd) {
 /**
  * Get git working tree status counts.
  * Parses `git --no-optional-locks status --porcelain -b` for staged, modified, untracked,
- * ahead, and behind counts.
+ * conflicted, ahead, and behind counts.
  *
  * @param cwd - Working directory
  * @returns Status counts or null if not in a git repo
  */
+/**
+ * Test a porcelain-v1 status pair for an unmerged (conflicted) path.
+ *
+ * The seven unmerged pairs are DD, AU, UD, UA, DU, AA, UU: a `U` on either
+ * side, plus the AA/DD doubles. Git puts them in the index column, so the plain
+ * `idx !== ' '` test that follows would score a conflicted tree as cleanly
+ * staged — mid-merge the HUD then read `+3` as if nothing were wrong.
+ */
+function isUnmergedStatus(idx, wt) {
+    if (idx === 'U' || wt === 'U') {
+        return true;
+    }
+    return (idx === 'A' && wt === 'A') || (idx === 'D' && wt === 'D');
+}
 export function getGitStatusCounts(cwd) {
     const key = cwd ? resolve(cwd) : process.cwd();
     const cached = statusCache.get(key);
@@ -166,7 +180,7 @@ export function getGitStatusCounts(cwd) {
     let result = null;
     try {
         const output = git(['--no-optional-locks', 'status', '--porcelain', '-b'], cwd);
-        let staged = 0, modified = 0, untracked = 0, ahead = 0, behind = 0;
+        let staged = 0, modified = 0, untracked = 0, conflicted = 0, ahead = 0, behind = 0;
         if (output) {
             const lines = output.split('\n');
             // Parse branch line for ahead/behind: ## main...origin/main [ahead 3, behind 1]
@@ -186,6 +200,9 @@ export function getGitStatusCounts(cwd) {
                 if (idx === '?') {
                     untracked++;
                 }
+                else if (isUnmergedStatus(idx, wt)) {
+                    conflicted++;
+                }
                 else {
                     if (idx !== ' ' && idx !== '?')
                         staged++;
@@ -194,7 +211,7 @@ export function getGitStatusCounts(cwd) {
                 }
             }
         }
-        result = { staged, modified, untracked, ahead, behind };
+        result = { staged, modified, untracked, conflicted, ahead, behind };
     }
     catch {
         result = null;
@@ -204,7 +221,10 @@ export function getGitStatusCounts(cwd) {
 }
 /**
  * Render git working tree status element.
- * Format: +2 !3 ?1 ⇡1 ⇣2
+ * Format: ✗1 +2 !3 ?1 ⇡1 ⇣2
+ *
+ * Conflicts lead the fragment, in the critical tone, because an unmerged tree
+ * is the one state here you must clear before anything else lands.
  *
  * @param cwd - Working directory
  * @returns Formatted status or null if clean or not in a git repo
@@ -213,11 +233,13 @@ export function renderGitStatus(cwd, labels = DEFAULT_HUD_LABELS) {
     const counts = getGitStatusCounts(cwd);
     if (!counts)
         return null;
-    const { staged, modified, untracked, ahead, behind } = counts;
-    if (staged === 0 && modified === 0 && untracked === 0 && ahead === 0 && behind === 0) {
+    const { staged, modified, untracked, conflicted = 0, ahead, behind } = counts;
+    if (staged === 0 && modified === 0 && untracked === 0 && conflicted === 0 && ahead === 0 && behind === 0) {
         return null;
     }
     const parts = [];
+    if (conflicted > 0)
+        parts.push(paintWarn(`${labels.conflict}${conflicted}`, true));
     if (staged > 0)
         parts.push(paint(PALETTE.add, `${labels.staged}${staged}`));
     if (modified > 0)
