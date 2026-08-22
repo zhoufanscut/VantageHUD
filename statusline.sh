@@ -252,9 +252,10 @@ if [ -s "$OUTPUT_FILE" ] && ! config_newer_than "$OUTPUT_FILE"; then
 fi
 
 # Synchronous refresh: either the first render for this session, or config.json
-# changed since the last render. Claude Code v2.1.x does not re-poll the
-# statusLine until user interaction, so an async background refresh leaves the
-# pane stuck on the old frame (or "[HUD] Starting...") until they type.
+# changed since the last render. Claude Code re-runs the statusLine command only
+# on its own triggers (new assistant message, /compact, a permission-mode or vim
+# toggle, or a configured refreshInterval), so an async background refresh can
+# leave the pane stuck on the old frame (or "[HUD] Starting...") for a long time.
 if [ -s "$INPUT_FILE" ] && try_acquire_lock; then
   refresh_cache
   if [ -s "$OUTPUT_FILE" ]; then
