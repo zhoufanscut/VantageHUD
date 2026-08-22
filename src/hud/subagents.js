@@ -17,24 +17,30 @@
  *
  * These files carry full per-turn token usage the lead transcript never sees,
  * so `token:` would otherwise undercount every multi-agent run. The lead holds
- * no `isSidechain` turns of its own, so folding them in is purely additive —
- * there is nothing here to double-count. `sumSubagentTokens` mirrors the lead's
- * accounting exactly (see transcript.js): the sum of `input_tokens +
- * output_tokens` per turn, excluding cache read/creation tokens.
+ * no `isSidechain` turns of its own, so folding them in is purely additive
+ * ACROSS the lead/subagent boundary — measured over 56 sessions with teammates,
+ * no `message.id` is shared between a lead and its own `subagents/`, nor
+ * between sibling subagent files, so nothing is counted twice between them.
+ *
+ * WITHIN a single file, however, rows very much do repeat: Claude Code writes
+ * one row per content block of an assistant response, each carrying that call's
+ * usage. Summing rows counted one call 2-4x. Both the lead and every file here
+ * therefore route through `tallyFile` (token-tally.js), which de-duplicates on
+ * `message.id` and scans forward incrementally, so the two sides stay accounted
+ * for identically by construction rather than by comment.
  *
  * Because the HUD renders one Node process per frame, an in-memory cache would
- * never survive between frames — so per-file sums are memoized on disk in the
- * session cache dir, keyed on each file's size+mtime under its path relative to
- * the subagents dir. A static team then costs one stat() per file; only files
- * that grew since the last frame are re-read. Any error yields 0: the HUD must
- * never break on a subagent read.
+ * never survive between frames — so per-file tallies are memoized on disk in the
+ * session cache dir under each file's path relative to the subagents dir. A
+ * size+mtime stamp short-circuits unchanged files to zero I/O; a file that grew
+ * is resumed at its saved byte offset, so only the appended bytes are parsed.
+ * Any error yields 0: the HUD must never break on a subagent read.
  */
-import { existsSync, readdirSync, statSync, openSync, readSync, closeSync, readFileSync, } from "fs";
+import { existsSync, readdirSync, statSync, readFileSync } from "fs";
 import { basename, dirname, join, relative } from "path";
 import { sessionCacheFile } from "../lib/worktree-paths.js";
+import { tallyFile } from "./token-tally.js";
 import { atomicWriteJsonSync } from "../lib/atomic-write.js";
-// Match transcript.js: only tail-read the last few MB of a huge teammate file.
-const MAX_TAIL_BYTES = 4 * 1024 * 1024;
 // Bound the descent. The known layouts put agent files at depth 0 (Agent-tool
 // teammates) and depth 2 (workflows/wf_<id>/); the headroom covers further
 // nesting without letting a pathological tree stall a render.
@@ -58,61 +64,6 @@ export function getSubagentsDir(leadTranscriptPath) {
         return null;
     }
     return join(dirname(leadTranscriptPath), basename(leadTranscriptPath, ".jsonl"), "subagents");
-}
-/**
- * Sum `input_tokens + output_tokens` for a single usage object, matching the
- * lead's accounting (cache read/creation tokens are excluded there too).
- */
-function tokensFromUsage(usage) {
-    if (!usage) {
-        return 0;
-    }
-    const input = typeof usage.input_tokens === "number" && Number.isFinite(usage.input_tokens)
-        ? usage.input_tokens
-        : 0;
-    const output = typeof usage.output_tokens === "number" && Number.isFinite(usage.output_tokens)
-        ? usage.output_tokens
-        : 0;
-    return Math.max(0, Math.round(input)) + Math.max(0, Math.round(output));
-}
-/**
- * Read one teammate transcript and sum tokens across its turns. Files larger
- * than MAX_TAIL_BYTES are tail-read (a partial sum, matching the lead's
- * large-transcript behavior); the first line of a mid-file read is discarded
- * because it may be a torn JSON row or a split multi-byte sequence.
- */
-function sumTokensInFile(filePath, fileSize) {
-    let content;
-    if (fileSize > MAX_TAIL_BYTES) {
-        const startOffset = fileSize - MAX_TAIL_BYTES;
-        const fd = openSync(filePath, "r");
-        const buffer = Buffer.alloc(MAX_TAIL_BYTES);
-        try {
-            readSync(fd, buffer, 0, MAX_TAIL_BYTES, startOffset);
-        }
-        finally {
-            closeSync(fd);
-        }
-        content = buffer.toString("utf8");
-        const firstNewline = content.indexOf("\n");
-        content = firstNewline >= 0 ? content.slice(firstNewline + 1) : content;
-    }
-    else {
-        content = readFileSync(filePath, "utf8");
-    }
-    let total = 0;
-    for (const line of content.split("\n")) {
-        if (!line.trim()) {
-            continue;
-        }
-        try {
-            total += tokensFromUsage(JSON.parse(line).message?.usage);
-        }
-        catch {
-            // Skip malformed lines
-        }
-    }
-    return total;
 }
 /**
  * Recursively collect every teammate transcript under the subagents dir, with
@@ -159,9 +110,9 @@ function collectAgentFiles(root, dir = root, depth = 0, out = []) {
     return out;
 }
 /**
- * Sum input+output tokens across every teammate transcript under this lead
- * session, memoized per file on disk. Returns 0 when there are no teammates or
- * on any error (never throws).
+ * Sum de-duplicated input+output tokens across every teammate transcript under
+ * this lead session, memoized per file on disk. Returns 0 when there are no
+ * teammates or on any error (never throws).
  */
 export function sumSubagentTokens(leadTranscriptPath, sessionKey) {
     try {
@@ -186,10 +137,11 @@ export function sumSubagentTokens(leadTranscriptPath, sessionKey) {
                 console.error(`[HUD] subagent token sum: ${found.length} teammate files, summing the ${MAX_SUBAGENT_FILES} largest`);
             }
         }
-        // Per-file memo, keyed by path relative to the subagents dir →
-        // { key: "size:mtime", tokens }. Survives the one-process-per-render
-        // model by living in the session cache dir. Stale entries for removed
-        // files are dropped by rebuilding the map from the current listing.
+        // Per-file memo, keyed by path relative to the subagents dir → a
+        // tallyFile memo plus a "size:mtime" stamp. Survives the
+        // one-process-per-render model by living in the session cache dir. Stale
+        // entries for removed files are dropped by rebuilding the map from the
+        // current listing.
         const cachePath = sessionKey ? sessionCacheFile("subagent-tokens", sessionKey) : null;
         let cache = {};
         if (cachePath) {
@@ -204,32 +156,39 @@ export function sumSubagentTokens(leadTranscriptPath, sessionKey) {
         let total = 0;
         let changed = false;
         for (const file of files) {
-            const key = `${file.size}:${Math.round(file.mtimeMs)}`;
+            const stamp = `${file.size}:${Math.round(file.mtimeMs)}`;
             const hit = cache[file.rel];
-            let tokens;
-            if (hit && hit.key === key && typeof hit.tokens === "number") {
-                tokens = hit.tokens;
+            // Fast path: the file has not been touched since we last tallied it,
+            // so reuse the memo without opening it at all. This is what keeps a
+            // 500-file team at one stat() each per frame.
+            //
+            // `hit.consumed === file.size` is the load-bearing half. `tallyFile`
+            // reports failure by returning a memo that did NOT reach the end of
+            // the file, and a stamp alone cannot tell that apart from success —
+            // so without this check one unreadable frame (ENOENT on a rotated
+            // file, EACCES, EMFILE) would be stamped as authoritative and, since
+            // a finished transcript never changes size or mtime again, freeze
+            // that teammate at a wrong total (usually 0) for the whole session.
+            // Requiring full coverage makes a failed tally retry next frame.
+            // Costs nothing in practice: every one of the 509 real transcripts
+            // on this machine ends with a newline, so `consumed === size` holds
+            // and the fast path still fires everywhere.
+            if (hit &&
+                hit.stamp === stamp &&
+                typeof hit.total === "number" &&
+                hit.consumed === file.size) {
+                next[file.rel] = hit;
+                total += hit.total;
+                continue;
             }
-            else {
-                try {
-                    tokens = sumTokensInFile(file.path, file.size);
-                }
-                catch {
-                    // A live teammate file can rotate or vanish between the walk
-                    // and the read. Fall back to its last good sum rather than
-                    // dropping the teammate to 0 for this frame. Store `hit`
-                    // verbatim — under its OLD key — so the mismatch survives and
-                    // the next frame retries, instead of freezing a stale value.
-                    if (hit && typeof hit.tokens === "number") {
-                        next[file.rel] = hit;
-                        total += hit.tokens;
-                    }
-                    continue;
-                }
-                changed = true;
-            }
-            next[file.rel] = { key, tokens };
-            total += tokens;
+            // Changed (or unseen): resume the tally at the memo's byte offset so
+            // only the appended bytes are parsed. Entries written by the older
+            // `{ key, tokens }` format carry no `fp`, so tallyFile rescans them
+            // from 0 — a one-frame cost, then they migrate to the new shape.
+            const memo = tallyFile(file.path, file.size, hit);
+            next[file.rel] = { ...memo, stamp };
+            total += memo.total;
+            changed = true;
         }
         // Persist when a file changed or the set of teammates changed (prune).
         if (cachePath &&

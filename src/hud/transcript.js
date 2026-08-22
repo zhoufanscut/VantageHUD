@@ -67,13 +67,6 @@ export async function parseTranscript(transcriptPath) {
         return result;
     }
     const latestTodos = [];
-    const sessionTokenTotals = {
-        inputTokens: 0,
-        outputTokens: 0,
-        seenUsage: false,
-    };
-    let sessionTotalsReliable = false;
-    const observedSessionIds = new Set();
     try {
         const stat = statSync(transcriptPath);
         const fileSize = stat.size;
@@ -84,15 +77,12 @@ export async function parseTranscript(transcriptPath) {
                     continue;
                 try {
                     const entry = JSON.parse(line);
-                    processEntry(entry, latestTodos, result, sessionTokenTotals, observedSessionIds);
+                    processEntry(entry, latestTodos, result);
                 }
                 catch {
                     // Skip malformed lines
                 }
             }
-            // Token totals from a tail-read are partial (we only saw the last MAX_TAIL_BYTES).
-            // Still surface them when token data was found so the HUD shows something useful.
-            sessionTotalsReliable = sessionTokenTotals.seenUsage;
         }
         else {
             const fileStream = createReadStream(transcriptPath);
@@ -105,22 +95,18 @@ export async function parseTranscript(transcriptPath) {
                     continue;
                 try {
                     const entry = JSON.parse(line);
-                    processEntry(entry, latestTodos, result, sessionTokenTotals, observedSessionIds);
+                    processEntry(entry, latestTodos, result);
                 }
                 catch {
                     // Skip malformed lines
                 }
             }
-            sessionTotalsReliable = observedSessionIds.size <= 1;
         }
     }
     catch {
         return finalizeTranscriptResult(result, []);
     }
     result.todos = latestTodos;
-    if (sessionTotalsReliable && sessionTokenTotals.seenUsage) {
-        result.sessionTotalTokens = sessionTokenTotals.inputTokens + sessionTokenTotals.outputTokens;
-    }
     const pendingPermissions = Array.from(pendingPermissionMap.values()).map(clonePendingPermission);
     const finalized = finalizeTranscriptResult(result, pendingPermissions);
     if (cacheKey) {
@@ -231,19 +217,17 @@ function extractTargetSummary(input, toolName) {
 /**
  * Process a single transcript entry
  */
-function processEntry(entry, latestTodos, result, sessionTokenTotals, observedSessionIds) {
+function processEntry(entry, latestTodos, result) {
     const timestamp = entry.timestamp ? new Date(entry.timestamp) : new Date();
-    if (entry.sessionId) {
-        observedSessionIds?.add(entry.sessionId);
-    }
+    // Last-request usage only — the point-in-time snapshot `ctx:` needs. The
+    // cumulative `token:` total is NOT computed here: a tail-read sees only the
+    // last MAX_TAIL_BYTES and would publish a truncated sum as a complete one
+    // (measured on a 25.4 MB transcript: 739,480 against a true 1,910,334, i.e.
+    // 39% of the truth, and able to run backwards as the window slid).
+    // token-tally.js owns that figure and scans the whole file incrementally.
     const usage = extractLastRequestTokenUsage(entry.message?.usage);
     if (usage) {
         result.lastRequestTokenUsage = usage;
-        if (sessionTokenTotals) {
-            sessionTokenTotals.inputTokens += usage.inputTokens;
-            sessionTokenTotals.outputTokens += usage.outputTokens;
-            sessionTokenTotals.seenUsage = true;
-        }
     }
     // Set session start time from first entry
     if (!result.sessionStart && entry.timestamp) {
