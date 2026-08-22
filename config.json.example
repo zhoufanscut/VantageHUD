@@ -9,7 +9,6 @@
     "contextBar": true,
     "showTokens": true,
     "sessionHealth": true,
-    "promptTime": true,
     "showCallCounts": true,
     "gitRepo": true,
     "gitBranch": true,

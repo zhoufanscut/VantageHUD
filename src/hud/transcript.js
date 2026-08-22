@@ -48,8 +48,6 @@ export async function parseTranscript(transcriptPath) {
         agentCallCount: 0,
         skillCallCount: 0,
         lastToolName: null,
-        lastPromptTime: undefined,
-        lastActivityTime: undefined,
     };
     if (!transcriptPath || !existsSync(transcriptPath)) {
         return result;
@@ -139,8 +137,6 @@ function cloneTranscriptData(result) {
         ...result,
         todos: result.todos.map((todo) => ({ ...todo })),
         sessionStart: cloneDate(result.sessionStart),
-        lastPromptTime: cloneDate(result.lastPromptTime),
-        lastActivityTime: cloneDate(result.lastActivityTime),
         lastActivatedSkill: result.lastActivatedSkill
             ? {
                 ...result.lastActivatedSkill,
@@ -233,35 +229,11 @@ function processEntry(entry, latestTodos, result) {
     if (!result.sessionStart && entry.timestamp) {
         result.sessionStart = timestamp;
     }
-    // Prompt-cache-age signal. Every main-thread user/assistant entry is an API
-    // round-trip that re-reads (and refreshes the TTL on) the prompt cache —
-    // typed prompts, tool_results (incl. AskUserQuestion answers), and assistant
-    // turns alike. Track the most recent one so promptTime reflects true cache
-    // age, not just the last thing the user typed. Entries are chronological;
-    // the last wins. A real timestamp is required to avoid the new Date()
-    // fallback poisoning the gauge.
-    //
-    // Current Claude Code writes each teammate/subagent to its own transcript
-    // under <lead>/subagents/ (see subagents.js), so the lead transcript parsed
-    // here holds no inline `isSidechain` entries. The guard is kept for older
-    // transcripts (and forward-compat) where sidechains appeared inline and
-    // would otherwise touch a separate cache yet poison the lead's cache-age
-    // gauge.
-    if (entry.timestamp && !entry.isSidechain && !entry.isMeta &&
-        (entry.type === "user" || entry.type === "assistant")) {
-        result.lastActivityTime = timestamp;
-    }
     const content = entry.message?.content;
-    // String-shaped user content carries the most recent real user-typed prompt.
-    // Assistant turns and tool results use array content; task-notifications and
-    // slash-command / command-output entries (<command-name>, <local-command-stdout>,
-    // <local-command-caveat>, …) are string-content user entries that start with
-    // "<". Requiring a real timestamp avoids the new Date() fallback poisoning the
-    // gauge. Entries are chronological, so the last wins.
+    // String-shaped user content is a typed prompt or a slash-command /
+    // command-output entry; neither carries tool_use or todo blocks, so there is
+    // nothing further to scan.
     if (typeof content === "string") {
-        if (entry.timestamp && entry.type === "user" && !entry.isMeta && !entry.isCompactSummary && !content.trimStart().startsWith("<")) {
-            result.lastPromptTime = timestamp;
-        }
         return;
     }
     if (!content || !Array.isArray(content))

@@ -64,7 +64,7 @@ export function resolveHudLabels(locale, labels) {
 export const DEFAULT_ELEMENT_ORDER = {
     main: [
         'pathLabel', 'model', 'rateLimits',
-        'contextBar', 'tokens', 'session', 'promptTime',
+        'contextBar', 'tokens', 'session',
         'callCounts', 'gitRepo', 'gitBranch', 'gitStatus',
     ],
 };
@@ -89,7 +89,6 @@ export const DEFAULT_HUD_CONFIG = {
         contextBar: true,
         showTokens: true, // tokens element — On by default; users can disable in config.json
         sessionHealth: true, // session element
-        promptTime: true, // On by default; users can disable in config.json
         showCallCounts: true, // callCounts element — tool/agent/skill counts (Issue #710)
         gitRepo: true, // Show repository name by default
         gitBranch: true, // Show branch (and worktree suffix) by default

@@ -10,7 +10,6 @@ import { renderContext, renderContextWithBar } from "./elements/context.js";
 import { renderRateLimits, renderRateLimitsWithBar, renderRateLimitsError } from "./elements/limits.js";
 import { renderSession } from "./elements/session.js";
 import { renderTokenUsage } from "./elements/token-usage.js";
-import { renderPromptTime } from "./elements/prompt-time.js";
 import { renderGitRepo, renderGitBranch, renderGitStatus } from "./elements/git.js";
 import { renderModel } from "./elements/model.js";
 import { renderCallCounts } from "./elements/call-counts.js";
@@ -225,11 +224,6 @@ export async function render(context, config) {
             if (errorIndicator)
                 rendered.set("rateLimits", errorIndicator);
         }
-    }
-    if (enabledElements.promptTime) {
-        const prompt = renderPromptTime(context.promptTime, new Date());
-        if (prompt)
-            rendered.set("promptTime", prompt);
     }
     if (enabledElements.sessionHealth && context.sessionHealth) {
         const session = renderSession(context.sessionHealth);

@@ -17,9 +17,8 @@
  * element files), not an aspirational role.
  *   text     path text — the only consumer
  *   label    workhorse muted tone: every `xxx:` prefix, `(reset)` tails, and the
- *            count numbers in callCounts / the promptTime fallback
- *   faint    quietest tone: `($spent/$limit)`, the stale `*`, `prompt:` fallback,
- *            `[API 429]`
+ *            count numbers in callCounts
+ *   faint    quietest tone: `($spent/$limit)`, the stale `*`, `[API 429]`
  *   sep      the ` | ` separator and the empty gauge-bar track (`░`)
  *   gradLow  usage tier "calm" (< 70%) — ALSO the static value tone for
  *            repo: / branch: / token: (so the calm-tier and identity-value
