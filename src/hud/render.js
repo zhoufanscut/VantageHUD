@@ -11,6 +11,8 @@ import { renderRateLimits, renderRateLimitsWithBar, renderRateLimitsError } from
 import { renderSession } from "./elements/session.js";
 import { renderTokenUsage } from "./elements/token-usage.js";
 import { renderGitRepo, renderGitBranch, renderGitStatus } from "./elements/git.js";
+import { renderSvnRepo, renderSvnBranch, renderSvnStatus, isSvnWorkingCopy } from "./elements/svn.js";
+import { getWorktreeRoot } from "../lib/worktree-paths.js";
 import { renderModel } from "./elements/model.js";
 import { renderCallCounts } from "./elements/call-counts.js";
 /**
@@ -172,20 +174,37 @@ export async function render(context, config) {
     // The layout (or DEFAULT_ELEMENT_ORDER) determines final ordering.
     const rendered = new Map();
     // -- main-line elements --
+    // The three `git*` elements are VCS slots covering both supported systems.
+    // The choice is made ONCE, here, rather than per slot: an element-by-element
+    // `??` fallback lets the slots disagree — a git clone sitting inside an SVN
+    // working copy has no `origin`, so `repo:` would fall through to the SVN
+    // project while `branch:` stayed on git, and a *clean* git tree (null
+    // status) would fall through to `svn status`, which reports that whole
+    // directory as unversioned. Git wins ties; SVN answers only when the
+    // directory is not a git worktree at all.
+    const wantsVcs = enabledElements.gitRepo || enabledElements.gitBranch || enabledElements.gitStatus;
+    // Cheap by construction: one `git rev-parse` for the decision, and the SVN
+    // side is a filesystem walk for `.svn`, so a git checkout never spawns `svn`
+    // and an SVN checkout never spawns the three git element commands.
+    const useSvn = wantsVcs
+        && getWorktreeRoot(context.cwd) === null
+        && isSvnWorkingCopy(context.cwd);
     if (enabledElements.gitRepo) {
-        const gitRepoElement = renderGitRepo(context.cwd);
-        if (gitRepoElement)
-            rendered.set("gitRepo", gitRepoElement);
+        const repoElement = useSvn ? renderSvnRepo(context.cwd) : renderGitRepo(context.cwd);
+        if (repoElement)
+            rendered.set("gitRepo", repoElement);
     }
     if (enabledElements.gitBranch) {
-        const gitBranchElement = renderGitBranch(context.cwd);
-        if (gitBranchElement)
-            rendered.set("gitBranch", gitBranchElement);
+        const branchElement = useSvn ? renderSvnBranch(context.cwd) : renderGitBranch(context.cwd);
+        if (branchElement)
+            rendered.set("gitBranch", branchElement);
     }
     if (enabledElements.gitStatus) {
-        const gitStatusElement = renderGitStatus(context.cwd, hudLabels);
-        if (gitStatusElement)
-            rendered.set("gitStatus", gitStatusElement);
+        const statusElement = useSvn
+            ? renderSvnStatus(context.cwd, hudLabels, context.sessionKey)
+            : renderGitStatus(context.cwd, hudLabels);
+        if (statusElement)
+            rendered.set("gitStatus", statusElement);
     }
     const modelSource = enabledElements.modelFormat === 'full'
         ? context.modelId ?? context.modelName

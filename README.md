@@ -3,7 +3,7 @@
 A small, self-contained [Claude Code](https://claude.com/claude-code) statusline
 (HUD). From the JSON Claude Code pipes to the `statusLine` command it renders the
 working folder, the model with thinking effort (`opus:max`), context %,
-rate limits, git info, session time, and more.
+rate limits, git (or Subversion) info, session time, and more.
 
 - **No dependencies.** Pure Node built-ins — no `node_modules`, no native code.
 - **Portable.** Clone anywhere, on macOS or Linux, with any Node `>=14.17`.
@@ -112,6 +112,12 @@ git -C ~/.claude/hud pull
 
 ## Notes
 - The working-folder path shows `~` in place of `$HOME` to stay compact.
+- `repo:` / `branch:` / working-tree counts cover **git and Subversion**. In an
+  SVN checkout the branch comes from the URL convention (`trunk`,
+  `branches/<name>`, `tags/<name>`) and carries the working-copy revision, e.g.
+  `branch:2.1@12345`. Both `svn` calls are local — nothing contacts the server,
+  which is why SVN shows no `⇡`/`⇣` ahead/behind — and the working-copy scan is
+  cached for 30s so a large checkout is not re-walked every frame.
 - All runtime files live in a per-session subfolder of `cache/`, i.e.
   `cache/<session>/<name>.json` (the render cache, HUD state, and the
   context-stabilization snapshot grouped per session). Centralized under the HUD

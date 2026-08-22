@@ -167,6 +167,9 @@ async function main() {
         // Build render context
         const context = {
             contextPercent,
+            // Threaded through so elements can memoize across renders (the SVN
+            // status walk does; one process per render kills in-memory caches).
+            sessionKey,
             modelName: getModelName(stdin),
             modelId: getModelId(stdin),
             effortLevel: getEffortLevel(stdin),

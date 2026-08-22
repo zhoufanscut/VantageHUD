@@ -79,6 +79,14 @@ skimming. Add a term back (or a new one) when it earns its place; keep this shor
   ("ultracode") agents, which is why `src/hud/subagents.js` walks it recursively /
   the tokens those subagents spend, which that module folds into
   `token:` so it reflects the whole run, not just the lead thread.
+- **`gitRepo` / `gitBranch` / `gitStatus`** — the three **VCS slots**, not
+  git-only elements: git answers first (`src/hud/elements/git.js`) and
+  Subversion fills a slot only when git returns nothing
+  (`src/hud/elements/svn.js`). The config keys keep their `git*` names.
+- **working copy** *(SVN)* — the SVN counterpart to a git worktree: the tree
+  holding a `.svn` directory. `findSvnWorkingCopyRoot`
+  (`src/lib/worktree-paths.js`) finds its root by filesystem walk, never by
+  running `svn`.
 - **safeMode** — default `true` (forced on Windows): strips non-SGR ANSI and swaps
   Unicode bars for ASCII (`src/hud/sanitize.js`). Changes the output, so worth
   naming.
@@ -95,6 +103,7 @@ The pairs most likely to make us talk past each other:
 | **render context** / **context window** (`ctx`) / "context" *(the chat)* | the object passed to `render()` / the model's token budget % / the conversation history. In code, "context" usually means the first. |
 | **session key** / **session id** | the cache-folder name (sanitized, sometimes a checksum) / Claude Code's conversation UUID (one input to the key). |
 | **element** / **enable flag** | the `renderXxx()` function / the config boolean (often same name) that gates it. |
+| **branch** *(git)* / **branch** *(SVN)* | a real ref / a URL convention — `trunk`, `branches/<name>`, `tags/<name>` parsed out of the checkout URL, since SVN has no branches. |
 | `DEFAULT_HUD_CONFIG.theme` / the real switch | that field is **documentation-only**; the active theme is resolved in `themes.js` (`HUD_THEME` / `settings.json`). |
 | **HUD** / **statusline.sh** / **statusline.mjs** | the project / the shell caching wrapper / the Node entry point. |
 | `src/lib/` / `src/utils/`, `src/cli/utils/`, `src/platform/` | `src/lib/` is the current home for shared utils; the others are the **old** locations it moved from — import from `../lib/…`. |

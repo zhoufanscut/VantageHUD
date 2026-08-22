@@ -180,17 +180,73 @@ export function listSessionCacheFiles(baseName) {
         return [];
     }
 }
+/** Upward `.svn` search bound — a stop for pathological paths, never reached in practice. */
+const MAX_SVN_WALK_DEPTH = 64;
 /**
- * Resolve a directory path to its git worktree root.
+ * Find the root of the Subversion working copy containing `directory`.
  *
- * Walks up from `directory` using `git rev-parse --show-toplevel`.
- * Falls back to `getWorktreeRoot(process.cwd())`, then `process.cwd()`.
+ * Pure filesystem, deliberately: this runs on every render for any directory
+ * git disowned, and it is the gate in front of every `svn` subprocess — a
+ * non-SVN directory must not pay for SVN support.
+ *
+ * Returns the *topmost* contiguous ancestor holding a `.svn`, which is the
+ * working-copy root under both on-disk layouts: 1.7+ keeps a single `.svn` at
+ * the root, while pre-1.7 checkouts put one in every directory (there the
+ * nearest `.svn` is merely the subdirectory you happen to be standing in).
+ *
+ * @param directory - Any directory inside (or above) a working copy
+ * @returns The working-copy root, or null when there is no `.svn` above it
+ */
+export function findSvnWorkingCopyRoot(directory) {
+    let dir = directory ? resolve(directory) : process.cwd();
+    // `resolve` does not follow symlinks, so without this the climb walks the
+    // *link's* parents: a cwd symlinked into a 1.7+ working copy (only the root
+    // holds `.svn`) would find nothing and the VCS fragments would vanish.
+    // git.js canonicalizes for the same reason.
+    try {
+        dir = realpathSync(dir);
+    }
+    catch {
+        // Unreadable or missing — walk the resolved path as-is.
+    }
+    let root = null;
+    for (let depth = 0; depth < MAX_SVN_WALK_DEPTH; depth += 1) {
+        let hasSvnDir = false;
+        try {
+            hasSvnDir = statSync(join(dir, '.svn')).isDirectory();
+        }
+        catch {
+            // No `.svn` here, or the path is unreadable.
+        }
+        if (hasSvnDir) {
+            root = dir;
+        }
+        else if (root) {
+            // The contiguous run of `.svn` ancestors ended — `root` is the top.
+            break;
+        }
+        const parent = dirname(dir);
+        if (parent === dir) {
+            break;
+        }
+        dir = parent;
+    }
+    return root;
+}
+/**
+ * Resolve a directory path to its version-control root.
+ *
+ * Walks up from `directory` using `git rev-parse --show-toplevel`, then falls
+ * back to the Subversion working-copy root, then to the directory as given.
+ * Only a *missing* `directory` falls back to the process cwd — a session's own
+ * cwd is better information than the process's, and substituting the latter
+ * made a session in any non-git directory report the HUD install's repo.
  *
  * Used to derive the cwd shown in the HUD and to resolve transcript paths —
  * not for state location (runtime files live under getCacheDir()/<session>/).
  *
- * @param directory - Any directory inside a git worktree (optional)
- * @returns The worktree root (never a subdirectory)
+ * @param directory - Any directory inside a git worktree or SVN checkout (optional)
+ * @returns The repository/working-copy root (never a subdirectory), else the directory itself
  */
 export function resolveToWorktreeRoot(directory) {
     if (directory) {
@@ -198,11 +254,17 @@ export function resolveToWorktreeRoot(directory) {
         const root = getWorktreeRoot(resolved);
         if (root)
             return root;
-        console.error('[worktree] non-git directory provided, falling back to process root', {
-            directory: resolved,
-        });
+        const svnRoot = findSvnWorkingCopyRoot(resolved);
+        if (svnRoot)
+            return svnRoot;
+        if (process.env.HUD_DEBUG) {
+            console.error('[worktree] neither a git worktree nor an svn checkout, using it as given', {
+                directory: resolved,
+            });
+        }
+        return resolved;
     }
-    // Fallback: derive from process CWD (the MCP server / CLI entry point)
+    // No directory given (e.g. a detached reader): derive from the process CWD.
     return getWorktreeRoot(process.cwd()) || process.cwd();
 }
 // ============================================================================
