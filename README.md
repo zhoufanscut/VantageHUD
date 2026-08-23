@@ -93,6 +93,32 @@ cp ~/.claude/hud/config.json.example ~/.claude/hud/config.json
 - Common knobs: `theme` (`aurora` | `ember`), `locale` (`en` | `zh-CN`), and the
   `elements` toggles (e.g. `gitBranch`, `contextBar`, `rateLimits`, `showTokens`).
   See `config.json.example` for the full list.
+- **Custom colors:** define your own palettes under `themes`, then select one with
+  `theme`. Each palette sets any subset of the 10 color tokens as `#rrggbb`; the
+  rest are inherited from `base` (another palette, default `aurora`):
+  ```json
+  { "theme": "mine", "themes": { "mine": { "base": "ember", "gradHigh": "#e06c75" } } }
+  ```
+  `config.json.example` carries an entry with all 10 tokens spelled out. What each
+  one paints:
+
+  | token | paints |
+  | --- | --- |
+  | `text` | the cwd path |
+  | `label` | every `xxx:` prefix, `(reset)` tails, the `callCounts` numbers |
+  | `faint` | `($spent/$limit)`, the stale `*`, `[API 429]` |
+  | `sep` | the ` \| ` separator **and** the empty gauge track (`░`) |
+  | `gradLow` | usage < 70%, plus the `repo:` / `branch:` / `token:` values and effort `max` |
+  | `gradMid` | usage 70–84%, `[API auth]` / `[API err]`, effort `high` |
+  | `gradHigh` | usage ≥ 85%, conflict counts, effort `low` |
+  | `add` | staged / ahead counts |
+  | `del` | modified / behind counts |
+  | `track` | untracked counts |
+
+  Naming a palette after a bundled one (`"ember": { … }`) retints it in place —
+  its `base` defaults to that same bundled palette. Names and keys are matched
+  case-insensitively. A value that isn't `#` plus 6 hex digits keeps the inherited
+  color; run with `HUD_DEBUG=1` to see why.
 - `modelFormat` (inside `elements`) sets how the model name reads: `short`
   (`opus`, the default), `versioned` (`opus 4.8`), or `full` (raw id,
   `claude-opus-4-8`). The `:effort` suffix is a separate `effort` toggle.

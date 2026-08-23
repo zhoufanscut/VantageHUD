@@ -44,12 +44,21 @@ skimming. Add a term back (or a new one) when it earns its place; keep this shor
 
 ## Theming
 
-- **theme** — a named palette: `aurora` (default; cool slate) or `ember` (warm
-  gruvbox). Resolved at import in `themes.js`: `HUD_THEME` env > `config.json`
-  `theme` > `DEFAULT_THEME`.
-- **palette** / **token** — the color *data* behind a theme: 10 named `[r,g,b]`
-  **tokens** (`text`, `label`, `gradLow/Mid/High`, …). Defined only in
-  `THEMES` (`src/hud/themes.js`); every element colors through them.
+- **theme** — a named palette: bundled `aurora` (default; cool slate) or `ember`
+  (warm gruvbox), or one the user defines under `config.json` `themes`. Resolved
+  at import in `themes.js`: `HUD_THEME` env > `config.json` `theme` >
+  `DEFAULT_THEME`; both tiers search bundled **and** user themes.
+- **palette** / **token** — the color *data* behind a theme: 10 named **tokens**
+  (`text`, `label`, `gradLow/Mid/High`, …), authored as `#rrggbb` in `THEMES`
+  (`src/hud/themes.js`) and in `config.json` alike. `themes.js` converts them to
+  the `[r,g,b]` triples `colors.js` consumes; every element colors through them.
+- **user theme** — an entry under the `config.json` `themes` key. May set any
+  subset of the 10 tokens; the rest come from **`base`**.
+- **`base`** — reserved key inside a user theme naming the palette to inherit
+  unset tokens from. Never an 11th token. Defaults to the theme's *own* name when
+  it shadows a bundled palette, else to `DEFAULT_THEME` — so `"themes": {"ember":
+  {…}}` retints ember in place, and its `base` resolves to the *bundled* ember
+  rather than looping.
 
 ## Runtime & state
 
@@ -104,6 +113,6 @@ The pairs most likely to make us talk past each other:
 | **session key** / **session id** | the cache-folder name (sanitized, sometimes a checksum) / Claude Code's conversation UUID (one input to the key). |
 | **element** / **enable flag** | the `renderXxx()` function / the config boolean (often same name) that gates it. |
 | **branch** *(git)* / **branch** *(SVN)* | a real ref / a URL convention — `trunk`, `branches/<name>`, `tags/<name>` parsed out of the checkout URL, since SVN has no branches. |
-| `DEFAULT_HUD_CONFIG.theme` / the real switch | that field is **documentation-only**; the active theme is resolved in `themes.js` (`HUD_THEME` / `settings.json`). |
+| `DEFAULT_HUD_CONFIG.theme` / `.themes` / the real switch | both fields are **documentation-only** (`mergeWithDefaults` drops them); the active palette is resolved in `themes.js` from its own import-time read of `config.json` (`HUD_THEME` env first). |
 | **HUD** / **statusline.sh** / **statusline.mjs** | the project / the shell caching wrapper / the Node entry point. |
 | `src/lib/` / `src/utils/`, `src/cli/utils/`, `src/platform/` | `src/lib/` is the current home for shared utils; the others are the **old** locations it moved from — import from `../lib/…`. |

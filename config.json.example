@@ -1,6 +1,21 @@
 {
   "locale": "en",
   "theme": "aurora",
+  "themes": {
+    "custom": {
+      "base": "aurora",
+      "text": "#c8d3e8",
+      "label": "#8fd0d8",
+      "faint": "#6e7896",
+      "sep": "#48506a",
+      "gradLow": "#7fd4c4",
+      "gradMid": "#e3c08a",
+      "gradHigh": "#e0909e",
+      "add": "#8fd0b8",
+      "del": "#e0909e",
+      "track": "#8fc4d8"
+    }
+  },
   "elements": {
     "pathLabel": true,
     "model": true,
