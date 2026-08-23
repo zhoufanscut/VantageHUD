@@ -119,7 +119,7 @@ node ~/.claude/hud/preview-themes.mjs
 | `ember` | warm, gold and orange — Gruvbox family | dark terminal |
 | `nebula` | vivid, mauve and pink — Catppuccin Mocha family | dark terminal |
 | `graphite` | near-monochrome; only the usage ramp carries hue, for a HUD that recedes | dark terminal |
-| `daylight` | GitHub-light family — every color is dark enough to read on white | **light terminal** |
+| `daylight` | GitHub-light family — every color reads on white (`sep` aside, which is a hairline) | **light terminal** |
 
 Pick one in `config.json`:
 
@@ -127,12 +127,18 @@ Pick one in `config.json`:
 { "theme": "nebula" }
 ```
 
-Or try one without touching a file — `HUD_THEME` wins over `config.json` for that
-run:
+Or look at one without touching a file — `HUD_THEME` wins over `config.json`:
 
 ```sh
-HUD_THEME=nebula
+HUD_THEME=nebula node ~/.claude/hud/preview-themes.mjs
 ```
+
+To make the *live* HUD use it that way you have to `export HUD_THEME=nebula`
+**before** starting Claude Code — the statusline is spawned with Claude Code's
+launch environment, so exporting it in an already-running session changes
+nothing. Editing `config.json` is the reliable way, and it is also the only one
+that forces an immediate re-render: the shell wrapper bypasses its cache on
+`config.json`'s mtime, so an env change would land a frame late.
 
 **On a light terminal, use `daylight`.** The other four are built for a dark
 background and wash out on white.
@@ -151,7 +157,7 @@ color comparison, not a live HUD. Your own themes from `config.json` show up too
 
 ### What each color paints
 
-A palette is exactly these 10 **tokens**. Two do double duty, which is worth
+A palette is exactly these 10 **tokens**. Several do double duty, which is worth
 knowing before you change them:
 
 | token | paints |
@@ -178,7 +184,7 @@ Handy for forking one — copy a column, change what you want:
 | --- | --- | --- | --- | --- | --- |
 | `text` | `#c8d3e8` | `#ebdbb2` | `#cdd6f4` | `#e6e6e6` | `#24292f` |
 | `label` | `#8fd0d8` | `#a89984` | `#cba6f7` | `#9e9e9e` | `#0550ae` |
-| `faint` | `#6e7896` | `#928374` | `#6c7086` | `#6b6b6b` | `#6e7781` |
+| `faint` | `#6e7896` | `#928374` | `#6c7086` | `#7d7d7d` | `#6e7781` |
 | `sep` | `#48506a` | `#665c54` | `#45475a` | `#3f3f3f` | `#d0d7de` |
 | `gradLow` | `#7fd4c4` | `#98971a` | `#94e2d5` | `#b0b0b0` | `#0a7c5a` |
 | `gradMid` | `#e3c08a` | `#fabd2f` | `#f9e2af` | `#b8964f` | `#9a6d00` |
@@ -208,7 +214,7 @@ with all 10 tokens spelled out if you would rather start from a full palette.
 - **Retint a bundled theme in place** by naming your palette after it —
   `"themes": { "ember": { "label": "#ff0000" } }` is ember with red labels, since
   `base` defaults to the bundled palette of the same name.
-- **Names and keys are case-insensitive**; `base` chains as deep as you like.
+- **Names and keys are case-insensitive**; `base` chains up to 16 deep.
 - **Colors only.** Glyphs, the ` \| ` separator and the 70/85 thresholds are not
   part of a theme (thresholds live under `thresholds`), so a color can never
   disagree with the `COMPRESS?` text beside it.

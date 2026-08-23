@@ -89,8 +89,9 @@ export const THEMES = {
         track: '#fe8019', // orange
     },
     // Nebula — vivid dark with mauve/pink accents (Catppuccin Mocha family).
-    // The most saturated of the set, and the only one whose tokens all stay
-    // distinct after the 16-color fallback.
+    // The most saturated of the set, and the one that survives the 16-color
+    // fallback best: a single collision (text=faint), against 2 for daylight,
+    // 7 aurora, 8 ember, 21 graphite.
     nebula: {
         text: '#cdd6f4', // periwinkle
         label: '#cba6f7', // mauve
@@ -105,13 +106,15 @@ export const THEMES = {
     },
     // Graphite — near-monochrome dark, for a HUD that recedes. Only the usage
     // ramp carries real hue; git counts are barely-tinted grays that stay
-    // legible by glyph. Trade-off: at 16 colors those tints collapse to white
-    // (add/del/track become indistinguishable) — deliberate, since the
-    // alternative is saturating them and losing the point of the theme.
+    // legible by glyph. Trade-off: at 16 colors every non-ramp token collapses
+    // to white (21 colliding pairs, by far the most of the five) — deliberate,
+    // since saturating them enough to survive `rgbTo16` would lose the point of
+    // the theme, and the +/!/?/✗ glyphs still carry the meaning.
     graphite: {
         text: '#e6e6e6', // near-white
         label: '#9e9e9e', // mid gray
-        faint: '#6b6b6b', // dim gray
+        faint: '#7d7d7d', // dim gray (kept above #787878: rgbTo16 sends anything
+        //                     darker to black, which is invisible on a dark terminal)
         sep: '#3f3f3f', // charcoal hairline
         gradLow: '#b0b0b0', // light gray (calm reads as "no color")
         gradMid: '#b8964f', // muted gold
@@ -121,9 +124,9 @@ export const THEMES = {
         track: '#8f9db0', // blue-gray
     },
     // Daylight — the only palette built for a LIGHT terminal background
-    // (GitHub-light family); every token is dark enough to read on white. On a
-    // dark background it is unusable, which is the point: the other four assume
-    // a dark terminal.
+    // (GitHub-light family); every token except `sep` clears 4.5:1 on white, and
+    // `sep` is a hairline and gauge track, not text. On a dark background it is
+    // unusable, which is the point: the other four assume a dark terminal.
     daylight: {
         text: '#24292f', // near-black
         label: '#0550ae', // blue
@@ -175,11 +178,15 @@ for (const key of [BASE_KEY, ...THEME_TOKENS])
  * @param {Record<string, unknown>} user
  */
 function readBase(user) {
+    let found;
+    // Last match wins, matching the token-override loop below — the two must
+    // agree, or `{"Base":…,"base":…}` and `{"Label":…,"label":…}` would resolve
+    // in opposite directions.
     for (const key of Object.keys(user)) {
         if (CANONICAL_KEY[String(key).trim().toLowerCase()] === BASE_KEY)
-            return user[key];
+            found = user[key];
     }
-    return undefined;
+    return found;
 }
 
 /**

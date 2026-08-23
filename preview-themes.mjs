@@ -39,7 +39,7 @@ if (args.includes('-h') || args.includes('--help')) {
     console.log(`Usage: node preview-themes.mjs [theme...] [--depth=0|1|2] [--ascii]
 
   (no theme)   preview every bundled and user-defined theme
-  --depth=N    force color depth: 2 truecolor, 1 = 256, 0 = basic 16
+  --depth=N    force color depth: 2 = truecolor, 1 = 256, 0 = basic 16
   --ascii      swap bar glyphs for ASCII, as safeMode does when rendering
 
 Available: ${listThemes().join(', ')}`);
@@ -67,14 +67,28 @@ if (depthFlag) {
     // Windows drive paths (/C:/…), which spawn cannot resolve.
     const rest = args.filter((a) => a !== depthFlag);
     const run = spawnSync(process.execPath, [fileURLToPath(import.meta.url), ...rest], { env, stdio: 'inherit' });
-    process.exit(run.status ?? 0);
+    if (run.error) {
+        console.error(run.error.message);
+        process.exit(1);
+    }
+    // `status` is null when the child died on a signal — not a success.
+    process.exit(run.status ?? 1);
 }
 
 const ascii = args.includes('--ascii');
 const FILL = ascii ? '#' : '█';
 const EMPTY = ascii ? '-' : '░';
 
-const wanted = args.filter((a) => !a.startsWith('-'));
+// Anything left starting with `-` is a typo: a bare `--depth`, `--asci`,
+// `--ascii=1`. Silently ignoring them rendered the default view and looked like
+// the flag had worked.
+const badFlag = args.find((a) => a.startsWith('-') && a !== '--ascii');
+if (badFlag) {
+    console.error(`unknown option: ${badFlag}\ntry --help`);
+    process.exit(1);
+}
+
+const wanted = args.filter((a) => !a.startsWith('-')).map((a) => a.trim());
 const unknown = wanted.filter((name) => !listThemes().includes(name.toLowerCase()));
 if (unknown.length) {
     console.error(`unknown theme(s): ${unknown.join(', ')}\navailable: ${listThemes().join(', ')}`);
@@ -94,7 +108,12 @@ function bar(palette, token, percent, width) {
 /**
  * Two sample lines per theme. Between them every one of the 10 tokens is
  * painted at least once, and the usage ramp is shown at all three tiers (calm
- * 41%, watch 76%, alert 88%) — the whole point of comparing themes.
+ * 41%, watch 80%, alert 88%) — the whole point of comparing themes.
+ *
+ * The numbers are made up, but the *shapes* are not: ctx sits at 80 because
+ * `COMPRESS?` is gated on `contextCompactSuggestion` (80), not on the 70/85
+ * color tiers, so 76% would render a suffix the HUD never emits. Same reason the
+ * git glyphs are `+ ! ? ✗ ⇡` — the real defaults from `DEFAULT_HUD_LABELS`.
  */
 function sample(palette) {
     const sep = paint(palette, 'sep', ' | ');
@@ -104,14 +123,16 @@ function sample(palette) {
         `${lbl('opus:')}${paint(palette, 'gradMid', 'high')}`,
         `${lbl('5h:')}[${bar(palette, 'gradLow', 41, 8)}]${paint(palette, 'gradLow', '41%')}${lbl('(3h42m)')} `
             + `${lbl('7d:')}[${bar(palette, 'gradHigh', 88, 8)}]${paint(palette, 'gradHigh', '88%')}${lbl('(2d5h)')}`,
-        `${lbl('ctx:')}[${bar(palette, 'gradMid', 76, 10)}]${paint(palette, 'gradMid', '76% COMPRESS?')}`,
+        `${lbl('ctx:')}[${bar(palette, 'gradMid', 80, 10)}]${paint(palette, 'gradMid', '80% COMPRESS?')}`,
     ].join(sep);
     const rest = [
-        `${lbl('token:')}${paint(palette, 'gradLow', '1.2M')} ${paint(palette, 'faint', '($12.40/$50)')}`,
-        `${lbl('session:')}${paint(palette, 'gradLow', '3h12m')}`,
+        `${lbl('token:')}${paint(palette, 'gradLow', '1.2M')}`,
+        `${lbl('extra:')}${paint(palette, 'gradLow', '12%')}${paint(palette, 'faint', '($12.40/$50.00)')}`,
+        `${lbl('session:')}${paint(palette, 'gradLow', '192m')}`,
         `${lbl('repo:')}${paint(palette, 'gradLow', 'hud')}`,
         `${lbl('branch:')}${paint(palette, 'gradLow', 'main')}`,
-        `${paint(palette, 'add', '✓2')} ${paint(palette, 'del', '●5')} ${paint(palette, 'track', '?1')} ${paint(palette, 'add', '⇡3')}`,
+        `${paint(palette, 'add', '+2')} ${paint(palette, 'del', '!5')} ${paint(palette, 'track', '?1')} `
+            + `${paint(palette, 'gradHigh', '✗1')} ${paint(palette, 'add', '⇡3')}`,
     ].join(sep);
     return [gauges, rest];
 }
