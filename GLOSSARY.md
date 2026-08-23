@@ -44,8 +44,10 @@ skimming. Add a term back (or a new one) when it earns its place; keep this shor
 
 ## Theming
 
-- **theme** — a named palette: bundled `aurora` (default; cool slate) or `ember`
-  (warm gruvbox), or one the user defines under `config.json` `themes`. Resolved
+- **theme** — a named palette: one of the five bundled (`aurora` default cool
+  slate, `ember` warm gruvbox, `nebula` vivid mauve, `graphite` near-monochrome,
+  `daylight` for light terminals), or one the user defines under `config.json`
+  `themes`. `node preview-themes.mjs` renders them all. Resolved
   at import in `themes.js`: `HUD_THEME` env > `config.json` `theme` >
   `DEFAULT_THEME`; both tiers search bundled **and** user themes.
 - **palette** / **token** — the color *data* behind a theme: 10 named **tokens**

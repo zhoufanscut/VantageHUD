@@ -90,9 +90,23 @@ cp ~/.claude/hud/config.json.example ~/.claude/hud/config.json
   gitignored, so `git pull` never clobbers your settings.
 - **Edits apply on the next status-line refresh** — no Claude Code restart
   needed. The HUD notices `config.json` changed (by mtime) and re-renders.
-- Common knobs: `theme` (`aurora` | `ember`), `locale` (`en` | `zh-CN`), and the
+- Common knobs: `theme`, `locale` (`en` | `zh-CN`), and the
   `elements` toggles (e.g. `gitBranch`, `contextBar`, `rateLimits`, `showTokens`).
   See `config.json.example` for the full list.
+- **Bundled themes** — run `node preview-themes.mjs` to see them all in your own
+  terminal (`--depth=0` previews the 16-color fallback, `--ascii` the `safeMode`
+  glyphs):
+
+  | theme | |
+  | --- | --- |
+  | `aurora` | cool slate, soft cyan-teal accents (Nord / Tokyo-Night family) — **default** |
+  | `ember` | warm dark, gold and orange (Gruvbox family) |
+  | `nebula` | vivid dark, mauve and pink (Catppuccin Mocha family) |
+  | `graphite` | near-monochrome dark — only the usage ramp carries hue |
+  | `daylight` | for a **light** terminal background (GitHub-light family) |
+
+  The first four assume a dark terminal; `daylight` is the one to pick if yours is
+  light.
 - **Custom colors:** define your own palettes under `themes`, then select one with
   `theme`. Each palette sets any subset of the 10 color tokens as `#rrggbb`; the
   rest are inherited from `base` (another palette, default `aurora`):

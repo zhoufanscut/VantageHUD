@@ -88,6 +88,54 @@ export const THEMES = {
         del: '#fb4934', // red
         track: '#fe8019', // orange
     },
+    // Nebula — vivid dark with mauve/pink accents (Catppuccin Mocha family).
+    // The most saturated of the set, and the only one whose tokens all stay
+    // distinct after the 16-color fallback.
+    nebula: {
+        text: '#cdd6f4', // periwinkle
+        label: '#cba6f7', // mauve
+        faint: '#6c7086', // overlay
+        sep: '#45475a', // surface
+        gradLow: '#94e2d5', // teal
+        gradMid: '#f9e2af', // yellow
+        gradHigh: '#f38ba8', // pink-red
+        add: '#a6e3a1', // green
+        del: '#f38ba8', // pink-red
+        track: '#89b4fa', // blue
+    },
+    // Graphite — near-monochrome dark, for a HUD that recedes. Only the usage
+    // ramp carries real hue; git counts are barely-tinted grays that stay
+    // legible by glyph. Trade-off: at 16 colors those tints collapse to white
+    // (add/del/track become indistinguishable) — deliberate, since the
+    // alternative is saturating them and losing the point of the theme.
+    graphite: {
+        text: '#e6e6e6', // near-white
+        label: '#9e9e9e', // mid gray
+        faint: '#6b6b6b', // dim gray
+        sep: '#3f3f3f', // charcoal hairline
+        gradLow: '#b0b0b0', // light gray (calm reads as "no color")
+        gradMid: '#b8964f', // muted gold
+        gradHigh: '#c76a6a', // muted red
+        add: '#8fa88f', // green-gray
+        del: '#b08f8f', // red-gray
+        track: '#8f9db0', // blue-gray
+    },
+    // Daylight — the only palette built for a LIGHT terminal background
+    // (GitHub-light family); every token is dark enough to read on white. On a
+    // dark background it is unusable, which is the point: the other four assume
+    // a dark terminal.
+    daylight: {
+        text: '#24292f', // near-black
+        label: '#0550ae', // blue
+        faint: '#6e7781', // gray
+        sep: '#d0d7de', // light hairline
+        gradLow: '#0a7c5a', // deep teal-green
+        gradMid: '#9a6d00', // dark gold
+        gradHigh: '#cf222e', // red
+        add: '#116329', // dark green
+        del: '#cf222e', // red
+        track: '#8250df', // purple
+    },
 };
 
 /** Fallback theme when none is configured (or an unknown name is given). */
@@ -321,11 +369,15 @@ function resolveHexPalette(name, seen, depth) {
  * Resolve `name` to the `[r,g,b]` palette `colors.js` consumes. Hex is parsed
  * exactly here, once. A malformed *bundled* color (a dev typo) falls back to the
  * default theme's token rather than reaching `fg()` as undefined, which would
- * throw and blank that fragment.
+ * throw and blank that fragment. An unknown name yields the default palette.
+ *
+ * Exported for tooling that needs a palette other than the active one —
+ * `preview-themes.mjs` renders every theme in a single process, which the
+ * import-frozen `PALETTE` cannot do. Pure: it never touches module state.
  * @param {string} name
  * @returns {Palette}
  */
-function resolvePalette(name) {
+export function resolvePalette(name) {
     const hex = resolveHexPalette(name, new Set(), 0);
     const fallback = THEMES[DEFAULT_THEME];
     /** @type {Palette} */
