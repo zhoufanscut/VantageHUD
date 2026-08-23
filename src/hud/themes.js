@@ -408,11 +408,11 @@ function resolveThemeName() {
     if (env && themeExists(env))
         return env;
     if (env)
-        debugWarn(`unknown HUD_THEME "${env}" — falling through to config.json`);
+        debugWarn(`unknown HUD_THEME "${env}" — falling through to config.json. Available: ${listThemes().join(', ')}`);
     if (CONFIGURED_THEME_NAME && themeExists(CONFIGURED_THEME_NAME))
         return CONFIGURED_THEME_NAME;
     if (CONFIGURED_THEME_NAME)
-        debugWarn(`unknown theme "${CONFIGURED_THEME_NAME}" — using "${DEFAULT_THEME}"`);
+        debugWarn(`unknown theme "${CONFIGURED_THEME_NAME}" — using "${DEFAULT_THEME}". Available: ${listThemes().join(', ')}`);
     return DEFAULT_THEME;
 }
 

@@ -6,6 +6,8 @@ working folder, the model with thinking effort (`opus:max`), context %,
 rate limits, git (or Subversion) info, session time, and more.
 
 - **No dependencies.** Pure Node built-ins — no `node_modules`, no native code.
+- **Five built-in themes** — dark, light and near-monochrome. See them all with
+  `node preview-themes.mjs`, or build your own. [Themes ↓](#themes)
 - **Portable.** Clone anywhere, on macOS or Linux, with any Node `>=14.17`.
 - **Proxy aware.** Honors `HTTPS_PROXY` / `https_proxy` for the usage/rate-limit
   API via an HTTP CONNECT tunnel (no-op when unset).
@@ -13,11 +15,12 @@ rate limits, git (or Subversion) info, session time, and more.
 ## Layout
 
 ```
-statusline.sh     # entry point Claude Code calls (caches + renders)
-statusline.mjs    # Node launcher: installs the proxy tunnel, loads src/
-find-node.sh      # locates node (PATH / nvm / fnm / homebrew)
-src/              # the renderer (ESM, Node built-ins only)
-cache/            # render cache + state, one subfolder per session (gitignored)
+statusline.sh       # entry point Claude Code calls (caches + renders)
+statusline.mjs      # Node launcher: installs the proxy tunnel, loads src/
+find-node.sh        # locates node (PATH / nvm / fnm / homebrew)
+preview-themes.mjs  # renders every theme as a sample line, to compare them
+src/                # the renderer (ESM, Node built-ins only)
+cache/              # render cache + state, one subfolder per session (gitignored)
 ```
 
 ## Setup
@@ -93,51 +96,125 @@ cp ~/.claude/hud/config.json.example ~/.claude/hud/config.json
 - Common knobs: `theme`, `locale` (`en` | `zh-CN`), and the
   `elements` toggles (e.g. `gitBranch`, `contextBar`, `rateLimits`, `showTokens`).
   See `config.json.example` for the full list.
-- **Bundled themes** — run `node preview-themes.mjs` to see them all in your own
-  terminal (`--depth=0` previews the 16-color fallback, `--ascii` the `safeMode`
-  glyphs):
-
-  | theme | |
-  | --- | --- |
-  | `aurora` | cool slate, soft cyan-teal accents (Nord / Tokyo-Night family) — **default** |
-  | `ember` | warm dark, gold and orange (Gruvbox family) |
-  | `nebula` | vivid dark, mauve and pink (Catppuccin Mocha family) |
-  | `graphite` | near-monochrome dark — only the usage ramp carries hue |
-  | `daylight` | for a **light** terminal background (GitHub-light family) |
-
-  The first four assume a dark terminal; `daylight` is the one to pick if yours is
-  light.
-- **Custom colors:** define your own palettes under `themes`, then select one with
-  `theme`. Each palette sets any subset of the 10 color tokens as `#rrggbb`; the
-  rest are inherited from `base` (another palette, default `aurora`):
-  ```json
-  { "theme": "mine", "themes": { "mine": { "base": "ember", "gradHigh": "#e06c75" } } }
-  ```
-  `config.json.example` carries an entry with all 10 tokens spelled out. What each
-  one paints:
-
-  | token | paints |
-  | --- | --- |
-  | `text` | the cwd path |
-  | `label` | every `xxx:` prefix, `(reset)` tails, the `callCounts` numbers |
-  | `faint` | `($spent/$limit)`, the stale `*`, `[API 429]` |
-  | `sep` | the ` \| ` separator **and** the empty gauge track (`░`) |
-  | `gradLow` | usage < 70%, plus the `repo:` / `branch:` / `token:` values and effort `max` |
-  | `gradMid` | usage 70–84%, `[API auth]` / `[API err]`, effort `high` |
-  | `gradHigh` | usage ≥ 85%, conflict counts, effort `low` |
-  | `add` | staged / ahead counts |
-  | `del` | modified / behind counts |
-  | `track` | untracked counts |
-
-  Naming a palette after a bundled one (`"ember": { … }`) retints it in place —
-  its `base` defaults to that same bundled palette. Names and keys are matched
-  case-insensitively. A value that isn't `#` plus 6 hex digits keeps the inherited
-  color; run with `HUD_DEBUG=1` to see why.
+- **Colors** are set by `theme`, and you can define your own palettes under
+  `themes` — see [Themes](#themes) below.
 - `modelFormat` (inside `elements`) sets how the model name reads: `short`
   (`opus`, the default), `versioned` (`opus 4.8`), or `full` (raw id,
   `claude-opus-4-8`). The `:effort` suffix is a separate `effort` toggle.
 - No file needed for a quick test: `HUD_THEME=ember` overrides the theme, and
   `HUD_CONFIG=/abs/path/config.json` points the HUD at a config elsewhere.
+
+## Themes
+
+Five palettes ship with the HUD. To see them all in your own terminal — the only
+way to really judge them — run:
+
+```sh
+node ~/.claude/hud/preview-themes.mjs
+```
+
+| theme | look | assumes |
+| --- | --- | --- |
+| `aurora` **(default)** | cool slate, soft cyan-teal accents — Nord / Tokyo-Night family | dark terminal |
+| `ember` | warm, gold and orange — Gruvbox family | dark terminal |
+| `nebula` | vivid, mauve and pink — Catppuccin Mocha family | dark terminal |
+| `graphite` | near-monochrome; only the usage ramp carries hue, for a HUD that recedes | dark terminal |
+| `daylight` | GitHub-light family — every color is dark enough to read on white | **light terminal** |
+
+Pick one in `config.json`:
+
+```json
+{ "theme": "nebula" }
+```
+
+Or try one without touching a file — `HUD_THEME` wins over `config.json` for that
+run:
+
+```sh
+HUD_THEME=nebula
+```
+
+**On a light terminal, use `daylight`.** The other four are built for a dark
+background and wash out on white.
+
+### Preview options
+
+```sh
+node preview-themes.mjs                # every theme, bundled and your own
+node preview-themes.mjs nebula ember   # just these
+node preview-themes.mjs --depth=0      # how it degrades on a 16-color terminal
+node preview-themes.mjs --ascii        # bar glyphs as safeMode renders them
+```
+
+The sample values are made up so every theme shows identical content — it is a
+color comparison, not a live HUD. Your own themes from `config.json` show up too.
+
+### What each color paints
+
+A palette is exactly these 10 **tokens**. Two do double duty, which is worth
+knowing before you change them:
+
+| token | paints |
+| --- | --- |
+| `text` | the cwd path |
+| `label` | every `xxx:` prefix, `(reset)` tails, the `callCounts` numbers |
+| `faint` | `($spent/$limit)`, the stale `*`, `[API 429]` |
+| `sep` | the ` \| ` separator **and** the empty gauge track (`░`) |
+| `gradLow` | usage under 70%, **and** the `repo:` / `branch:` / `token:` values, and effort `max` |
+| `gradMid` | usage 70–84%, `[API auth]` / `[API err]`, effort `high` |
+| `gradHigh` | usage 85% and over, conflict counts, effort `low` |
+| `add` | staged / ahead counts |
+| `del` | modified / behind counts |
+| `track` | untracked counts |
+
+So a very dim `sep` also dims every empty gauge bar, and `gradLow` sets both the
+"all calm" color and your repo/branch text.
+
+### The bundled palettes
+
+Handy for forking one — copy a column, change what you want:
+
+| token | `aurora` | `ember` | `nebula` | `graphite` | `daylight` |
+| --- | --- | --- | --- | --- | --- |
+| `text` | `#c8d3e8` | `#ebdbb2` | `#cdd6f4` | `#e6e6e6` | `#24292f` |
+| `label` | `#8fd0d8` | `#a89984` | `#cba6f7` | `#9e9e9e` | `#0550ae` |
+| `faint` | `#6e7896` | `#928374` | `#6c7086` | `#6b6b6b` | `#6e7781` |
+| `sep` | `#48506a` | `#665c54` | `#45475a` | `#3f3f3f` | `#d0d7de` |
+| `gradLow` | `#7fd4c4` | `#98971a` | `#94e2d5` | `#b0b0b0` | `#0a7c5a` |
+| `gradMid` | `#e3c08a` | `#fabd2f` | `#f9e2af` | `#b8964f` | `#9a6d00` |
+| `gradHigh` | `#e0909e` | `#fb4934` | `#f38ba8` | `#c76a6a` | `#cf222e` |
+| `add` | `#8fd0b8` | `#98971a` | `#a6e3a1` | `#8fa88f` | `#116329` |
+| `del` | `#e0909e` | `#fb4934` | `#f38ba8` | `#b08f8f` | `#cf222e` |
+| `track` | `#8fc4d8` | `#fe8019` | `#89b4fa` | `#8f9db0` | `#8250df` |
+
+### Your own theme
+
+Define palettes under `themes`, then select one with `theme`. Set any subset of
+the 10 tokens as `#rrggbb`; the rest come from `base` (another palette, default
+`aurora`):
+
+```json
+{
+  "theme": "mine",
+  "themes": {
+    "mine": { "base": "ember", "gradHigh": "#e06c75" }
+  }
+}
+```
+
+That is ember with a different alert color. `config.json.example` carries an entry
+with all 10 tokens spelled out if you would rather start from a full palette.
+
+- **Retint a bundled theme in place** by naming your palette after it —
+  `"themes": { "ember": { "label": "#ff0000" } }` is ember with red labels, since
+  `base` defaults to the bundled palette of the same name.
+- **Names and keys are case-insensitive**; `base` chains as deep as you like.
+- **Colors only.** Glyphs, the ` \| ` separator and the 70/85 thresholds are not
+  part of a theme (thresholds live under `thresholds`), so a color can never
+  disagree with the `COMPRESS?` text beside it.
+- A value that isn't `#` plus exactly 6 hex digits keeps the inherited color
+  rather than breaking the line. Run with `HUD_DEBUG=1` to see what was rejected
+  and why.
 
 ## Behind a proxy
 ```sh
