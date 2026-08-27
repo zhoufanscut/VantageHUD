@@ -16,8 +16,8 @@
  * the locale-dependent text output.
  */
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
-import { resolve, basename } from 'node:path';
+import { readFileSync, statSync } from 'node:fs';
+import { resolve, basename, join } from 'node:path';
 import { findSvnWorkingCopyRoot, sessionCacheFile } from '../../lib/worktree-paths.js';
 import { atomicWriteJsonSync } from '../../lib/atomic-write.js';
 import { paint, paintLabel, paintWarn, PALETTE } from '../colors.js';
@@ -77,6 +77,8 @@ function readStatusMemo(sessionKey, cwdKey) {
         if (memo?.cwd !== cwdKey || !memo.counts || typeof memo.at !== 'number') {
             return null;
         }
+        // A memo written before the stamp existed has no `wcDb`; it compares
+        // unequal to any real stamp and so costs one rescan, then self-heals.
         return memo;
     }
     catch {
@@ -84,7 +86,7 @@ function readStatusMemo(sessionKey, cwdKey) {
         return null;
     }
 }
-function writeStatusMemo(sessionKey, cwdKey, counts) {
+function writeStatusMemo(sessionKey, cwdKey, counts, wcDb) {
     if (!sessionKey) {
         return;
     }
@@ -92,6 +94,7 @@ function writeStatusMemo(sessionKey, cwdKey, counts) {
         atomicWriteJsonSync(sessionCacheFile('svn-status', sessionKey), {
             cwd: cwdKey,
             counts,
+            wcDb,
             at: Date.now(),
         });
     }
@@ -138,17 +141,64 @@ function decodeUrl(value) {
  * call, so a git (or plain) directory must not pay for SVN support.
  *
  * @param cwd - Working directory
- * @returns true when a `.svn` directory is present at or above cwd
+ * @returns The working-copy root, or null when cwd is not in one
  */
-export function isSvnWorkingCopy(cwd) {
+export function getSvnWorkingCopyRoot(cwd) {
     const key = cwd ? resolve(cwd) : process.cwd();
     const cached = workingCopyCache.get(key);
     if (cached && Date.now() < cached.expiresAt) {
         return cached.value;
     }
-    const found = findSvnWorkingCopyRoot(key) !== null;
-    workingCopyCache.set(key, { value: found, expiresAt: Date.now() + CACHE_TTL_MS });
-    return found;
+    const root = findSvnWorkingCopyRoot(key);
+    workingCopyCache.set(key, { value: root, expiresAt: Date.now() + CACHE_TTL_MS });
+    return root;
+}
+/**
+ * Detect a Subversion working copy at or above `cwd`.
+ *
+ * @param cwd - Working directory
+ * @returns true when a `.svn` directory is present at or above cwd
+ */
+export function isSvnWorkingCopy(cwd) {
+    return getSvnWorkingCopyRoot(cwd) !== null;
+}
+/**
+ * Cheap change stamp for the working copy's metadata store.
+ *
+ * `svn status` walks the whole tree (measured: ~510 ms on a 96k-file checkout),
+ * so it can only run behind a memo — but a memo on a clock alone means a
+ * `svn delete` stays invisible for the rest of the TTL, which is what made the
+ * status element look broken. Every metadata operation commits a SQLite
+ * transaction to `.svn/wc.db`, so its mtime is a ~µs proxy for "the schedule
+ * changed": measured to move for `svn delete`, `add`, `revert` and `propset`,
+ * and — importantly — *not* to move for `svn status` itself, so reading can
+ * never invalidate its own memo.
+ *
+ * It is deliberately only half the gate. The mtime does **not** move when a
+ * versioned file is edited, deleted with a plain `rm` (`missing`), or a new
+ * unversioned file appears — all three are pure working-file changes that
+ * touch no metadata. Those still need the TTL, so the two conditions are ORed
+ * and neither is redundant. Externals are the same story: each carries its own
+ * `.svn/wc.db`, and the root's stamp says nothing about theirs.
+ *
+ * Returns null for a pre-1.7 working copy (no `wc.db`), which simply leaves the
+ * TTL as the only trigger — the behaviour before this stamp existed.
+ *
+ * @param root - Working-copy root
+ * @returns `"<mtimeMs>:<size>"`, or null when unreadable
+ */
+function readWcDbStamp(root) {
+    if (!root) {
+        return null;
+    }
+    try {
+        const st = statSync(join(root, '.svn', 'wc.db'));
+        return `${st.mtimeMs}:${st.size}`;
+    }
+    catch {
+        // Pre-1.7 layout, or unreadable — fall back to the TTL alone.
+        return null;
+    }
 }
 /**
  * Split a checkout URL into the project name and the branch it points at.
@@ -346,7 +396,8 @@ export function getSvnInfo(cwd) {
  * @returns Counts, or null outside a working copy / with nothing yet measured
  */
 export function getSvnStatusCounts(cwd, sessionKey) {
-    if (!isSvnWorkingCopy(cwd)) {
+    const root = getSvnWorkingCopyRoot(cwd);
+    if (!root) {
         return null;
     }
     const key = cwd ? resolve(cwd) : process.cwd();
@@ -360,13 +411,20 @@ export function getSvnStatusCounts(cwd, sessionKey) {
     }
     const memo = readStatusMemo(sessionKey, key);
     let result;
-    if (memo && Date.now() - memo.at < STATUS_MEMO_TTL_MS) {
+    // Two independent triggers, ORed because each covers what the other misses:
+    // the stamp catches a schedule change (`svn delete`/`add`/`revert`) on the
+    // very next frame, and the clock catches the working-file changes the stamp
+    // cannot see (an edit, a plain `rm`, a new unversioned file).
+    if (memo && Date.now() - memo.at < STATUS_MEMO_TTL_MS && memo.wcDb === readWcDbStamp(root)) {
         result = memo.counts;
     }
     else {
         try {
             result = parseSvnStatusXml(svn(['status', '--xml', '--non-interactive'], cwd, STATUS_TIMEOUT_MS));
-            writeStatusMemo(sessionKey, key, result);
+            // Stamped *after* the walk, not before: should some future `svn`
+            // ever write wc.db while reporting status, storing the pre-walk
+            // value would make every frame re-trigger a ~510 ms rescan.
+            writeStatusMemo(sessionKey, key, result, readWcDbStamp(root));
         }
         catch {
             result = memo ? memo.counts : null;
