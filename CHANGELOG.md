@@ -4,9 +4,31 @@ Notable changes to this project. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.5.0] - 2026-09-05
+
+A usage client that can no longer log you out, exact call counts at any
+transcript size, a sturdier proxy tunnel, and the review findings that came
+with them.
+
+### Changed
+
+- **`session:` and the reset countdowns share one compact duration format**:
+  `45m`, `3h12m`, `2d5h`. The session timer no longer reads raw minutes (a
+  resumed conversation showed `37683m`), and a countdown under an hour reads
+  `56m` instead of `0h56m`.
+- **`repo:` and the worktree suffix come from the payload** when Claude Code
+  supplies `workspace.repo.name` / `workspace.git_worktree`, with git as the
+  fallback. A frame in a git repo spawns 3 git processes instead of 6.
+- **Terminal-width auto-detection honors `wrapMode`.** When `COLUMNS` is
+  available the line is truncated to it by default; it switched to wrapping at
+  separators before. `wrapMode: "wrap"` restores that.
+- Renamed to **VantageHUD** in the README and `package.json`, matching the
+  repository.
 
 ### Fixed
+
+- **`find-node.sh` picked nvm/fnm versions by name order**, so `v9.x` beat
+  `v20.x`. Versions are now compared numerically.
 
 - **The smoke test showed the previous frame.** With a cached render present,
   `HUD_SYNC_REFRESH=1` printed the cached line first and only then re-rendered,
@@ -124,6 +146,6 @@ counter that is finally correct.
 First public release — a small, self-contained statusline for Claude Code that
 shows the model, thinking effort, context, rate limits, and git at a glance.
 
-[Unreleased]: https://github.com/zhoufanscut/VantageHUD/compare/v0.4.0...HEAD
+[0.5.0]: https://github.com/zhoufanscut/VantageHUD/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/zhoufanscut/VantageHUD/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/zhoufanscut/VantageHUD/releases/tag/v0.3.0
