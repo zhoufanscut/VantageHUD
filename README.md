@@ -102,6 +102,10 @@ cp ~/.claude/hud/config.json.example ~/.claude/hud/config.json
   in the default order, unknown names are ignored.
 - **Colors** are set by `theme`, and you can define your own palettes under
   `themes` — see [Themes](#themes) below.
+- `maxWidth` / `wrapMode`: the line is cut to `maxWidth` columns with `...`
+  (`wrapMode: "truncate"`, the default) or broken at the ` | ` separators
+  (`"wrap"`). Without `maxWidth` the width comes from `COLUMNS` when Claude
+  Code provides it; the line is left alone otherwise.
 - `modelFormat` (inside `elements`) sets how the model name reads: `short`
   (`opus`, the default), `versioned` (`opus 4.8`), or `full` (raw id,
   `claude-opus-4-8`). The `:effort` suffix is a separate `effort` toggle.

@@ -95,8 +95,11 @@ async function main() {
         // Read configuration.
         // Clone to avoid mutating shared DEFAULT_HUD_CONFIG when applying runtime width detection
         const config = { ...readHudConfig() };
-        // Auto-detect terminal width if not explicitly configured (#1726)
-        // Prefer live TTY columns (responds to resize) over static COLUMNS env var
+        // Auto-detect the terminal width when maxWidth is not configured.
+        // Prefer live TTY columns over the COLUMNS env var (which the statusline
+        // docs say Claude Code sets, though a live 2.1.261 hook had none). The
+        // configured wrapMode is honored as is — truncate by default, so the
+        // HUD stays one line; set "wrap" to break at separators instead.
         if (config.maxWidth === undefined) {
             const cols = process.stderr.columns ||
                 process.stdout.columns ||
@@ -104,8 +107,6 @@ async function main() {
                 0;
             if (cols > 0) {
                 config.maxWidth = cols;
-                if (config.wrapMode === "truncate")
-                    config.wrapMode = "wrap";
             }
         }
         // Resolve worktree-mismatched transcript paths (issue #1094)
