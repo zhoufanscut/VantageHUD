@@ -128,7 +128,7 @@ function sample(palette) {
     const rest = [
         `${lbl('token:')}${paint(palette, 'gradLow', '1.2M')}`,
         `${lbl('extra:')}${paint(palette, 'gradLow', '12%')}${paint(palette, 'faint', '($12.40/$50.00)')}`,
-        `${lbl('session:')}${paint(palette, 'gradLow', '192m')}`,
+        `${lbl('session:')}${paint(palette, 'gradLow', '3h12m')}`,
         `${lbl('repo:')}${paint(palette, 'gradLow', 'hud')}`,
         `${lbl('branch:')}${paint(palette, 'gradLow', 'main')}`,
         `${paint(palette, 'add', '+2')} ${paint(palette, 'del', '!5')} ${paint(palette, 'track', '?1')} `

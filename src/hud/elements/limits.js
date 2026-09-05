@@ -4,6 +4,7 @@
  * Renders 5-hour and weekly rate limit usage display.
  */
 import { RESET, fg, gradientColor, PALETTE, paintFaint, paintWarn } from '../colors.js';
+import { formatDuration } from '../../lib/formatting.js';
 // Palette tokens: steel "5h:"/"7d:" labels AND the reset-time parentheticals
 // (the latter share the call-count tone, PALETTE.label), faint slate for the
 // $spent/$limit parenthetical, and a hairline-slate empty-bar track.
@@ -18,27 +19,17 @@ function getColor(percent) {
     return fg(gradientColor(percent));
 }
 /**
- * Format reset time as human-readable duration.
+ * Format reset time as a compact duration (`59m`, `3h42m`, `2d5h`).
  * Returns null if date is null/undefined or in the past.
  */
 function formatResetTime(date) {
     if (!date)
         return null;
-    const now = Date.now();
-    const resetMs = date.getTime();
-    const diffMs = resetMs - now;
+    const diffMs = date.getTime() - Date.now();
     // Already reset or invalid
     if (diffMs <= 0)
         return null;
-    const diffMinutes = Math.floor(diffMs / 60_000);
-    const diffHours = Math.floor(diffMinutes / 60);
-    const diffDays = Math.floor(diffHours / 24);
-    if (diffDays > 0) {
-        const remainingHours = diffHours % 24;
-        return `${diffDays}d${remainingHours}h`;
-    }
-    const remainingMinutes = diffMinutes % 60;
-    return `${diffHours}h${remainingMinutes}m`;
+    return formatDuration(diffMs / 60_000);
 }
 /**
  * Render rate limits display.
