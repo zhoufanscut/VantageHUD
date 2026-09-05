@@ -97,7 +97,9 @@ skimming. Add a term back (or a new one) when it earns its place; keep this shor
   git (`src/hud/elements/git.js`) unless the directory is not a git worktree
   at all *and* is an SVN working copy, in which case Subversion
   (`src/hud/elements/svn.js`) fills all three — never a per-slot fallback, so
-  the slots cannot disagree. A plain directory renders none of them. The config keys
+  the slots cannot disagree. A plain directory renders none of them. The repo
+  name and worktree suffix come from the payload's `workspace` when Claude Code
+  supplies them, git otherwise. The config keys
   keep their `git*` names.
 - **working copy** *(SVN)* — the SVN counterpart to a git worktree: the tree
   holding a `.svn` directory. `findSvnWorkingCopyRoot`

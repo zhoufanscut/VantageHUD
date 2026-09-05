@@ -130,10 +130,13 @@ export function getWorktreeInfo(cwd) {
  * Render git repository name element.
  *
  * @param cwd - Working directory
+ * @param knownName - Repo name Claude Code already parsed from `origin`
+ *   (the payload's `workspace.repo.name`); spares the `git remote get-url`
+ *   spawn when given
  * @returns Formatted repo name or null
  */
-export function renderGitRepo(cwd) {
-    const repo = getGitRepoName(cwd);
+export function renderGitRepo(cwd, knownName = null) {
+    const repo = knownName || getGitRepoName(cwd);
     if (!repo)
         return null;
     return `${paintLabel('repo:')}${paint(PALETTE.gradLow, repo)}`;
@@ -144,13 +147,19 @@ export function renderGitRepo(cwd) {
  *   branch:feature-x (wt:my-wt)
  *
  * @param cwd - Working directory
+ * @param worktreeHint - `{ known, name }` derived from the payload's
+ *   `workspace.git_worktree`: when `known`, `name` is the linked-worktree name
+ *   (or null for the main working tree) and the two `git rev-parse` spawns are
+ *   skipped; otherwise git is asked
  * @returns Formatted branch name or null
  */
-export function renderGitBranch(cwd) {
+export function renderGitBranch(cwd, worktreeHint = null) {
     const branch = getGitBranch(cwd);
     if (!branch)
         return null;
-    const wtInfo = getWorktreeInfo(cwd);
+    const wtInfo = worktreeHint && worktreeHint.known
+        ? { isWorktree: Boolean(worktreeHint.name), worktreeName: worktreeHint.name }
+        : getWorktreeInfo(cwd);
     if (wtInfo.isWorktree && wtInfo.worktreeName) {
         return `${paintLabel('branch:')}${paint(PALETTE.gradLow, branch)} ${paintLabel('(wt:')}${paint(PALETTE.gradLow, wtInfo.worktreeName)}${paintLabel(')')}`;
     }

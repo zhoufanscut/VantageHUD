@@ -185,17 +185,19 @@ export async function render(context, config) {
     const wantsVcs = enabledElements.gitRepo || enabledElements.gitBranch || enabledElements.gitStatus;
     // Cheap by construction: one `git rev-parse` for the decision, and the SVN
     // side is a filesystem walk for `.svn`, so a git checkout never spawns `svn`
-    // and an SVN checkout never spawns the three git element commands.
+    // and an SVN checkout never spawns the git element commands. The repo name
+    // and worktree suffix come from the payload's `workspace` when Claude Code
+    // supplies them (index.js), which spares three more git spawns per frame.
     const useSvn = wantsVcs
         && getWorktreeRoot(context.cwd) === null
         && isSvnWorkingCopy(context.cwd);
     if (enabledElements.gitRepo) {
-        const repoElement = useSvn ? renderSvnRepo(context.cwd) : renderGitRepo(context.cwd);
+        const repoElement = useSvn ? renderSvnRepo(context.cwd) : renderGitRepo(context.cwd, context.repoName);
         if (repoElement)
             rendered.set("gitRepo", repoElement);
     }
     if (enabledElements.gitBranch) {
-        const branchElement = useSvn ? renderSvnBranch(context.cwd) : renderGitBranch(context.cwd);
+        const branchElement = useSvn ? renderSvnBranch(context.cwd) : renderGitBranch(context.cwd, context.worktreeHint);
         if (branchElement)
             rendered.set("gitBranch", branchElement);
     }

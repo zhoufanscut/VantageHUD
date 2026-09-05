@@ -150,9 +150,28 @@ async function main() {
         const sessionTotalTokens = lead?.totalTokens != null
             ? lead.totalTokens + sumSubagentTokens(resolvedTranscriptPath, sessionKey)
             : null;
+        // Repo identity and linked-worktree name straight from the payload
+        // (`workspace.repo`, `workspace.git_worktree`), so the git elements can
+        // skip three of their six subprocesses. `repo` is absent outside a git
+        // repo or without an `origin` remote — exactly when the git fallback
+        // would find nothing either. The worktree hint is trusted only when
+        // `repo` is present: `git_worktree` predates it (2.1.97 vs ≤2.1.233 in
+        // the cached payloads here), so any payload carrying `repo` would also
+        // carry `git_worktree` inside a linked worktree; an older payload keeps
+        // the `git rev-parse` pair.
+        const workspace = stdin.workspace && typeof stdin.workspace === "object" ? stdin.workspace : null;
+        const repoName = typeof workspace?.repo?.name === "string" && workspace.repo.name.trim()
+            ? workspace.repo.name.trim()
+            : null;
+        const worktreeName = typeof workspace?.git_worktree === "string" && workspace.git_worktree.trim()
+            ? workspace.git_worktree.trim()
+            : null;
+        const worktreeHint = repoName ? { known: true, name: worktreeName } : { known: false, name: null };
         // Build render context
         const context = {
             contextPercent,
+            repoName,
+            worktreeHint,
             // Threaded through so elements can memoize across renders (the SVN
             // status walk does; one process per render kills in-memory caches).
             sessionKey,
