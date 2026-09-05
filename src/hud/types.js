@@ -74,12 +74,12 @@ export const DEFAULT_HUD_USAGE_POLL_INTERVAL_MS = 90 * 1000;
 export const DEFAULT_HUD_CONFIG = {
     locale: 'en',
     // Color theme — DOCUMENTATION ONLY (not consumed at runtime; mergeWithDefaults
-    // drops both fields). Bundled palettes live in `themes.js` ('aurora' |
-    // 'ember'); the active one is resolved there at import (HUD_THEME env >
-    // config.json `theme` > `DEFAULT_THEME`), since elements freeze their colors
-    // before the runtime config is read. The authoritative default is
-    // `DEFAULT_THEME` in themes.js — keep this in sync with it. Read the resolved
-    // name via `ACTIVE_THEME_NAME`.
+    // drops both fields). Bundled palettes live in `themes.js` (`aurora`,
+    // `ember`, `nebula`, `graphite`, `daylight`); the active one is resolved
+    // there at import (HUD_THEME env > config.json `theme` > `DEFAULT_THEME`),
+    // since elements freeze their colors before the runtime config is read.
+    // The authoritative default is `DEFAULT_THEME` in themes.js — keep this in
+    // sync with it. Read the resolved name via `ACTIVE_THEME_NAME`.
     theme: 'aurora',
     // User-defined palettes, merged over the bundled ones and selectable by
     // `theme` / `HUD_THEME`. Each entry may set any subset of the 10 `#rrggbb`

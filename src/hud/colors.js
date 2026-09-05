@@ -13,9 +13,9 @@ export const RESET = '\x1b[0m';
 //
 // Palettes (the color *data*) live in `themes.js`; this file is the engine that
 // turns a palette token into an escape sequence and degrades gracefully:
-// truecolor → 256-color → basic 16. The active theme — slate-cool "aurora" or
-// warm "ember", selected via `HUD_THEME` / config.json — is resolved there and
-// surfaced here as `PALETTE`.
+// truecolor → 256-color → basic 16. The active theme — one of the bundled
+// palettes or a user one, selected via `HUD_THEME` / config.json — is resolved
+// there and surfaced here as `PALETTE`.
 /**
  * Detect terminal color depth once per process.
  *   2 → 24-bit truecolor   (COLORTERM=truecolor|24bit)

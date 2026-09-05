@@ -9,8 +9,9 @@ rate limits, git (or Subversion) info, session time, and more.
 - **Five built-in themes** — dark, light and near-monochrome. See them all with
   `node preview-themes.mjs`, or build your own. [Themes ↓](#themes)
 - **Portable.** Clone anywhere, on macOS or Linux, with any Node `>=14.17`.
-- **Proxy aware.** Honors `HTTPS_PROXY` / `https_proxy` for the usage/rate-limit
-  API via an HTTP CONNECT tunnel (no-op when unset).
+- **Proxy aware.** Honors `HTTPS_PROXY` / `https_proxy` — including
+  `user:pass@` credentials and `https://` proxies — for the usage/rate-limit
+  API via a CONNECT tunnel (no-op when unset).
 
 ## Layout
 
@@ -96,6 +97,9 @@ cp ~/.claude/hud/config.json.example ~/.claude/hud/config.json
 - Common knobs: `theme`, `locale` (`en` | `zh-CN`), and the
   `elements` toggles (e.g. `gitBranch`, `contextBar`, `rateLimits`, `showTokens`).
   See `config.json.example` for the full list.
+- `elementOrder` (top level, e.g. `["model", "contextBar", "pathLabel"]`)
+  reorders the line: named elements come first in that order, the rest follow
+  in the default order, unknown names are ignored.
 - **Colors** are set by `theme`, and you can define your own palettes under
   `themes` — see [Themes](#themes) below.
 - `modelFormat` (inside `elements`) sets how the model name reads: `short`
@@ -225,8 +229,13 @@ with all 10 tokens spelled out if you would rather start from a full palette.
 ## Behind a proxy
 ```sh
 export HTTPS_PROXY=http://proxy.example.com:8080
+# with credentials (percent-encode reserved characters in the password):
+export HTTPS_PROXY=http://alice:p%40ss@proxy.example.com:8080
 ```
-The launcher tunnels the HUD's HTTPS calls through it automatically.
+The launcher tunnels the HUD's HTTPS calls through it automatically. `https://`
+proxies are supported too. A proxy that refuses the tunnel (407/403) or never
+answers (10 s bound) just leaves the rate-limit fragment on the payload's own
+numbers — or `[API err]` on a Claude Code too old to send them.
 
 ## Update
 ```sh
@@ -242,15 +251,18 @@ git -C ~/.claude/hud pull
   which is why SVN shows no `⇡`/`⇣` ahead/behind — and the working-copy scan is
   cached for 30s so a large checkout is not re-walked every frame.
 - All runtime files live in a per-session subfolder of `cache/`, i.e.
-  `cache/<session>/<name>.json` (the render cache, HUD state, and the
-  context-stabilization snapshot grouped per session). Centralized under the HUD
+  `cache/<session>/<name>.json` (the render cache, the token/call-count tally
+  memos, and the context-stabilization snapshot grouped per session). Centralized under the HUD
   install dir, never inside your project; safe to delete anytime. Session folders
   idle for more than 14 days are pruned automatically.
 - If a render fails, the renderer's stderr is kept as
   `cache/<session>/statusline.err` (cleared by the next successful render) —
   check it when the bar shows `[HUD] HUD error`.
 - Optional env: `HUD_CONFIG` (path to the config file; default is the HUD
-  install's own `config.json`), `HUD_THEME` (`aurora` | `ember`, overrides
+  install's own `config.json`), `HUD_THEME` (any bundled or user theme name, overrides
   `config.json`), `HUD_CACHE_DIR` (override that cache/state dir; default is the
   HUD install's own `cache/`), `HUD_CACHE_MAX_AGE_DAYS` (idle-session retention,
-  default 14), `HUD_SYNC_REFRESH=1` (synchronous render), `HUD_DEBUG=1` (verbose).
+  default 14), `HUD_LOCK_STALE_SECONDS` (age after which another frame may
+  take over a render lock, default 10), `HUD_SYNC_REFRESH=1` (testing only:
+  bypass the render cache and render this payload synchronously; set globally
+  it would cost every frame a full Node render), `HUD_DEBUG=1` (verbose).

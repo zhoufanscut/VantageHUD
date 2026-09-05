@@ -19,11 +19,13 @@ skimming. Add a term back (or a new one) when it earns its place; keep this shor
 - **payload** / **stdin JSON** — the one JSON object Claude Code pipes in per
   render (`session_id`, `cwd`, `model`, `effort`, `context_window`, …). The sole
   live input (`src/hud/stdin.js`).
-- **transcript** — the conversation log (`.jsonl`); parsed (`src/hud/transcript.js`)
-  for tool/agent/skill counts, todos, tokens, last tool/skill. A *second* input,
-  distinct from the payload.
+- **transcript** — the conversation log (`.jsonl`); tail-read
+  (`src/hud/transcript.js`) for the last request's token usage, and scanned
+  incrementally (`src/hud/token-tally.js`) for the token total, the
+  tool/agent/skill counts and the session start. A *second* input, distinct
+  from the payload.
 - **render context** — the object `index.js#main()` assembles from payload +
-  transcript + state + usage API and hands to `render()`. **Not** the model's
+  transcript + usage API and hands to `render()`. **Not** the model's
   context window (see *Easy to confuse*).
 - **element** — a pure render function `renderXxx(args) → string | null`, one per
   file in `src/hud/elements/`. Returns `null` to render nothing.
@@ -72,8 +74,8 @@ skimming. Add a term back (or a new one) when it earns its place; keep this shor
   session gets its own `cache/<session>/` subfolder. Resolve via
   `src/lib/worktree-paths.js` — never hardcode.
 - **smoke test** — the only verification (no tests/linter/CI): pipe a sample
-  payload through `statusline.sh`, expect a line containing `opus high`. See
-  `AGENTS.md` › Verification.
+  payload through `statusline.sh` with `HUD_SYNC_REFRESH=1`, expect a line
+  containing `opus:high`. See `AGENTS.md` › Verification.
 
 ## Common elements
 
@@ -91,14 +93,18 @@ skimming. Add a term back (or a new one) when it earns its place; keep this shor
   the tokens those subagents spend, which that module folds into
   `token:` so it reflects the whole run, not just the lead thread.
 - **`gitRepo` / `gitBranch` / `gitStatus`** — the three **VCS slots**, not
-  git-only elements: git answers first (`src/hud/elements/git.js`) and
-  Subversion fills a slot only when git returns nothing
-  (`src/hud/elements/svn.js`). The config keys keep their `git*` names.
+  git-only elements. `render.js` picks the VCS **once** per render (`useSvn`):
+  git (`src/hud/elements/git.js`) unless the directory is not a git worktree
+  at all *and* is an SVN working copy, in which case Subversion
+  (`src/hud/elements/svn.js`) fills all three — never a per-slot fallback, so
+  the slots cannot disagree. A plain directory renders none of them. The config keys
+  keep their `git*` names.
 - **working copy** *(SVN)* — the SVN counterpart to a git worktree: the tree
   holding a `.svn` directory. `findSvnWorkingCopyRoot`
   (`src/lib/worktree-paths.js`) finds its root by filesystem walk, never by
   running `svn`.
-- **safeMode** — default `true` (forced on Windows): strips non-SGR ANSI and swaps
+- **safeMode** — default `true` on every platform (an explicit `false` disables
+  it, Windows included): strips non-SGR ANSI and swaps
   Unicode bars for ASCII (`src/hud/sanitize.js`). Changes the output, so worth
   naming.
 
