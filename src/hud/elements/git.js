@@ -13,11 +13,18 @@ const repoCache = new Map();
 const branchCache = new Map();
 const worktreeCache = new Map();
 const statusCache = new Map();
+/**
+ * `maxBuffer` is raised above execFileSync's 1 MiB default because overflow
+ * throws (ENOBUFS) rather than truncating: `git status --porcelain` spends
+ * ~70 bytes per untracked path, so a large unignored tree (measured: 16,000
+ * files → 1.2 MB) silently deleted the status fragment. Same fix as svn.js.
+ */
 function git(args, cwd) {
     return execFileSync('git', args, {
         cwd,
         encoding: 'utf-8',
         timeout: 1000,
+        maxBuffer: 16 * 1024 * 1024,
         stdio: ['pipe', 'pipe', 'pipe'],
         windowsHide: true,
     }).trim();
