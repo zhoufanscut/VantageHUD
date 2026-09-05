@@ -1,63 +1,14 @@
 /**
- * HUD - State Management
+ * HUD - Config
  *
- * Manages the per-session HUD state file (session start timestamp, etc.).
+ * Reads the HUD's own `config.json` and merges it over the defaults in
+ * `types.js`. (This module once also kept a per-session `hud-state.json`
+ * holding the persisted session start; token-tally.js now derives the session
+ * start exactly from the transcript's first row, so nothing is written here.)
  */
 import { existsSync, readFileSync } from "fs";
-import { sessionCacheFile, ensureSessionCacheDir } from "../lib/worktree-paths.js";
 import { getHudConfigFile } from "../lib/install-paths.js";
-import { atomicWriteJsonSync } from "../lib/atomic-write.js";
 import { DEFAULT_HUD_CONFIG, isHudLocale, resolveHudLabels, } from "./types.js";
-// ============================================================================
-// Path Helpers
-// ============================================================================
-/**
- * Resolve the HUD state file: `<cacheDir>/<session>/hud-state.json`.
- * Session-scoped via a per-session subfolder; a missing session id collapses to
- * the `default/` folder. The `directory` argument is unused (state no longer
- * lives under the project/worktree) but kept for call-site compatibility.
- */
-function getStateFilePath(_directory, sessionId) {
-    return sessionCacheFile("hud-state", sessionId);
-}
-// ============================================================================
-// HUD State Operations
-// ============================================================================
-/**
- * Read HUD state from disk (checks new local and legacy local only)
- */
-export function readHudState(directory, sessionId) {
-    const stateFile = getStateFilePath(directory, sessionId);
-    if (!existsSync(stateFile)) {
-        return null;
-    }
-    try {
-        return JSON.parse(readFileSync(stateFile, "utf-8"));
-    }
-    catch (error) {
-        console.error("[HUD] Failed to read session state:", error instanceof Error ? error.message : error);
-        return null;
-    }
-}
-/**
- * Write HUD state to disk (local only)
- */
-export function writeHudState(state, directory, sessionId) {
-    try {
-        ensureSessionCacheDir(sessionId);
-        const stateFile = getStateFilePath(directory, sessionId);
-        const nextState = sessionId ? { ...state, sessionId } : state;
-        atomicWriteJsonSync(stateFile, nextState);
-        return true;
-    }
-    catch (error) {
-        console.error("[HUD] Failed to write state:", error instanceof Error ? error.message : error);
-        return false;
-    }
-}
-// ============================================================================
-// HUD Config Operations
-// ============================================================================
 /**
  * Read HUD configuration from disk.
  * Priority: the HUD's own `config.json` (see `getHudConfigFile`) > defaults.

@@ -54,6 +54,16 @@
  * rewrite that shifts content. Note compaction is NOT such a case: it *appends*
  * `compactMetadata` rows to the same growing file, so it resumes normally.
  *
+ * The same forward scan also carries the **tool/agent/skill call counts** and
+ * the **session start** (the first row's timestamp), for the same reason: they
+ * used to come from the 4 MiB tail read of the lead transcript and were
+ * therefore truncated on any larger session — measured on a 4.9 MB transcript:
+ * 442 of 494 tool calls and 2 of 3 agent calls — and, like the old token
+ * total, could run backwards as the window slid. Every row is already parsed
+ * here, so counting them costs nothing, and the memo makes the figures exact
+ * at any size. A memo written before these fields existed is not resumable: it
+ * triggers one full rescan, then carries them from there.
+ *
  * Everything here fails to a null/zero total rather than throwing: the HUD must
  * never break on a transcript read.
  */
@@ -64,6 +74,10 @@ import { atomicWriteJsonSync } from "../lib/atomic-write.js";
 // first row carries its session id and start timestamp, so a rewrite that keeps
 // the first 512 bytes byte-identical is not a rewrite we need to distinguish.
 const FINGERPRINT_BYTES = 512;
+/** tool_use names counted as an agent invocation (the `A` count). */
+const AGENT_TOOLS = new Set(["Task", "proxy_Task", "Agent"]);
+/** tool_use names counted as a skill invocation (the `S` count). */
+const SKILL_TOOLS = new Set(["Skill", "proxy_Skill"]);
 /**
  * FNV-1a over a buffer, returned as hex. Not cryptographic — this only has to
  * notice that a file's head changed, and it keeps the memo small (8 chars)
@@ -167,7 +181,28 @@ function tokensFromUsage(usage) {
  * @property {number} total       De-duplicated token total for those bytes.
  * @property {string|null} lastId `message.id` of the final group in that range.
  * @property {number} lastIdTokens Tokens already counted for `lastId`.
+ * @property {number} toolCalls    tool_use blocks seen — every tool, agents and skills included.
+ * @property {number} agentCalls   Of those, Agent/Task invocations.
+ * @property {number} skillCalls   Of those, Skill invocations.
+ * @property {string|null} firstTimestamp `timestamp` of the first row carrying one (the session start).
  */
+/** A memo for a file nothing has been read from. */
+function emptyMemo() {
+    return {
+        fp: "", consumed: 0, total: 0, lastId: null, lastIdTokens: 0,
+        toolCalls: 0, agentCalls: 0, skillCalls: 0, firstTimestamp: null,
+    };
+}
+/** Field-wise memo equality, so a persist can be skipped when nothing moved. */
+function sameMemo(a, b) {
+    if (!a || !b)
+        return false;
+    for (const key of Object.keys(emptyMemo())) {
+        if (a[key] !== b[key])
+            return false;
+    }
+    return true;
+}
 /**
  * Tally one transcript file, resuming from `memo` when it still applies.
  *
@@ -182,7 +217,7 @@ function tokensFromUsage(usage) {
  * @returns {TallyMemo}
  */
 export function tallyFile(filePath, size, memo) {
-    const empty = { fp: "", consumed: 0, total: 0, lastId: null, lastIdTokens: 0 };
+    const empty = emptyMemo();
     try {
         if (!size || size <= 0) {
             return empty;
@@ -199,6 +234,15 @@ export function tallyFile(filePath, size, memo) {
             memo.consumed <= size &&
             typeof memo.total === "number" &&
             Number.isFinite(memo.total) &&
+            // A memo from before the call counts existed carries none; resuming
+            // it would count only the appended rows, so it rescans from 0 once.
+            typeof memo.toolCalls === "number" &&
+            typeof memo.agentCalls === "number" &&
+            typeof memo.skillCalls === "number" &&
+            // A recorded `null` is honest (no row carried a timestamp yet);
+            // anything else means the field was lost, and resuming would adopt
+            // a later row's timestamp as the session start.
+            (memo.firstTimestamp === null || typeof memo.firstTimestamp === "string") &&
             isLineBoundary(filePath, memo.consumed);
         const start = resumable ? memo.consumed : 0;
         if (start === size) {
@@ -212,6 +256,12 @@ export function tallyFile(filePath, size, memo) {
         let lastIdTokens = resumable && typeof memo.lastIdTokens === "number"
             ? memo.lastIdTokens
             : 0;
+        let toolCalls = resumable ? memo.toolCalls : 0;
+        let agentCalls = resumable ? memo.agentCalls : 0;
+        let skillCalls = resumable ? memo.skillCalls : 0;
+        let firstTimestamp = resumable && typeof memo.firstTimestamp === "string"
+            ? memo.firstTimestamp
+            : null;
         const chunk = readRange(filePath, start, size - start);
         if (chunk.length === 0) {
             return resumable ? { ...memo, fp } : empty;
@@ -238,7 +288,32 @@ export function tallyFile(filePath, size, memo) {
             catch {
                 continue; // Skip malformed lines
             }
-            const usage = entry?.message?.usage;
+            if (!entry || typeof entry !== "object") {
+                continue;
+            }
+            if (firstTimestamp === null && typeof entry.timestamp === "string" && entry.timestamp) {
+                firstTimestamp = entry.timestamp;
+            }
+            // Call counts. Safe to count per row: each assistant row carries
+            // exactly one content block (0 rows with several, 0 repeated
+            // tool_use ids, across 50 transcripts / 16,330 rows), so the rows
+            // of one message never repeat a block.
+            const content = entry.message?.content;
+            if (Array.isArray(content)) {
+                for (const block of content) {
+                    if (!block || block.type !== "tool_use" || !block.id || !block.name) {
+                        continue;
+                    }
+                    toolCalls++;
+                    if (AGENT_TOOLS.has(block.name)) {
+                        agentCalls++;
+                    }
+                    else if (SKILL_TOOLS.has(block.name)) {
+                        skillCalls++;
+                    }
+                }
+            }
+            const usage = entry.message?.usage;
             if (!usage) {
                 continue;
             }
@@ -259,13 +334,16 @@ export function tallyFile(filePath, size, memo) {
             lastId = id;
             lastIdTokens = tokens;
         }
-        return { fp, consumed, total: Math.max(0, total), lastId, lastIdTokens };
+        return {
+            fp, consumed, total: Math.max(0, total), lastId, lastIdTokens,
+            toolCalls, agentCalls, skillCalls, firstTimestamp,
+        };
     }
     catch (error) {
         // A live transcript can rotate or vanish between the stat and the read.
         // Keep the previous total for this frame; the next one retries. Two
         // different routes get us there: subagents.js refuses to trust a memo
-        // whose `consumed` falls short of the file size, and sumLeadTokens
+        // whose `consumed` falls short of the file size, and tallyLead
         // either skips the write entirely (memo returned unchanged) or persists
         // `fp: ""`, which can never match a real fingerprint.
         if (process.env.HUD_DEBUG) {
@@ -275,18 +353,25 @@ export function tallyFile(filePath, size, memo) {
     }
 }
 /**
- * Cumulative de-duplicated token total for the lead transcript, memoized across
- * renders in the session cache dir (the HUD runs one process per frame, so an
- * in-memory cache would never survive).
+ * @typedef {Object} LeadTally
+ * @property {number|null} totalTokens De-duplicated input+output total; null when the file holds no usage rows, so `token:` hides rather than reading 0.
+ * @property {number} toolCalls
+ * @property {number} agentCalls
+ * @property {number} skillCalls
+ * @property {Date|null} sessionStart Timestamp of the first row, or null when no row carries one.
+ */
+/**
+ * Tally the lead transcript — token total, call counts and session start —
+ * memoized across renders in the session cache dir as `lead-tokens.json` (the
+ * HUD runs one process per frame, so an in-memory cache would never survive).
  *
- * Returns `null` when there is no usable transcript or no usage data at all, so
- * the `token:` element hides rather than showing a misleading 0.
+ * Returns `null` when there is no usable transcript at all.
  *
  * @param {string|null|undefined} leadTranscriptPath
  * @param {string} [sessionKey]
- * @returns {number|null}
+ * @returns {LeadTally|null}
  */
-export function sumLeadTokens(leadTranscriptPath, sessionKey) {
+export function tallyLead(leadTranscriptPath, sessionKey) {
     try {
         if (!leadTranscriptPath || !existsSync(leadTranscriptPath)) {
             return null;
@@ -303,8 +388,9 @@ export function sumLeadTokens(leadTranscriptPath, sessionKey) {
             }
         }
         const next = tallyFile(leadTranscriptPath, size, memo);
-        if (cachePath &&
-            (!memo || memo.consumed !== next.consumed || memo.total !== next.total)) {
+        // Persist on any change — including the one-time migration of a memo
+        // that predates the counters, where `consumed` and `total` stand still.
+        if (cachePath && !sameMemo(memo, next)) {
             try {
                 atomicWriteJsonSync(cachePath, next);
             }
@@ -312,8 +398,15 @@ export function sumLeadTokens(leadTranscriptPath, sessionKey) {
                 // Best-effort; a missed write just re-scans next frame.
             }
         }
-        // No usage rows seen anywhere in the file → nothing meaningful to show.
-        return next.consumed > 0 && next.total > 0 ? next.total : null;
+        const start = next.firstTimestamp ? new Date(next.firstTimestamp) : null;
+        return {
+            // No usage rows seen anywhere in the file → nothing meaningful to show.
+            totalTokens: next.consumed > 0 && next.total > 0 ? next.total : null,
+            toolCalls: next.toolCalls,
+            agentCalls: next.agentCalls,
+            skillCalls: next.skillCalls,
+            sessionStart: start && !Number.isNaN(start.getTime()) ? start : null,
+        };
     }
     catch (error) {
         if (process.env.HUD_DEBUG) {

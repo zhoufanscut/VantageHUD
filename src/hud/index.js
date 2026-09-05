@@ -8,8 +8,8 @@
 import { readStdin, writeStdinCache, readStdinCache, getContextPercent, getContextPercentFromUsage, getModelId, getModelName, getEffortLevel, getRateLimitsFromStdin, stabilizeContextPercent, } from "./stdin.js";
 import { parseTranscript } from "./transcript.js";
 import { sumSubagentTokens } from "./subagents.js";
-import { sumLeadTokens } from "./token-tally.js";
-import { readHudState, readHudConfig, writeHudState, } from "./state.js";
+import { tallyLead } from "./token-tally.js";
+import { readHudConfig } from "./state.js";
 import { getUsage } from "./usage-api.js";
 import { render } from "./render.js";
 import { sanitizeOutput } from "./sanitize.js";
@@ -68,8 +68,7 @@ function mergeStdinRateLimits(stdinRateLimits, usageResult) {
  * Build the sessionHealth data (session duration) from the session start time.
  */
 function calculateSessionHealth(sessionStart) {
-    const durationMs = sessionStart ? Date.now() - sessionStart.getTime() : 0;
-    const durationMinutes = Math.floor(durationMs / 60_000);
+    const durationMinutes = Math.max(0, Math.floor((Date.now() - sessionStart.getTime()) / 60_000));
     return { durationMinutes };
 }
 /**
@@ -111,35 +110,16 @@ async function main() {
         }
         // Resolve worktree-mismatched transcript paths (issue #1094)
         const resolvedTranscriptPath = resolveTranscriptPath(stdin.transcript_path, cwd);
-        // Parse transcript for tool/skill counts, tokens, todos, and prompt-cache age
-        const transcriptData = await parseTranscript(resolvedTranscriptPath);
-        // Read HUD state (persists the real session start across tail-parsing resets)
-        const hudState = readHudState(cwd, sessionKey);
-        // Persist session start time to survive tail-parsing resets (#528)
-        // When tail parsing kicks in for large transcripts, sessionStart comes from
-        // the first entry in the tail chunk rather than the actual session start.
-        // We persist the real start time in HUD state on first observation.
-        // Scoped per session ID so a new session in the same cwd resets the timestamp.
-        let sessionStart = transcriptData.sessionStart;
-        const sameSession = hudState?.sessionId === sessionKey;
-        if (sameSession && hudState?.sessionStartTimestamp) {
-            // Use persisted value (the real session start) - but validate first
-            const persisted = new Date(hudState.sessionStartTimestamp);
-            if (!isNaN(persisted.getTime())) {
-                sessionStart = persisted;
-            }
-            // If invalid, fall through to transcript-derived sessionStart
-        }
-        else if (sessionStart) {
-            // First time seeing session start (or new session) - persist it
-            const stateToWrite = hudState || {
-                timestamp: new Date().toISOString(),
-            };
-            stateToWrite.sessionStartTimestamp = sessionStart.toISOString();
-            stateToWrite.sessionId = sessionKey;
-            stateToWrite.timestamp = new Date().toISOString();
-            writeHudState(stateToWrite, cwd, sessionKey);
-        }
+        // Tail-read the transcript for the last request's usage (feeds ctx:).
+        const transcriptData = parseTranscript(resolvedTranscriptPath);
+        // Everything cumulative — the token total, the tool/agent/skill counts
+        // and the session start — comes from the incremental whole-file tally
+        // (token-tally.js), memoized per session so each frame parses only the
+        // bytes appended since the last one. A tail read cannot provide these:
+        // it truncates on any large transcript and runs backwards as the
+        // window slides (measured; see token-tally.js).
+        const lead = tallyLead(resolvedTranscriptPath, sessionKey);
+        const sessionStart = lead?.sessionStart ?? null;
         // Merge Claude Code stdin generic buckets with API/cache-specific fields.
         // Stdin owns fresher five-hour/seven-day values, while getUsage() may provide
         // Sonnet/Opus weekly, monthly, extra, stale, and error metadata.
@@ -167,9 +147,8 @@ async function main() {
         // multi-agent run. Both sides run through the same de-duplicating,
         // incremental tally (token-tally.js), so they cannot drift apart in how
         // they count. Only enrich a trustworthy lead total (null → hidden).
-        const leadTotalTokens = sumLeadTokens(resolvedTranscriptPath, sessionKey);
-        const sessionTotalTokens = leadTotalTokens != null
-            ? leadTotalTokens + sumSubagentTokens(resolvedTranscriptPath, sessionKey)
+        const sessionTotalTokens = lead?.totalTokens != null
+            ? lead.totalTokens + sumSubagentTokens(resolvedTranscriptPath, sessionKey)
             : null;
         // Build render context
         const context = {
@@ -182,12 +161,13 @@ async function main() {
             effortLevel: getEffortLevel(stdin),
             cwd,
             rateLimitsResult,
-            sessionHealth: calculateSessionHealth(sessionStart),
+            // Null without a transcript, so `session:` hides instead of reading 0m.
+            sessionHealth: sessionStart ? calculateSessionHealth(sessionStart) : null,
             lastRequestTokenUsage: transcriptData.lastRequestTokenUsage || null,
             sessionTotalTokens,
-            toolCallCount: transcriptData.toolCallCount,
-            agentCallCount: transcriptData.agentCallCount,
-            skillCallCount: transcriptData.skillCallCount,
+            toolCallCount: lead?.toolCalls ?? 0,
+            agentCallCount: lead?.agentCalls ?? 0,
+            skillCallCount: lead?.skillCalls ?? 0,
         };
         // Debug: log data if HUD_DEBUG is set
         if (process.env.HUD_DEBUG) {
@@ -240,20 +220,10 @@ async function main() {
         }
     }
     catch (error) {
-        // Distinguish installation errors from runtime errors
-        const isInstallError = error instanceof Error &&
-            (error.message.includes("ENOENT") ||
-                error.message.includes("MODULE_NOT_FOUND") ||
-                error.message.includes("Cannot find module"));
-        if (isInstallError) {
-            console.log("[HUD] run /setup to install properly");
-        }
-        else {
-            // Output fallback message to stdout for status line visibility
-            console.log("[HUD] HUD error - check stderr");
-            // Log actual runtime errors to stderr for debugging
-            console.error("[HUD Error]", error instanceof Error ? error.message : error);
-        }
+        // One fallback line for the bar; the detail goes to stderr, which
+        // statusline.sh keeps as cache/<session>/statusline.err.
+        console.log("[HUD] HUD error - check stderr");
+        console.error("[HUD Error]", error instanceof Error ? (error.stack || error.message) : error);
     }
 }
 // Auto-run (unconditional so dynamic import() via statusline.mjs wrapper works correctly)

@@ -1,180 +1,86 @@
 /**
  * HUD - Transcript Parser
  *
- * Parse JSONL transcript from Claude Code to extract tool/skill counts, token
- * usage, todos, and prompt-cache age. Based on claude-hud reference implementation.
+ * Reads the tail of the lead transcript (`.jsonl`) for the one figure that
+ * legitimately wants only recency: the **last request's token usage**, which
+ * feeds `ctx:` when the live stdin `context_window` is zeroed (see
+ * `getContextPercentFromUsage` in stdin.js).
  *
- * Performance optimizations:
- * - Tail-based parsing: reads only the last few MB of large transcripts
+ * Nothing cumulative is computed here, on purpose. A tail read publishes a
+ * truncated figure as a complete one — the old token total measured 39% of the
+ * truth on a 25.4 MB transcript, and the old tool/agent/skill counts 89% on a
+ * 4.9 MB one (442 of 494 tool calls, 2 of 3 agent calls) — and both can run
+ * *backwards* as the window slides. Every running figure (tokens, call counts,
+ * session start) therefore comes from token-tally.js, which scans the whole
+ * file incrementally and memoizes the result per session.
  */
-import { createReadStream, existsSync, statSync, openSync, readSync, closeSync, } from "fs";
-import { createInterface } from "readline";
-import { basename } from "path";
-// Performance constants
-// 4MB tail window: large enough that token-usage and prompt-cache-age signals for
-// long sessions still fall inside the parsed window.
+import { existsSync, statSync, openSync, readSync, closeSync } from "fs";
+// The last usage row sits near the end of the file, but a single large
+// tool_result row can precede it; 4 MiB leaves ample room.
 const MAX_TAIL_BYTES = 4 * 1024 * 1024;
 /**
- * Tools known to require permission approval in Claude Code.
- * Only these tools will trigger the "APPROVE?" indicator.
+ * @typedef {Object} LastRequestTokenUsage
+ * @property {number} inputTokens
+ * @property {number} outputTokens
+ * @property {number} [reasoningTokens]
+ * @property {number} [cacheReadInputTokens]
+ * @property {number} [cacheCreationInputTokens]
  */
-const PERMISSION_TOOLS = [
-    "Edit",
-    "Write",
-    "Bash",
-    "proxy_Edit",
-    "proxy_Write",
-    "proxy_Bash",
-];
 /**
- * Time threshold for considering a tool "pending approval".
- * If tool_use exists without tool_result within this window, show indicator.
+ * Read the last request's token usage from the transcript tail.
+ * Never throws: a missing or unreadable transcript yields no usage.
+ *
+ * @param {string|null|undefined} transcriptPath
+ * @returns {{ lastRequestTokenUsage: LastRequestTokenUsage|undefined }}
  */
-const PERMISSION_THRESHOLD_MS = 3000; // 3 seconds
-/**
- * Module-level map tracking pending permission-requiring tools.
- * Key: tool_use block id, Value: PendingPermission info
- * Cleared when tool_result is received for the corresponding tool_use.
- */
-const pendingPermissionMap = new Map();
-const transcriptCache = new Map();
-const TRANSCRIPT_CACHE_MAX_SIZE = 20;
-export async function parseTranscript(transcriptPath) {
-    pendingPermissionMap.clear();
-    const result = {
-        todos: [],
-        lastActivatedSkill: undefined,
-        toolCallCount: 0,
-        agentCallCount: 0,
-        skillCallCount: 0,
-        lastToolName: null,
-    };
+export function parseTranscript(transcriptPath) {
+    const result = { lastRequestTokenUsage: undefined };
     if (!transcriptPath || !existsSync(transcriptPath)) {
         return result;
     }
-    let cacheKey = null;
     try {
-        const stat = statSync(transcriptPath);
-        cacheKey = `${transcriptPath}:${stat.size}:${stat.mtimeMs}`;
-        const cached = transcriptCache.get(transcriptPath);
-        if (cached?.cacheKey === cacheKey) {
-            return finalizeTranscriptResult(cloneTranscriptData(cached.baseResult), cached.pendingPermissions);
-        }
-    }
-    catch {
-        return result;
-    }
-    const latestTodos = [];
-    try {
-        const stat = statSync(transcriptPath);
-        const fileSize = stat.size;
-        if (fileSize > MAX_TAIL_BYTES) {
-            const lines = readTailLines(transcriptPath, fileSize, MAX_TAIL_BYTES);
-            for (const line of lines) {
-                if (!line.trim())
-                    continue;
-                try {
-                    const entry = JSON.parse(line);
-                    processEntry(entry, latestTodos, result);
-                }
-                catch {
-                    // Skip malformed lines
-                }
+        const fileSize = statSync(transcriptPath).size;
+        for (const line of readTailLines(transcriptPath, fileSize, MAX_TAIL_BYTES)) {
+            if (!line.trim())
+                continue;
+            let entry;
+            try {
+                entry = JSON.parse(line);
             }
-        }
-        else {
-            const fileStream = createReadStream(transcriptPath);
-            const rl = createInterface({
-                input: fileStream,
-                crlfDelay: Infinity,
-            });
-            for await (const line of rl) {
-                if (!line.trim())
-                    continue;
-                try {
-                    const entry = JSON.parse(line);
-                    processEntry(entry, latestTodos, result);
-                }
-                catch {
-                    // Skip malformed lines
-                }
+            catch {
+                continue; // Skip malformed lines
+            }
+            const usage = extractLastRequestTokenUsage(entry?.message?.usage);
+            if (usage) {
+                result.lastRequestTokenUsage = usage;
             }
         }
     }
     catch {
-        return finalizeTranscriptResult(result, []);
+        // Unreadable, or rotated mid-frame — nothing to report this frame.
     }
-    result.todos = latestTodos;
-    const pendingPermissions = Array.from(pendingPermissionMap.values()).map(clonePendingPermission);
-    const finalized = finalizeTranscriptResult(result, pendingPermissions);
-    if (cacheKey) {
-        if (transcriptCache.size >= TRANSCRIPT_CACHE_MAX_SIZE) {
-            transcriptCache.clear();
-        }
-        transcriptCache.set(transcriptPath, {
-            cacheKey,
-            baseResult: cloneTranscriptData(finalized),
-            pendingPermissions,
-        });
-    }
-    return finalized;
+    return result;
 }
 /**
  * Read the tail portion of a file and split into lines.
  * Handles partial first line (from mid-file start).
  */
-function cloneDate(value) {
-    return value ? new Date(value.getTime()) : undefined;
-}
-function clonePendingPermission(permission) {
-    return {
-        ...permission,
-        timestamp: new Date(permission.timestamp.getTime()),
-    };
-}
-function cloneTranscriptData(result) {
-    return {
-        ...result,
-        todos: result.todos.map((todo) => ({ ...todo })),
-        sessionStart: cloneDate(result.sessionStart),
-        lastActivatedSkill: result.lastActivatedSkill
-            ? {
-                ...result.lastActivatedSkill,
-                timestamp: new Date(result.lastActivatedSkill.timestamp.getTime()),
-            }
-            : undefined,
-        pendingPermission: result.pendingPermission
-            ? clonePendingPermission(result.pendingPermission)
-            : undefined,
-        lastRequestTokenUsage: result.lastRequestTokenUsage
-            ? { ...result.lastRequestTokenUsage }
-            : undefined,
-    };
-}
-function finalizeTranscriptResult(result, pendingPermissions) {
-    const now = Date.now();
-    result.pendingPermission = undefined;
-    for (const permission of pendingPermissions) {
-        const age = now - permission.timestamp.getTime();
-        if (age <= PERMISSION_THRESHOLD_MS) {
-            result.pendingPermission = clonePendingPermission(permission);
-            break;
-        }
-    }
-    return result;
-}
 function readTailLines(filePath, fileSize, maxBytes) {
     const startOffset = Math.max(0, fileSize - maxBytes);
     const bytesToRead = fileSize - startOffset;
-    const fd = openSync(filePath, "r");
+    if (bytesToRead <= 0) {
+        return [];
+    }
     const buffer = Buffer.alloc(bytesToRead);
+    const fd = openSync(filePath, "r");
+    let bytesRead = 0;
     try {
-        readSync(fd, buffer, 0, bytesToRead, startOffset);
+        bytesRead = readSync(fd, buffer, 0, bytesToRead, startOffset);
     }
     finally {
         closeSync(fd);
     }
-    const content = buffer.toString("utf8");
+    const content = buffer.subarray(0, bytesRead).toString("utf8");
     const lines = content.split("\n");
     // If we started mid-file, discard the potentially incomplete first line.
     // This also handles UTF-8 multi-byte boundary splits: the first chunk may
@@ -184,106 +90,6 @@ function readTailLines(filePath, fileSize, maxBytes) {
         lines.shift();
     }
     return lines;
-}
-/**
- * Extract a human-readable target summary from tool input.
- */
-function extractTargetSummary(input, toolName) {
-    if (!input || typeof input !== "object")
-        return "...";
-    const inp = input;
-    // Edit/Write: show file path
-    if (toolName.includes("Edit") || toolName.includes("Write")) {
-        const filePath = inp.file_path;
-        if (filePath) {
-            // Return just the filename or last path segment
-            return basename(filePath) || filePath;
-        }
-    }
-    // Bash: show first 20 chars of command
-    if (toolName.includes("Bash")) {
-        const cmd = inp.command;
-        if (cmd) {
-            const trimmed = cmd.trim().substring(0, 20);
-            return trimmed.length < cmd.trim().length ? `${trimmed}...` : trimmed;
-        }
-    }
-    return "...";
-}
-/**
- * Process a single transcript entry
- */
-function processEntry(entry, latestTodos, result) {
-    const timestamp = entry.timestamp ? new Date(entry.timestamp) : new Date();
-    // Last-request usage only — the point-in-time snapshot `ctx:` needs. The
-    // cumulative `token:` total is NOT computed here: a tail-read sees only the
-    // last MAX_TAIL_BYTES and would publish a truncated sum as a complete one
-    // (measured on a 25.4 MB transcript: 739,480 against a true 1,910,334, i.e.
-    // 39% of the truth, and able to run backwards as the window slid).
-    // token-tally.js owns that figure and scans the whole file incrementally.
-    const usage = extractLastRequestTokenUsage(entry.message?.usage);
-    if (usage) {
-        result.lastRequestTokenUsage = usage;
-    }
-    // Set session start time from first entry
-    if (!result.sessionStart && entry.timestamp) {
-        result.sessionStart = timestamp;
-    }
-    const content = entry.message?.content;
-    // String-shaped user content is a typed prompt or a slash-command /
-    // command-output entry; neither carries tool_use or todo blocks, so there is
-    // nothing further to scan.
-    if (typeof content === "string") {
-        return;
-    }
-    if (!content || !Array.isArray(content))
-        return;
-    for (const block of content) {
-        // Track tool_use for Task (agents) and TodoWrite
-        if (block.type === "tool_use" && block.id && block.name) {
-            result.toolCallCount++;
-            result.lastToolName = block.name;
-            if (block.name === "Task" || block.name === "proxy_Task" || block.name === "Agent") {
-                result.agentCallCount++;
-            }
-            else if (block.name === "TodoWrite" || block.name === "proxy_TodoWrite") {
-                const input = block.input;
-                if (input?.todos && Array.isArray(input.todos)) {
-                    // Replace latest todos with new ones
-                    latestTodos.length = 0;
-                    latestTodos.push(...input.todos.map((t) => ({
-                        content: t.content,
-                        status: t.status,
-                        activeForm: t.activeForm,
-                    })));
-                }
-            }
-            else if (block.name === "Skill" || block.name === "proxy_Skill") {
-                result.skillCallCount++;
-                // Track last activated skill
-                const input = block.input;
-                if (input?.skill) {
-                    result.lastActivatedSkill = {
-                        name: input.skill,
-                        args: input.args,
-                        timestamp: timestamp,
-                    };
-                }
-            }
-            // Track tool_use for permission-requiring tools
-            if (PERMISSION_TOOLS.includes(block.name)) {
-                pendingPermissionMap.set(block.id, {
-                    toolName: block.name.replace("proxy_", ""),
-                    targetSummary: extractTargetSummary(block.input, block.name),
-                    timestamp: timestamp,
-                });
-            }
-        }
-        // Clear pending permissions when the tool_result for that tool arrives.
-        if (block.type === "tool_result" && block.tool_use_id) {
-            pendingPermissionMap.delete(block.tool_use_id);
-        }
-    }
 }
 function extractLastRequestTokenUsage(usage) {
     if (!usage)
