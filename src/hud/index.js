@@ -2,7 +2,7 @@
 /**
  * HUD - Main Entry Point
  *
- * Statusline command that visualizes claude-statusline state.
+ * Statusline command that renders the VantageHUD status line.
  * Receives stdin JSON from Claude Code and outputs formatted statusline.
  */
 import { readStdin, writeStdinCache, readStdinCache, getContextPercent, getContextPercentFromUsage, getModelId, getModelName, getEffortLevel, getRateLimitsFromStdin, stabilizeContextPercent, } from "./stdin.js";

@@ -1,5 +1,5 @@
 /**
- * Atomic, durable file writes for claude-statusline.
+ * Atomic, durable file writes for the HUD.
  * Self-contained module with no external dependencies.
  */
 import * as fsSync from "fs";

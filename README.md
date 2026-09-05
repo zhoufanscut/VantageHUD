@@ -1,4 +1,4 @@
-# claude-statusline
+# VantageHUD
 
 A small, self-contained [Claude Code](https://claude.com/claude-code) statusline
 (HUD). From the JSON Claude Code pipes to the `statusLine` command it renders the
@@ -33,7 +33,7 @@ cache/              # render cache + state, one subfolder per session (gitignore
 ### 2. Get the folder
 Clone it anywhere — `~/.claude/hud` is the conventional spot:
 ```sh
-git clone <your-repo-url> ~/.claude/hud
+git clone https://github.com/zhoufanscut/VantageHUD.git ~/.claude/hud
 ```
 (The scripts keep their executable bit through `git clone`, so there's nothing
 to `chmod`.)
