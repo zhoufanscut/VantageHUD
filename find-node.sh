@@ -15,17 +15,28 @@
 
 NODE_BIN=""
 
+# Pick the highest-versioned executable among candidate paths (one per line on
+# stdin) whose path carries a vX.Y.Z segment. Glob order is lexical — v9 sorts
+# after v20 — so the version is compared numerically via a zero-padded key.
+newest_node() {
+  while IFS= read -r _cand; do
+    [ -x "$_cand" ] || continue
+    _key=$(printf '%s\n' "$_cand" | sed -n 's/.*\/v\{0,1\}\([0-9]\{1,\}\)\.\([0-9]\{1,\}\)\.\([0-9]\{1,\}\)\/.*/\1 \2 \3/p')
+    [ -n "$_key" ] || continue
+    set -- $_key
+    printf '%08d%08d%08d %s\n' "$1" "$2" "$3" "$_cand"
+  done | sort -r | head -1 | cut -d' ' -f2-
+}
+
 # 1. which node
 _resolved=$(command -v node 2>/dev/null)
 if [ -n "$_resolved" ]; then
   NODE_BIN="$_resolved"
 fi
 
-# 2. nvm versioned paths: iterate to find the latest installed version
+# 2. nvm versioned paths: the newest installed version
 if [ -z "$NODE_BIN" ] && [ -d "$HOME/.nvm/versions/node" ]; then
-  for _path in "$HOME/.nvm/versions/node/"*/bin/node; do
-    [ -x "$_path" ] && NODE_BIN="$_path"
-  done
+  NODE_BIN=$(for _path in "$HOME/.nvm/versions/node/"*/bin/node; do printf '%s\n' "$_path"; done | newest_node)
 fi
 
 # 3. fnm versioned paths (Linux and macOS default locations)
@@ -35,9 +46,7 @@ if [ -z "$NODE_BIN" ]; then
     "$HOME/Library/Application Support/fnm/node-versions" \
     "$HOME/.local/share/fnm/node-versions"; do
     if [ -d "$_fnm_base" ]; then
-      for _path in "$_fnm_base/"*/installation/bin/node; do
-        [ -x "$_path" ] && NODE_BIN="$_path"
-      done
+      NODE_BIN=$(for _path in "$_fnm_base/"*/installation/bin/node; do printf '%s\n' "$_path"; done | newest_node)
       [ -n "$NODE_BIN" ] && break
     fi
   done
