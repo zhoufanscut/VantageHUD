@@ -210,13 +210,12 @@ refresh_cache() {
     HUD_SESSION_KEY="$SESSION_KEY" node "$HUD_SCRIPT" < "$INPUT_FILE" > "$NODE_STDOUT_TMP" 2> "$NODE_STDERR_TMP"
   fi
 
-  # Keep the last good line if rendering fails or returns empty output. A
-  # failed render either leaves stdout empty or prints a "[HUD] ..." fallback
-  # line there (e.g. "[HUD] HUD error - check stderr"), so non-empty stdout
-  # alone does not mean success. On failure, keep stderr as statusline.err so
-  # the "check stderr" hint points at something; only a successful render
-  # clears it. Successful renders may emit benign stderr noise (worktree
-  # warnings, HUD_DEBUG) — that is discarded, never persisted.
+  # A failed render either leaves stdout empty (crash, timeout, no node) or
+  # prints a "[HUD] ..." fallback line (a caught runtime error). Empty output
+  # keeps the last good line; the fallback line replaces it on purpose, since
+  # it points at stderr — kept as statusline.err on failure and cleared only by
+  # a successful render. Successful renders may emit benign stderr noise
+  # (worktree warnings, HUD_DEBUG) — that is discarded, never persisted.
   if [ ! -s "$NODE_STDOUT_TMP" ] || grep -q '^\[HUD\]' "$NODE_STDOUT_TMP" 2>/dev/null; then
     if [ -s "$NODE_STDERR_TMP" ]; then
       mv "$NODE_STDERR_TMP" "$SESSION_DIR/statusline.err" 2>/dev/null || :
@@ -236,26 +235,26 @@ refresh_cache() {
 }
 
 # Hot path: return immediately from the last successful render for this session
-# — unless config.json changed since that render, in which case fall through to
-# a synchronous refresh so the edit shows on this frame, not the next.
-if [ -s "$OUTPUT_FILE" ] && ! config_newer_than "$OUTPUT_FILE"; then
+# — unless config.json changed since that render (fall through to a synchronous
+# refresh so the edit shows on this frame, not the next), or HUD_SYNC_REFRESH=1
+# asks for this payload to be rendered before anything is printed. The smoke
+# test relies on the latter: served from the cache, it would print the
+# *previous* frame and a code change would look like it had no effect.
+if [ "${HUD_SYNC_REFRESH:-0}" != "1" ] && [ -s "$OUTPUT_FILE" ] && ! config_newer_than "$OUTPUT_FILE"; then
   cat "$OUTPUT_FILE" 2>/dev/null || printf '[HUD] Starting...\n'
   # Refresh in background for the next frame.
   if try_acquire_lock; then
-    if [ "${HUD_SYNC_REFRESH:-0}" = "1" ]; then
-      refresh_cache
-    else
-      ( refresh_cache ) >/dev/null 2>&1 &
-    fi
+    ( refresh_cache ) >/dev/null 2>&1 &
   fi
   exit 0
 fi
 
-# Synchronous refresh: either the first render for this session, or config.json
-# changed since the last render. Claude Code re-runs the statusLine command only
-# on its own triggers (new assistant message, /compact, a permission-mode or vim
-# toggle, or a configured refreshInterval), so an async background refresh can
-# leave the pane stuck on the old frame (or "[HUD] Starting...") for a long time.
+# Synchronous refresh: the first render for this session, a config.json change
+# since the last render, or HUD_SYNC_REFRESH=1. Claude Code re-runs the
+# statusLine command only on its own triggers (new assistant message, /compact,
+# a permission-mode or vim toggle, a configured refreshInterval), so an async
+# background refresh can leave the pane stuck on the old frame (or
+# "[HUD] Starting...") for a long time.
 if [ -s "$INPUT_FILE" ] && try_acquire_lock; then
   refresh_cache
   if [ -s "$OUTPUT_FILE" ]; then

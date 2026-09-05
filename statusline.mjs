@@ -16,10 +16,16 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 /**
- * Route https.request through HTTPS_PROXY / https_proxy via an HTTP CONNECT
- * tunnel, using only Node built-ins. Patches the shared `node:https` module
- * object, so the dynamically-imported HUD (which calls https.request) is
- * covered. Does nothing unless a proxy env var is set.
+ * Route https.request through HTTPS_PROXY / https_proxy via a CONNECT tunnel,
+ * using only Node built-ins. Patches the shared `node:https` module object, so
+ * the dynamically-imported HUD (which calls https.request) is covered. Does
+ * nothing unless a proxy env var is set.
+ *
+ * Handles the two things a corporate proxy commonly needs: credentials in the
+ * URL (`http://user:pass@proxy:3128`) are sent as `Proxy-Authorization`, and
+ * an `https://` proxy is reached over TLS. A CONNECT that is not answered with
+ * 200 (407 auth, 403 policy) fails the request outright instead of starting a
+ * TLS handshake on a socket that carries the proxy's error page.
  */
 function installProxyTunnel() {
   const proxyEnv = process.env.HTTPS_PROXY || process.env.https_proxy;
@@ -30,20 +36,57 @@ function installProxyTunnel() {
   } catch {
     return;
   }
+  const origRequest = https.request.bind(https);
+  const proxyIsTls = proxyUrl.protocol === "https:";
+  const proxyPort = parseInt(proxyUrl.port, 10) || (proxyIsTls ? 443 : 80);
+  // URL parsing keeps userinfo percent-encoded; decode before base64-ing.
+  const decode = (s) => {
+    try {
+      return decodeURIComponent(s);
+    } catch {
+      return s;
+    }
+  };
+  const proxyHeaders = {};
+  if (proxyUrl.username || proxyUrl.password) {
+    const userinfo = `${decode(proxyUrl.username)}:${decode(proxyUrl.password)}`;
+    proxyHeaders["Proxy-Authorization"] = `Basic ${Buffer.from(userinfo).toString("base64")}`;
+  }
 
   class HttpsProxyAgent extends https.Agent {
     createConnection(options, callback) {
-      const tunnel = http.request({
+      const host = options.hostname || options.host;
+      const target = `${host}:${options.port || 443}`;
+      const connect = proxyIsTls ? origRequest : http.request;
+      // Bound the CONNECT handshake. The outer request's own timeout only
+      // arms once it has a socket, which a proxy that accepts the TCP
+      // connection and never answers would withhold forever — and with it
+      // the whole render (reproduced: the process hung until killed).
+      const timeout = options.timeout > 0 ? options.timeout : 10000;
+      const tunnel = connect({
         hostname: proxyUrl.hostname,
-        port: parseInt(proxyUrl.port) || 80,
+        port: proxyPort,
         method: "CONNECT",
-        path: `${options.hostname || options.host}:${options.port || 443}`,
-        headers: { Host: `${options.hostname || options.host}:${options.port || 443}` },
+        path: target,
+        headers: { Host: target, ...proxyHeaders },
+        timeout,
       });
-      tunnel.once("connect", (_res, socket) => {
+      tunnel.once("timeout", () => {
+        // destroy(err) surfaces through the "error" listener below, once.
+        tunnel.destroy(new Error(`proxy CONNECT to ${target} timed out after ${timeout} ms`));
+      });
+      tunnel.once("connect", (res, socket) => {
+        if (res.statusCode !== 200) {
+          socket.destroy();
+          callback(new Error(`proxy CONNECT to ${target} failed: HTTP ${res.statusCode}`));
+          return;
+        }
+        // The handshake bound must not outlive the handshake: this raw socket
+        // now carries the TLS session, whose idle limit is the outer request's.
+        socket.setTimeout(0);
         const tlsSock = tls.connect({
           socket,
-          servername: options.hostname || options.host,
+          servername: host,
           rejectUnauthorized: options.rejectUnauthorized !== false,
         });
         callback(null, tlsSock);
@@ -54,7 +97,6 @@ function installProxyTunnel() {
   }
 
   const agent = new HttpsProxyAgent({ keepAlive: false });
-  const origRequest = https.request.bind(https);
 
   https.request = function proxyTunnelRequest(urlOrOpts, optsOrCb, cb) {
     let opts;
