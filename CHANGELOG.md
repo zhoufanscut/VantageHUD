@@ -66,5 +66,5 @@ counter that is finally correct.
 First public release — a small, self-contained statusline for Claude Code that
 shows the model, thinking effort, context, rate limits, and git at a glance.
 
-[0.4.0]: https://github.com/zhoufanscut/VantageHud/compare/v0.3.0...v0.4.0
-[0.3.0]: https://github.com/zhoufanscut/VantageHud/releases/tag/v0.3.0
+[0.4.0]: https://github.com/zhoufanscut/VantageHUD/compare/v0.3.0...v0.4.0
+[0.3.0]: https://github.com/zhoufanscut/VantageHUD/releases/tag/v0.3.0
