@@ -49,13 +49,20 @@ function mergeStdinRateLimits(stdinRateLimits, usageResult) {
     if (!stdinRateLimits) {
         return usageResult;
     }
-    return {
+    // The payload's five-hour/seven-day figures are live for this frame, so a
+    // `stale` flag the API cache earned must not paint them with `*` / `~` —
+    // the marker is per fragment, not per bucket. What the cache still
+    // contributes (the Opus/Sonnet weekly and `extra:` buckets) may then be up
+    // to 15 min old without saying so; their reset countdowns are computed live.
+    const merged = {
         ...(usageResult ?? {}),
         rateLimits: {
             ...(usageResult?.rateLimits ?? {}),
             ...stdinRateLimits,
         },
     };
+    delete merged.stale;
+    return merged;
 }
 /**
  * Build the sessionHealth data (session duration) from the session start time.

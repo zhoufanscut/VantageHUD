@@ -57,7 +57,13 @@ export function renderRateLimits(limits, stale, sonnetThreshold = 0) {
         const head = `${LABEL}${label}:${RESET}${getColor(pct)}${pct}%${RESET}${staleMarker}`;
         return reset ? `${head}${LABEL}(${resetPrefix}${reset})${RESET}` : head;
     };
-    const parts = [fmt('5h', limits.fiveHourPercent, limits.fiveHourResetsAt)];
+    const parts = [];
+    // Every window is optional: a payload can carry one without the other, and
+    // the API may have answered with neither. Rendering an absent one would
+    // read `5h:NaN%`.
+    if (limits.fiveHourPercent != null) {
+        parts.push(fmt('5h', limits.fiveHourPercent, limits.fiveHourResetsAt));
+    }
     if (limits.weeklyPercent != null) {
         parts.push(fmt('7d', limits.weeklyPercent, limits.weeklyResetsAt));
     }
@@ -79,7 +85,7 @@ export function renderRateLimits(limits, stale, sonnetThreshold = 0) {
         const extraHead = `${LABEL}extra:${RESET}${getColor(extra)}${extra}%${RESET}${staleMarker}${dollarPart}`;
         parts.push(extraReset ? `${extraHead}${LABEL}(${resetPrefix}${extraReset})${RESET}` : extraHead);
     }
-    return parts.join(' ');
+    return parts.length > 0 ? parts.join(' ') : null;
 }
 /**
  * Render rate limits with visual progress bars.
@@ -102,7 +108,10 @@ export function renderRateLimitsWithBar(limits, barWidth = 8, stale, sonnetThres
         const head = `${LABEL}${label}:${RESET}[${bar}]${color}${pct}%${RESET}${staleMarker}`;
         return reset ? `${head}${LABEL}(${resetPrefix}${reset})${RESET}` : head;
     };
-    const parts = [fmt('5h', limits.fiveHourPercent, limits.fiveHourResetsAt)];
+    const parts = [];
+    if (limits.fiveHourPercent != null) {
+        parts.push(fmt('5h', limits.fiveHourPercent, limits.fiveHourResetsAt));
+    }
     if (limits.weeklyPercent != null) {
         parts.push(fmt('7d', limits.weeklyPercent, limits.weeklyResetsAt));
     }
@@ -128,7 +137,7 @@ export function renderRateLimitsWithBar(limits, barWidth = 8, stale, sonnetThres
         const head = `${LABEL}extra:${RESET}[${bar}]${color}${extra}%${RESET}${staleMarker}${dollarPart}`;
         parts.push(extraReset ? `${head}${LABEL}(${resetPrefix}${extraReset})${RESET}` : head);
     }
-    return parts.join(' ');
+    return parts.length > 0 ? parts.join(' ') : null;
 }
 /**
  * Render an error indicator when the built-in rate limit API call fails.

@@ -245,17 +245,27 @@ export function getContextPercentFromUsage(stdin, usage) {
  * Convert Claude Code stdin rate_limits into the existing HUD RateLimits shape.
  */
 export function getRateLimitsFromStdin(stdin) {
-    const fiveHour = stdin.rate_limits?.five_hour?.used_percentage;
-    const sevenDay = stdin.rate_limits?.seven_day?.used_percentage;
-    if (fiveHour == null && sevenDay == null) {
+    const fiveHour = stdin.rate_limits?.five_hour;
+    const sevenDay = stdin.rate_limits?.seven_day;
+    const hasFiveHour = fiveHour?.used_percentage != null;
+    const hasSevenDay = sevenDay?.used_percentage != null;
+    if (!hasFiveHour && !hasSevenDay) {
         return null;
     }
-    return {
-        fiveHourPercent: clampPercent(fiveHour),
-        weeklyPercent: sevenDay == null ? undefined : clampPercent(sevenDay),
-        fiveHourResetsAt: parseResetDate(stdin.rate_limits?.five_hour?.resets_at),
-        weeklyResetsAt: parseResetDate(stdin.rate_limits?.seven_day?.resets_at),
-    };
+    // Only the windows the payload actually carries. The result is spread over
+    // the usage API's buckets in index.js, so an absent window must not appear
+    // here at all — a `weeklyPercent: undefined` (or a 0 for a missing
+    // five-hour window) would overwrite the API's value for it.
+    const result = {};
+    if (hasFiveHour) {
+        result.fiveHourPercent = clampPercent(fiveHour.used_percentage);
+        result.fiveHourResetsAt = parseResetDate(fiveHour.resets_at);
+    }
+    if (hasSevenDay) {
+        result.weeklyPercent = clampPercent(sevenDay.used_percentage);
+        result.weeklyResetsAt = parseResetDate(sevenDay.resets_at);
+    }
+    return result;
 }
 /**
  * Get model display name from stdin.

@@ -10,8 +10,15 @@
  *
  * API: api.anthropic.com/api/oauth/usage
  * Response: { five_hour: { utilization }, seven_day: { utilization } }
+ *
+ * Credentials are strictly read-only. In particular the HUD never refreshes an
+ * expired access token: OAuth refresh tokens are single-use, so a refresh from
+ * a statusline hook revokes the token Claude Code itself holds and forces a
+ * re-login (anthropics/claude-code#42603, closed with "remove all token refresh
+ * logic from hooks"). Claude Code refreshes on its own and rewrites the store;
+ * the HUD just re-reads it.
  */
-import { existsSync, readFileSync, writeFileSync, renameSync, unlinkSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import { getClaudeConfigDir } from '../lib/config-dir.js';
 import { getCacheDir } from '../lib/worktree-paths.js';
 import { join } from 'path';
@@ -29,14 +36,7 @@ const CACHE_TTL_TRANSIENT_NETWORK_MS = 2 * 60 * 1000; // 2 minutes to avoid hamm
 const MAX_RATE_LIMITED_BACKOFF_MS = 5 * 60 * 1000; // 5 minutes max for sustained 429s
 const API_TIMEOUT_MS = 10000;
 const MAX_STALE_DATA_MS = 15 * 60 * 1000; // 15 minutes — discard stale data after this
-const TOKEN_REFRESH_URL_HOSTNAME = 'platform.claude.com';
 const USAGE_CACHE_LOCK_OPTS = { staleLockMs: API_TIMEOUT_MS + 5000 };
-const TOKEN_REFRESH_URL_PATH = '/v1/oauth/token';
-/**
- * OAuth client_id for Claude Code (public client).
- * This is the production value; can be overridden via CLAUDE_CODE_OAUTH_CLIENT_ID env var.
- */
-const DEFAULT_OAUTH_CLIENT_ID = '9d1c250a-e61b-44d9-88ed-5944d1962f5e';
 function isEnterpriseUsageContext(options) {
     if (!options)
         return true;
@@ -287,7 +287,6 @@ function readKeychainCredential(serviceName, account) {
         return {
             accessToken: creds.accessToken,
             expiresAt: creds.expiresAt,
-            refreshToken: creds.refreshToken,
             source: 'keychain',
             subscriptionType: creds.subscriptionType,
             rateLimitTier: creds.rateLimitTier,
@@ -323,7 +322,8 @@ function readKeychainCredentials() {
         if (!isCredentialExpired(creds)) {
             return creds;
         }
-        expiredFallback ??= creds;
+        if (expiredFallback === null)
+            expiredFallback = creds; // not `??=`: that is Node 15+ syntax, and the floor is 14.17
     }
     return expiredFallback;
 }
@@ -343,7 +343,6 @@ function readFileCredentials() {
             return {
                 accessToken: creds.accessToken,
                 expiresAt: creds.expiresAt,
-                refreshToken: creds.refreshToken,
                 source: 'file',
                 subscriptionType: creds.subscriptionType,
                 rateLimitTier: creds.rateLimitTier,
@@ -373,60 +372,6 @@ function validateCredentials(creds) {
     if (!creds.accessToken)
         return false;
     return !isCredentialExpired(creds);
-}
-/**
- * Attempt to refresh an expired OAuth access token using the refresh token.
- * Returns updated credentials on success, null on failure.
- */
-function refreshAccessToken(refreshToken) {
-    return new Promise((resolve) => {
-        const clientId = process.env.CLAUDE_CODE_OAUTH_CLIENT_ID || DEFAULT_OAUTH_CLIENT_ID;
-        const body = new URLSearchParams({
-            grant_type: 'refresh_token',
-            refresh_token: refreshToken,
-            client_id: clientId,
-        }).toString();
-        const req = https.request({
-            hostname: TOKEN_REFRESH_URL_HOSTNAME,
-            path: TOKEN_REFRESH_URL_PATH,
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'Content-Length': Buffer.byteLength(body),
-            },
-            timeout: API_TIMEOUT_MS,
-        }, (res) => {
-            let data = '';
-            res.on('data', (chunk) => { data += chunk; });
-            res.on('end', () => {
-                if (res.statusCode === 200) {
-                    try {
-                        const parsed = JSON.parse(data);
-                        if (parsed.access_token) {
-                            resolve({
-                                accessToken: parsed.access_token,
-                                refreshToken: parsed.refresh_token || refreshToken,
-                                expiresAt: parsed.expires_in
-                                    ? Date.now() + parsed.expires_in * 1000
-                                    : parsed.expires_at,
-                            });
-                            return;
-                        }
-                    }
-                    catch {
-                        // JSON parse failed
-                    }
-                }
-                if (process.env.HUD_DEBUG) {
-                    console.error(`[usage-api] Token refresh failed: HTTP ${res.statusCode}`);
-                }
-                resolve(null);
-            });
-        });
-        req.on('error', () => resolve(null));
-        req.on('timeout', () => { req.destroy(); resolve(null); });
-        req.end(body);
-    });
 }
 /**
  * Fetch usage from Anthropic API
@@ -475,64 +420,6 @@ function fetchUsageFromApi(accessToken) {
         });
         req.end();
     });
-}
-/**
- * Persist refreshed credentials back to the file-based credential store.
- * Keychain write-back is not supported (read-only for HUD).
- * Updates only the claudeAiOauth fields, preserving other data.
- */
-function writeBackCredentials(creds) {
-    try {
-        const credPath = join(getClaudeConfigDir(), '.credentials.json');
-        if (!existsSync(credPath))
-            return;
-        const content = readFileSync(credPath, 'utf-8');
-        const parsed = JSON.parse(content);
-        // Update the nested structure
-        if (parsed.claudeAiOauth) {
-            parsed.claudeAiOauth.accessToken = creds.accessToken;
-            if (creds.expiresAt != null) {
-                parsed.claudeAiOauth.expiresAt = creds.expiresAt;
-            }
-            if (creds.refreshToken) {
-                parsed.claudeAiOauth.refreshToken = creds.refreshToken;
-            }
-        }
-        else {
-            // Flat structure
-            parsed.accessToken = creds.accessToken;
-            if (creds.expiresAt != null) {
-                parsed.expiresAt = creds.expiresAt;
-            }
-            if (creds.refreshToken) {
-                parsed.refreshToken = creds.refreshToken;
-            }
-        }
-        // Atomic write: write to tmp file, then rename (atomic on POSIX, best-effort on Windows)
-        const tmpPath = `${credPath}.tmp.${process.pid}`;
-        try {
-            writeFileSync(tmpPath, JSON.stringify(parsed, null, 2), { mode: 0o600 });
-            renameSync(tmpPath, credPath);
-        }
-        catch (writeErr) {
-            // Clean up orphaned tmp file on failure
-            try {
-                if (existsSync(tmpPath)) {
-                    unlinkSync(tmpPath);
-                }
-            }
-            catch {
-                // Ignore cleanup errors
-            }
-            throw writeErr;
-        }
-    }
-    catch {
-        // Silent failure - credential write-back is best-effort
-        if (process.env.HUD_DEBUG) {
-            console.error('[usage-api] Failed to write back refreshed credentials');
-        }
-    }
 }
 /**
  * Clamp values to 0-100 and filter invalid
@@ -696,7 +583,7 @@ async function fetchAndCacheUsage(opts) {
  * - rateLimits: RateLimits on success, null on failure/no credentials
  * - error: categorized reason when API call fails (undefined on success or no credentials)
  *   - 'network': API call failed (timeout, HTTP error, parse error)
- *   - 'auth': credentials expired and refresh failed
+ *   - 'auth': credentials expired (never refreshed here — Claude Code does that; stale data served if recent)
  *   - 'no_credentials': no OAuth credentials available (expected for API key users)
  *   - 'rate_limited': API returned 429; stale data served if available, with exponential backoff
  */
@@ -725,24 +612,25 @@ export async function getUsage() {
                 return getCachedUsageResult(cache);
             }
             // Anthropic OAuth path (official Claude Code support)
-            let creds = getCredentials();
+            const creds = getCredentials();
             if (creds) {
                 if (!validateCredentials(creds)) {
-                    if (creds.refreshToken) {
-                        const refreshed = await refreshAccessToken(creds.refreshToken);
-                        if (refreshed) {
-                            creds = { ...creds, ...refreshed };
-                            writeBackCredentials(creds);
-                        }
-                        else {
-                            writeCache({ data: null, error: true, source: 'anthropic', errorReason: 'auth' });
-                            return { rateLimits: null, error: 'auth' };
-                        }
-                    }
-                    else {
-                        writeCache({ data: null, error: true, source: 'anthropic', errorReason: 'auth' });
-                        return { rateLimits: null, error: 'auth' };
-                    }
+                    // Expired. Deliberately NOT refreshed (see the header):
+                    // Claude Code refreshes and rewrites the store on its own,
+                    // and the short 'auth' TTL re-reads it soon after. Until
+                    // then serve the last good numbers, stale-marked, while
+                    // they are recent enough to mean anything.
+                    const fallbackData = hasUsableStaleData(cache) ? cache.data : null;
+                    writeCache({
+                        data: fallbackData,
+                        error: true,
+                        source: 'anthropic',
+                        errorReason: 'auth',
+                        lastSuccessAt: cache?.lastSuccessAt,
+                    });
+                    return fallbackData
+                        ? { rateLimits: fallbackData, error: 'auth', stale: true }
+                        : { rateLimits: null, error: 'auth' };
                 }
                 const accessToken = creds.accessToken;
                 const subscriptionType = creds.subscriptionType;
