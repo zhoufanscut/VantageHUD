@@ -30,10 +30,14 @@ skimming. Add a term back (or a new one) when it earns its place; keep this shor
 - **element** — a pure render function `renderXxx(args) → string | null`, one per
   file in `src/hud/elements/`. Returns `null` to render nothing.
 - **fragment** — the string an element returns: **no separators, no newlines**.
-  `render.js` joins fragments with ` | ` into the single status line.
+  `render.js` joins fragments with ` | ` into the single status line. Each is
+  stored through `put()`, which catches a throwing element (that fragment is
+  dropped, not the line) and replaces control characters other than ESC with `?`.
 
 ## Layout & config
 
+- **`[cfg err]`** — leading marker when `config.json` exists but does not parse
+  (`configError` from `readHudConfig`); every setting is then at its default.
 - **config.json** — the HUD's own user-config file at the install root
   (`getHudConfigFile`, `src/lib/install-paths.js`; `HUD_CONFIG` overrides).
   Optional, gitignored; `config.json.example` is the committed reference. Read
