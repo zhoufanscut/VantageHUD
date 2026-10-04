@@ -11,7 +11,7 @@ rate limits, git (or Subversion) info, session time, and more.
 - **Portable.** Clone anywhere, on macOS or Linux, with any Node `>=14.17`.
 - **Proxy aware.** Honors `HTTPS_PROXY` / `https_proxy` — including
   `user:pass@` credentials and `https://` proxies — for the usage/rate-limit
-  API via a CONNECT tunnel (no-op when unset).
+  API via a CONNECT tunnel (no-op when unset), and `NO_PROXY` / `no_proxy`.
 
 ## Layout
 
@@ -240,7 +240,10 @@ export HTTPS_PROXY=http://proxy.example.com:8080
 export HTTPS_PROXY=http://alice:p%40ss@proxy.example.com:8080
 ```
 The launcher tunnels the HUD's HTTPS calls through it automatically. `https://`
-proxies are supported too. A proxy that refuses the tunnel (407/403) or never
+proxies are supported too, and a bare `host:port` is read as `http://host:port`.
+A SOCKS proxy (`socks5://…`) is not: the HUD then goes direct. A host covered
+by `NO_PROXY` / `no_proxy` (`*`, a host, or a domain such as `.anthropic.com`,
+optionally with `:port`; no CIDR ranges) goes direct too. A proxy that refuses the tunnel (407/403) or never
 answers (10 s bound) just leaves the rate-limit fragment on the payload's own
 numbers — or `[API err]` on a Claude Code too old to send them.
 
