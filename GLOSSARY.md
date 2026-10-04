@@ -108,6 +108,12 @@ skimming. Add a term back (or a new one) when it earns its place; keep this shor
   ("ultracode") agents, which is why `src/hud/subagents.js` walks it recursively /
   the tokens those subagents spend, which that module folds into
   `token:` so it reflects the whole run, not just the lead thread.
+- **unsettled group** / **`~` on `token:`** — an API call (`message.id` group)
+  whose last transcript row still has `stop_reason: null`, so it holds only
+  the streaming placeholder count. Most subagent calls stay that way from
+  Claude Code 2.1.283, and the real count is on disk nowhere. `token:~1.2M`
+  means the total includes such calls and is therefore a lower bound
+  (`sessionTokensApproximate`).
 - **`gitRepo` / `gitBranch` / `gitStatus`** — the three **VCS slots**, not
   git-only elements. `render.js` picks the VCS **once** per render (`useSvn`):
   git (`src/hud/elements/git.js`) unless the directory is not a git worktree

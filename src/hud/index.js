@@ -165,9 +165,15 @@ async function main() {
         // multi-agent run. Both sides run through the same de-duplicating,
         // incremental tally (token-tally.js), so they cannot drift apart in how
         // they count. Only enrich a trustworthy lead total (null → hidden).
-        const sessionTotalTokens = lead?.totalTokens != null
-            ? lead.totalTokens + sumSubagentTokens(resolvedTranscriptPath, sessionKey)
-            : null;
+        // `approximate` marks a total that is known to run low: some call's
+        // usage never settled (most subagent calls from Claude Code 2.1.283).
+        let sessionTotalTokens = null;
+        let sessionTokensApproximate = false;
+        if (lead?.totalTokens != null) {
+            const team = sumSubagentTokens(resolvedTranscriptPath, sessionKey);
+            sessionTotalTokens = lead.totalTokens + team.total;
+            sessionTokensApproximate = lead.approximate || team.approximate;
+        }
         // Repo identity and linked-worktree name straight from the payload
         // (`workspace.repo`, `workspace.git_worktree`), so the git elements can
         // skip three of their six subprocesses. `repo` is absent outside a git
@@ -203,6 +209,7 @@ async function main() {
             // Null without a transcript, so `session:` hides instead of reading 0m.
             sessionHealth: sessionStart ? calculateSessionHealth(sessionStart) : null,
             sessionTotalTokens,
+            sessionTokensApproximate,
             toolCallCount: lead?.toolCalls ?? 0,
             agentCallCount: lead?.agentCalls ?? 0,
             skillCallCount: lead?.skillCalls ?? 0,

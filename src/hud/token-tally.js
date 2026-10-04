@@ -24,6 +24,21 @@
  *    groups. So last-wins and max-wins agree, and first-wins or any-row-wins
  *    would be badly wrong. Do not "simplify" this to counting a group once.
  *
+ *    **The last row is not always settled, though.** A settled row carries a
+ *    `stop_reason`; a row written mid-stream carries `stop_reason: null` and
+ *    the `message_start` placeholder (`output_tokens` 2-32). From Claude Code
+ *    2.1.283 on, most *subagent* calls never get a settled row: measured here,
+ *    1,176 of 1,289 groups on 2.1.289, 32 of 35 on 2.1.286, 7 of 8 on 2.1.283
+ *    (24 of 337 on 2.1.261), and 0 of 1,521 lead groups on any version. The
+ *    settled count exists nowhere on disk, so such a group adds only its
+ *    placeholder. We do not guess the rest: chars/token on settled groups
+ *    ranged 1.07-2.25 by thinking mode (thinking text is redacted to a
+ *    signature), and a single ratio landed within ±25% on only 9-40% of groups
+ *    (aggregate -28%). Instead `unsettled` counts closed groups whose last row
+ *    has `stop_reason: null`, and `token:` shows `~` when any summed file has
+ *    one. Only an explicit `null` counts, so a format without the key never
+ *    trips it.
+ *
  * 2. **Tail-reading silently truncated the total.** The old path read only the
  *    last 4 MiB of a large transcript and still published the result as a
  *    complete session total. On a 25.4 MB transcript it reported 739,480
@@ -185,12 +200,15 @@ function tokensFromUsage(usage) {
  * @property {number} agentCalls   Of those, Agent/Task invocations.
  * @property {number} skillCalls   Of those, Skill invocations.
  * @property {string|null} firstTimestamp `timestamp` of the first row carrying one (the session start).
+ * @property {number} unsettled   Closed groups whose last row has `stop_reason: null` (usage never settled).
+ * @property {boolean|null} lastSettled Whether `lastId`'s latest row is settled; null when no group is open.
  */
 /** A memo for a file nothing has been read from. */
 function emptyMemo() {
     return {
         fp: "", consumed: 0, total: 0, lastId: null, lastIdTokens: 0,
         toolCalls: 0, agentCalls: 0, skillCalls: 0, firstTimestamp: null,
+        unsettled: 0, lastSettled: null,
     };
 }
 /** Field-wise memo equality, so a persist can be skipped when nothing moved. */
@@ -243,6 +261,10 @@ export function tallyFile(filePath, size, memo) {
             // anything else means the field was lost, and resuming would adopt
             // a later row's timestamp as the session start.
             (memo.firstTimestamp === null || typeof memo.firstTimestamp === "string") &&
+            // Same for the settled tracking: an older memo cannot say whether
+            // the groups it already counted had settled.
+            typeof memo.unsettled === "number" &&
+            (memo.lastSettled === null || typeof memo.lastSettled === "boolean") &&
             isLineBoundary(filePath, memo.consumed);
         const start = resumable ? memo.consumed : 0;
         if (start === size) {
@@ -262,6 +284,8 @@ export function tallyFile(filePath, size, memo) {
         let firstTimestamp = resumable && typeof memo.firstTimestamp === "string"
             ? memo.firstTimestamp
             : null;
+        let unsettled = resumable ? memo.unsettled : 0;
+        let lastSettled = resumable ? memo.lastSettled : null;
         const chunk = readRange(filePath, start, size - start);
         if (chunk.length === 0) {
             return resumable ? { ...memo, fp } : empty;
@@ -321,22 +345,32 @@ export function tallyFile(filePath, size, memo) {
             const id = typeof entry.message?.id === "string" && entry.message.id
                 ? entry.message.id
                 : null;
+            const settled = entry.message.stop_reason !== null;
             if (id && id === lastId) {
                 // Another content block of the call we already counted. Replace
-                // rather than add — every row of a group carries the same usage
-                // snapshot, so last-wins and max agree (verified: 0 groups where
-                // output_tokens decreases).
+                // rather than add: rows of a group are non-decreasing snapshots
+                // of one call's usage, so the last row is the settled value and
+                // equals the max (0 decreasing groups measured). On current
+                // subagent files that last row may itself be an unsettled
+                // placeholder; see the header.
                 total += tokens - lastIdTokens;
                 lastIdTokens = tokens;
+                lastSettled = settled;
                 continue;
+            }
+            // A new group closes the previous one.
+            if (lastSettled === false) {
+                unsettled++;
             }
             total += tokens;
             lastId = id;
             lastIdTokens = tokens;
+            lastSettled = settled;
         }
         return {
             fp, consumed, total: Math.max(0, total), lastId, lastIdTokens,
             toolCalls, agentCalls, skillCalls, firstTimestamp,
+            unsettled, lastSettled,
         };
     }
     catch (error) {
@@ -359,6 +393,7 @@ export function tallyFile(filePath, size, memo) {
  * @property {number} agentCalls
  * @property {number} skillCalls
  * @property {Date|null} sessionStart Timestamp of the first row, or null when no row carries one.
+ * @property {boolean} approximate True when a closed call's usage never settled, so the total is low.
  */
 /**
  * Tally the lead transcript — token total, call counts and session start —
@@ -406,6 +441,7 @@ export function tallyLead(leadTranscriptPath, sessionKey) {
             agentCalls: next.agentCalls,
             skillCalls: next.skillCalls,
             sessionStart: start && !Number.isNaN(start.getTime()) ? start : null,
+            approximate: next.unsettled > 0,
         };
     }
     catch (error) {

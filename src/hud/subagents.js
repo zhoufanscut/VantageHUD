@@ -15,8 +15,12 @@
  * run reads as "no teammates" and scores 0. Since a Workflow is typically where
  * the bulk of a session's tokens go, that hid the majority of real usage.
  *
- * These files carry full per-turn token usage the lead transcript never sees,
- * so `token:` would otherwise undercount every multi-agent run. The lead holds
+ * These files carry per-call token usage the lead transcript never sees, so
+ * `token:` would otherwise undercount every multi-agent run. That usage is
+ * not always final: from Claude Code 2.1.283 on, most subagent calls keep only
+ * the streaming placeholder (`stop_reason: null`, `output_tokens` 2-32) and
+ * the settled count is written nowhere (token-tally.js has the numbers). The
+ * sum then runs low, and `approximate` tells `token:` to show `~`. The lead holds
  * no `isSidechain` turns of its own, so folding them in is purely additive
  * ACROSS the lead/subagent boundary — measured over 56 sessions with teammates,
  * no `message.id` is shared between a lead and its own `subagents/`, nor
@@ -53,6 +57,8 @@ const MAX_WALK_DEPTH = 4;
 // prefer larger files and say so under HUD_DEBUG, so a capped sum never reads as
 // "counted everything".
 const MAX_SUBAGENT_FILES = 512;
+/** The result when there is nothing to sum, or on any error. */
+const NONE = { total: 0, approximate: false };
 /**
  * Derive the subagents directory for a lead transcript path, or null when the
  * path is not a `.jsonl` transcript.
@@ -111,18 +117,21 @@ function collectAgentFiles(root, dir = root, depth = 0, out = []) {
 }
 /**
  * Sum de-duplicated input+output tokens across every teammate transcript under
- * this lead session, memoized per file on disk. Returns 0 when there are no
- * teammates or on any error (never throws).
+ * this lead session, memoized per file on disk. `approximate` is true when any
+ * call's usage never settled, so the total is a lower bound. Returns a zero
+ * total when there are no teammates or on any error (never throws).
+ *
+ * @returns {{ total: number, approximate: boolean }}
  */
 export function sumSubagentTokens(leadTranscriptPath, sessionKey) {
     try {
         const dir = getSubagentsDir(leadTranscriptPath);
         if (!dir || !existsSync(dir)) {
-            return 0;
+            return NONE;
         }
         const found = collectAgentFiles(dir);
         if (found.length === 0) {
-            return 0;
+            return NONE;
         }
         let files = found;
         if (found.length > MAX_SUBAGENT_FILES) {
@@ -154,6 +163,7 @@ export function sumSubagentTokens(leadTranscriptPath, sessionKey) {
         }
         const next = {};
         let total = 0;
+        let approximate = false;
         let changed = false;
         for (const file of files) {
             const stamp = `${file.size}:${Math.round(file.mtimeMs)}`;
@@ -173,12 +183,21 @@ export function sumSubagentTokens(leadTranscriptPath, sessionKey) {
             // Costs nothing in practice: every one of the 509 real transcripts
             // on this machine ends with a newline, so `consumed === size` holds
             // and the fast path still fires everywhere.
+            //
+            // `unsettled` must be present too: a memo written before it existed
+            // cannot say whether the file's calls settled, so it rescans once.
             if (hit &&
                 hit.stamp === stamp &&
                 typeof hit.total === "number" &&
+                typeof hit.unsettled === "number" &&
                 hit.consumed === file.size) {
                 next[file.rel] = hit;
                 total += hit.total;
+                // The file has not grown since the last frame, so its open last
+                // group is closed too: count it if it never settled.
+                if (hit.unsettled > 0 || hit.lastSettled === false) {
+                    approximate = true;
+                }
                 continue;
             }
             // Changed (or unseen): resume the tally at the memo's byte offset so
@@ -188,6 +207,9 @@ export function sumSubagentTokens(leadTranscriptPath, sessionKey) {
             const memo = tallyFile(file.path, file.size, hit);
             next[file.rel] = { ...memo, stamp };
             total += memo.total;
+            if (memo.unsettled > 0) {
+                approximate = true;
+            }
             changed = true;
         }
         // Persist when a file changed or the set of teammates changed (prune).
@@ -200,12 +222,12 @@ export function sumSubagentTokens(leadTranscriptPath, sessionKey) {
                 // Best-effort; a missed write just re-reads next frame.
             }
         }
-        return total;
+        return { total, approximate };
     }
     catch (error) {
         if (process.env.HUD_DEBUG) {
             console.error("[HUD] subagent token sum error:", error instanceof Error ? error.message : error);
         }
-        return 0;
+        return NONE;
     }
 }

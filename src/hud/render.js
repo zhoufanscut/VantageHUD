@@ -306,7 +306,7 @@ export async function render(context, config) {
         put("session", () => renderSession(context.sessionHealth));
     }
     if (enabledElements.showTokens === true) {
-        put("tokens", () => renderTokenUsage(context.sessionTotalTokens, hudLabels));
+        put("tokens", () => renderTokenUsage(context.sessionTotalTokens, hudLabels, context.sessionTokensApproximate));
     }
     if (enabledElements.contextBar) {
         put("contextBar", () => enabledElements.useBars

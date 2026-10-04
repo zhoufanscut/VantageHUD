@@ -191,7 +191,7 @@ knowing before you change them:
 | --- | --- |
 | `text` | the cwd path |
 | `label` | every `xxx:` prefix, `(reset)` tails, the `callCounts` numbers |
-| `faint` | `($spent/$limit)`, the stale `*`, `[API 429]` |
+| `faint` | `($spent/$limit)`, the stale `*`, the approximate `~` of `token:~1.2M`, `[API 429]` |
 | `sep` | the ` \| ` separator **and** the empty gauge track (`░`) |
 | `gradLow` | usage under 70%, **and** the `repo:` / `branch:` / `token:` values, and effort `max` |
 | `gradMid` | usage 70–84%, `[API auth]` / `[API err]`, effort `high` |
