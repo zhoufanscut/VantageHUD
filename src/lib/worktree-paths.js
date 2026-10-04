@@ -11,7 +11,7 @@
  * sessions (and projects sharing one install) never collide.
  */
 import { execSync } from 'child_process';
-import { existsSync, mkdirSync, realpathSync, readdirSync, statSync } from 'fs';
+import { existsSync, realpathSync, readdirSync, statSync } from 'fs';
 import { resolve, relative, sep, join, isAbsolute, dirname } from 'path';
 import { getClaudeConfigDir } from './config-dir.js';
 import { getHudInstallRoot } from './install-paths.js';
@@ -59,22 +59,6 @@ export function getWorktreeRoot(cwd) {
         return null;
     }
 }
-/**
- * Validate that a path is safe (no traversal attacks).
- *
- * @throws Error if path contains traversal sequences
- */
-export function validatePath(inputPath) {
-    // Reject explicit path traversal
-    if (inputPath.includes('..')) {
-        throw new Error(`Invalid path: path traversal not allowed (${inputPath})`);
-    }
-    // Reject absolute paths - use isAbsolute() for cross-platform coverage
-    // Covers: /unix, ~/home, C:\windows, D:/windows, \\UNC
-    if (inputPath.startsWith('~') || isAbsolute(inputPath)) {
-        throw new Error(`Invalid path: absolute paths not allowed (${inputPath})`);
-    }
-}
 // ============================================================================
 // SESSION CACHE PATHS (<cacheDir>/<session>/<name>.json) — matches statusline.sh
 // ============================================================================
@@ -118,25 +102,6 @@ export function sanitizeSessionKey(sessionKey) {
  */
 export function getSessionCacheDir(sessionKey) {
     return join(getCacheDir(), sanitizeSessionKey(sessionKey));
-}
-/**
- * Ensure a session's cache subfolder exists. Best-effort; tolerates the EEXIST
- * race between concurrent sessions (see atomic-write.js:ensureDirSync). Callers
- * using raw fs.writeFileSync must call this first — only atomicWriteFileSync and
- * the file lock auto-create parent dirs.
- */
-export function ensureSessionCacheDir(sessionKey) {
-    const dir = getSessionCacheDir(sessionKey);
-    if (!existsSync(dir)) {
-        try {
-            mkdirSync(dir, { recursive: true });
-        }
-        catch (err) {
-            if (err.code !== 'EEXIST')
-                throw err;
-        }
-    }
-    return dir;
 }
 /**
  * Resolve a session-scoped cache file path: `<cacheDir>/<session>/<baseName>.json`.
