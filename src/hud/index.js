@@ -112,8 +112,6 @@ async function main() {
         }
         // Resolve worktree-mismatched transcript paths (issue #1094)
         const resolvedTranscriptPath = resolveTranscriptPath(stdin.transcript_path, cwd);
-        // Tail-read the transcript for the last request's usage (feeds ctx:).
-        const transcriptData = parseTranscript(resolvedTranscriptPath);
         // Everything cumulative — the token total, the tool/agent/skill counts
         // and the session start — comes from the incremental whole-file tally
         // (token-tally.js), memoized per session so each frame parses only the
@@ -143,9 +141,12 @@ async function main() {
         // ANTHROPIC_BASE_URL) leave it zeroed far more often. When it yields 0,
         // recover the value from the transcript's last-request usage so ctx does
         // not collapse to 0% on idle frames or after a cross-session cache clobber.
+        // The transcript tail is read only here: on every other frame its
+        // result would go unused.
         let contextPercent = getContextPercent(stdin);
         if (contextPercent === 0) {
-            const contextFromUsage = getContextPercentFromUsage(stdin, transcriptData.lastRequestTokenUsage);
+            const { lastRequestTokenUsage } = parseTranscript(resolvedTranscriptPath);
+            const contextFromUsage = getContextPercentFromUsage(stdin, lastRequestTokenUsage);
             if (contextFromUsage != null) {
                 contextPercent = contextFromUsage;
             }
@@ -194,7 +195,6 @@ async function main() {
             rateLimitsResult,
             // Null without a transcript, so `session:` hides instead of reading 0m.
             sessionHealth: sessionStart ? calculateSessionHealth(sessionStart) : null,
-            lastRequestTokenUsage: transcriptData.lastRequestTokenUsage || null,
             sessionTotalTokens,
             toolCallCount: lead?.toolCalls ?? 0,
             agentCallCount: lead?.agentCalls ?? 0,
