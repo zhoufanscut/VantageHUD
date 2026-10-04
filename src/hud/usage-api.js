@@ -392,9 +392,16 @@ function validateCredentials(creds) {
 function fetchUsageFromApi(accessToken, budgetMs) {
     return new Promise((settle) => {
         let budgetTimer = null;
+        let deadlineTimer = null;
+        let settled = false;
         const resolve = (result) => {
+            if (settled)
+                return;
+            settled = true;
             if (budgetTimer)
                 clearTimeout(budgetTimer);
+            if (deadlineTimer)
+                clearTimeout(deadlineTimer);
             settle(result);
         };
         const req = require('https').request({
@@ -411,6 +418,15 @@ function fetchUsageFromApi(accessToken, budgetMs) {
             let data = '';
             res.on('data', (chunk) => {
                 data += chunk;
+            });
+            // A body cut off mid-way (proxy reset, tunnel teardown) never
+            // emits 'end', and `req` reports no 'error' once a response
+            // exists: without these the promise never settled, Node exited
+            // with no line, and the lock was left behind.
+            res.on('error', () => resolve({ data: null }));
+            res.on('close', () => {
+                if (!res.complete)
+                    resolve({ data: null });
             });
             res.on('end', () => {
                 if (res.statusCode === 200) {
@@ -441,10 +457,18 @@ function fetchUsageFromApi(accessToken, budgetMs) {
             budgetTimer = setTimeout(() => {
                 // Settle first: destroy() emits 'error', whose { data: null }
                 // must not be the result.
-                settle({ data: null, overBudget: true });
+                resolve({ data: null, overBudget: true });
                 req.destroy();
             }, budgetMs);
         }
+        // Wall-clock cap. The `timeout` option is a socket-*idle* timer, so a
+        // response trickling a byte every few seconds never trips it and held
+        // the usage lock indefinitely. API_TIMEOUT_MS stays under the lock's
+        // staleLockMs, so a live holder never outlasts the staleness window.
+        deadlineTimer = setTimeout(() => {
+            resolve({ data: null });
+            req.destroy();
+        }, API_TIMEOUT_MS);
         req.end();
     });
 }
