@@ -110,7 +110,7 @@ export const DEFAULT_HUD_CONFIG = {
         contextWarning: 70,
         contextCompactSuggestion: 80,
         contextCritical: 85,
-        sonnetWeeklyVisibility: 80, // Hide the Sonnet weekly (sn) bucket until its usage % reaches this (0 = always show)
+        sonnetWeeklyVisibility: 80, // Hide the Sonnet weekly (sn) bucket, and any other per-model weekly bucket but op (fb = Fable, …), until its usage % reaches this (0 = always show)
     },
     contextLimitWarning: {
         threshold: 80,

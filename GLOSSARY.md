@@ -99,8 +99,9 @@ skimming. Add a term back (or a new one) when it earns its place; keep this shor
   payload, shown next to the model.
 - **ctx** / **context bar** — context-window usage %, the `contextBar` element.
 - **rate limits** / **buckets** — usage windows: five-hour (`5h`), seven-day
-  (`7d`), Opus/Sonnet weekly, monthly. From the payload + the usage API
-  (`src/hud/usage-api.js`).
+  (`7d`), and the per-model weekly ones (`op` Opus, `sn` Sonnet, and any other
+  model the usage API's `limits[]` names, labelled by `modelWeeklyLabel` —
+  `fb` for Fable). From the payload + the usage API (`src/hud/usage-api.js`).
 - **token** / **subagents dir** / **teammate tokens** — the `token:` element's
   session token total (`sessionTotalTokens`) / `<lead-transcript>/subagents/` where
   Claude Code stores each subagent's own `agent-*.jsonl` transcript — flat for

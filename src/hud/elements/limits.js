@@ -32,9 +32,23 @@ function formatResetTime(date) {
     return formatDuration(diffMs / 60_000);
 }
 /**
+ * The other per-model weekly buckets (`fb:` for Fable, say), from the usage
+ * API's `limits[]`. Gated like `sn:`: a model the user barely touches would
+ * otherwise sit at 0% on every line. Labels are letters only (parser).
+ */
+function pushModelWeekly(parts, fmt, buckets, threshold) {
+    if (!Array.isArray(buckets))
+        return;
+    for (const b of buckets) {
+        if (b && typeof b.label === 'string' && typeof b.percent === 'number' && Math.round(b.percent) >= threshold) {
+            parts.push(fmt(b.label, b.percent, b.resetsAt));
+        }
+    }
+}
+/**
  * Render rate limits display.
  *
- * Format: 5h:45%(3h42m) 7d:12%(2d5h) mo:8%(15d3h) sn:20%(1d2h) op:5%(1d2h)
+ * Format: 5h:45%(3h42m) 7d:12%(2d5h) mo:8%(15d3h) sn:20%(1d2h) op:5%(1d2h) fb:90%(1d2h)
  */
 export function renderRateLimits(limits, stale, sonnetThreshold = 0) {
     if (!limits)
@@ -69,6 +83,7 @@ export function renderRateLimits(limits, stale, sonnetThreshold = 0) {
     if (limits.opusWeeklyPercent != null) {
         parts.push(fmt('op', limits.opusWeeklyPercent, limits.opusWeeklyResetsAt));
     }
+    pushModelWeekly(parts, fmt, limits.modelWeekly, sonnetThreshold);
     if (limits.extraUsagePercent != null && limits.extraUsageLimitUsd != null) {
         const extra = Math.min(100, Math.max(0, Math.round(limits.extraUsagePercent)));
         const extraReset = formatResetTime(limits.extraUsageResetsAt);
@@ -117,6 +132,7 @@ export function renderRateLimitsWithBar(limits, barWidth = 8, stale, sonnetThres
     if (limits.opusWeeklyPercent != null) {
         parts.push(fmt('op', limits.opusWeeklyPercent, limits.opusWeeklyResetsAt));
     }
+    pushModelWeekly(parts, fmt, limits.modelWeekly, sonnetThreshold);
     if (limits.extraUsagePercent != null && limits.extraUsageLimitUsd != null) {
         const extra = Math.min(100, Math.max(0, Math.round(limits.extraUsagePercent)));
         const color = getColor(extra);

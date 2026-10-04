@@ -117,6 +117,10 @@ cp ~/.claude/hud/config.json.example ~/.claude/hud/config.json
   `conflict`, `ahead`, `behind`.
 - `usageApiPollIntervalMs` (default `90000`, minimum `30000`): how often the
   usage API is polled for the buckets the payload does not carry.
+- `thresholds.sonnetWeeklyVisibility` (default `80`, `0` = always): the
+  per-model weekly buckets — `sn:` (Sonnet) and any other model the usage API
+  reports, such as `fb:` (Fable) — stay hidden until their usage reaches this
+  percent. `op:` (Opus) always shows.
 - **Colors** are set by `theme`, and you can define your own palettes under
   `themes` — see [Themes](#themes) below.
 - `maxWidth` / `wrapMode`: the line is cut to `maxWidth` columns with `...`

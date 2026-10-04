@@ -9,7 +9,7 @@
  * - Linux/fallback: Reads from ~/.claude/.credentials.json
  *
  * API: api.anthropic.com/api/oauth/usage
- * Response: { five_hour: { utilization }, seven_day: { utilization } }
+ * Response: { five_hour: { utilization }, seven_day: { utilization }, limits: [...] }
  *
  * Credentials are strictly read-only. In particular the HUD never refreshes an
  * expired access token: OAuth refresh tokens are single-use, so a refresh from
@@ -140,6 +140,13 @@ function readCache(source) {
             }
             if (cache.data.extraUsageResetsAt) {
                 cache.data.extraUsageResetsAt = new Date(cache.data.extraUsageResetsAt);
+            }
+            if (Array.isArray(cache.data.modelWeekly)) {
+                for (const bucket of cache.data.modelWeekly) {
+                    if (bucket && bucket.resetsAt) {
+                        bucket.resetsAt = new Date(bucket.resetsAt);
+                    }
+                }
             }
         }
         return cache;
@@ -481,18 +488,75 @@ function clamp(v) {
     return Math.max(0, Math.min(100, v));
 }
 /**
+ * Short label for a model-scoped weekly bucket: the first letter plus the
+ * first consonant after it, so the labels the HUD always used fall out of
+ * the rule (Sonnet → `sn`, Opus → `op`) and new models get one too (Fable →
+ * `fb`). The name is server-supplied text; only ASCII letters survive, so no
+ * control or escape byte can reach the line. Null when none are left (a
+ * name in another script): that bucket is skipped.
+ */
+export function modelWeeklyLabel(displayName) {
+    if (typeof displayName !== 'string')
+        return null;
+    // Drop CSI/OSC escapes whole first, or their final byte (`m` of `ESC[31m`)
+    // would be read as a letter of the name.
+    const letters = displayName
+        .replace(/\x1b\[[0-?]*[ -\/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)?/g, '')
+        .toLowerCase()
+        .replace(/[^a-z]/g, '');
+    if (!letters)
+        return null;
+    const consonant = letters.slice(1).match(/[^aeiou]/);
+    return letters[0] + (consonant ? consonant[0] : letters.slice(1, 2));
+}
+// At most this many extra per-model buckets reach the line.
+const MAX_MODEL_WEEKLY = 4;
+/**
  * Parse API response into RateLimits
+ *
+ * The flat buckets (`five_hour`, `seven_day`, `seven_day_sonnet`,
+ * `seven_day_opus`) come first. The newer `limits[]` list is the fallback:
+ * `session` / `weekly_all` stand in for an absent five-hour / seven-day
+ * window, and every `weekly_scoped` entry naming a model becomes a per-model
+ * weekly bucket — on current accounts the flat per-model fields are null and
+ * the per-model caps (Fable, say) exist only there. Sonnet and Opus fill
+ * the existing `sn:`/`op:` slots; any other model goes to `modelWeekly`.
  */
 export function parseUsageResponse(response, options) {
     // `null`, an array or a scalar is valid JSON too; reading a bucket off
     // `null` would throw.
     if (!response || typeof response !== 'object' || Array.isArray(response))
         return null;
-    const fiveHour = response.five_hour?.utilization;
-    const sevenDay = response.seven_day?.utilization;
-    const sonnetSevenDay = response.seven_day_sonnet?.utilization;
-    const opusSevenDay = response.seven_day_opus?.utilization;
-    const extra = response.extra_usage;
+    const limits = Array.isArray(response.limits)
+        ? response.limits.filter((l) => l && typeof l === 'object' && typeof l.percent === 'number' && isFinite(l.percent))
+        : [];
+    const unscopedLimit = (kind) => limits.find((l) => l.kind === kind && l.scope == null);
+    const sessionLimit = response.five_hour?.utilization == null ? unscopedLimit('session') : undefined;
+    const weeklyAllLimit = response.seven_day?.utilization == null ? unscopedLimit('weekly_all') : undefined;
+    const fiveHour = response.five_hour?.utilization ?? sessionLimit?.percent;
+    const sevenDay = response.seven_day?.utilization ?? weeklyAllLimit?.percent;
+    // Model-scoped weekly entries, by label. A surface-scoped entry (a cap on
+    // one client, not one model) is skipped rather than mislabeled as a model.
+    const scoped = new Map();
+    for (const l of limits) {
+        if (l.kind !== 'weekly_scoped' || !l.scope || typeof l.scope !== 'object' || l.scope.surface != null)
+            continue;
+        const label = modelWeeklyLabel(l.scope.model?.display_name);
+        if (!label)
+            continue;
+        const prev = scoped.get(label);
+        if (!prev || l.percent > prev.percent)
+            scoped.set(label, l);
+    }
+    const sonnetScoped = response.seven_day_sonnet?.utilization == null ? scoped.get('sn') : undefined;
+    const opusScoped = response.seven_day_opus?.utilization == null ? scoped.get('op') : undefined;
+    const sonnetSevenDay = response.seven_day_sonnet?.utilization ?? sonnetScoped?.percent;
+    const opusSevenDay = response.seven_day_opus?.utilization ?? opusScoped?.percent;
+    scoped.delete('sn');
+    scoped.delete('op');
+    // `is_enabled: false` means no extra usage is set up, whatever else the
+    // object holds.
+    const extra = response.extra_usage?.is_enabled === false ? null : response.extra_usage;
     const usedCredits = extra?.used_credits;
     const extraCurrency = (extra?.currency ?? 'USD').toUpperCase();
     const isEnterpriseContext = isEnterpriseUsageContext(options);
@@ -509,6 +573,7 @@ export function parseUsageResponse(response, options) {
         sevenDay == null &&
         sonnetSevenDay == null &&
         opusSevenDay == null &&
+        scoped.size === 0 &&
         !hasUsableEnterprise &&
         !hasUsableExtraUsage)
         return null;
@@ -524,31 +589,32 @@ export function parseUsageResponse(response, options) {
             return null;
         }
     };
-    // Per-model quotas are at the top level (flat structure)
-    // e.g., response.seven_day_sonnet, response.seven_day_opus
-    const sonnetResetsAt = response.seven_day_sonnet?.resets_at;
     const result = {};
     // Only the windows the API reported: clamp(undefined) is 0, so an
     // unconditional assignment invented `5h:0%` for an account without a
     // five-hour window (enterprise, or model-scoped buckets only).
     if (fiveHour != null) {
         result.fiveHourPercent = clamp(fiveHour);
-        result.fiveHourResetsAt = parseDate(response.five_hour?.resets_at);
+        result.fiveHourResetsAt = parseDate(sessionLimit ? sessionLimit.resets_at : response.five_hour?.resets_at);
     }
     if (sevenDay != null) {
         result.weeklyPercent = clamp(sevenDay);
-        result.weeklyResetsAt = parseDate(response.seven_day?.resets_at);
+        result.weeklyResetsAt = parseDate(weeklyAllLimit ? weeklyAllLimit.resets_at : response.seven_day?.resets_at);
     }
-    // Add Sonnet-specific quota if available from API
     if (sonnetSevenDay != null) {
         result.sonnetWeeklyPercent = clamp(sonnetSevenDay);
-        result.sonnetWeeklyResetsAt = parseDate(sonnetResetsAt);
+        result.sonnetWeeklyResetsAt = parseDate(sonnetScoped ? sonnetScoped.resets_at : response.seven_day_sonnet?.resets_at);
     }
-    // Add Opus-specific quota if available from API
-    const opusResetsAt = response.seven_day_opus?.resets_at;
     if (opusSevenDay != null) {
         result.opusWeeklyPercent = clamp(opusSevenDay);
-        result.opusWeeklyResetsAt = parseDate(opusResetsAt);
+        result.opusWeeklyResetsAt = parseDate(opusScoped ? opusScoped.resets_at : response.seven_day_opus?.resets_at);
+    }
+    if (scoped.size > 0) {
+        result.modelWeekly = Array.from(scoped, ([label, l]) => ({
+            label,
+            percent: clamp(l.percent),
+            resetsAt: parseDate(l.resets_at),
+        })).slice(0, MAX_MODEL_WEEKLY);
     }
     // Add extra (metered) usage if available (Pro subscribers with extra usage allocation)
     if (extra != null) {

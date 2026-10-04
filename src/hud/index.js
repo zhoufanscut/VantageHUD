@@ -57,7 +57,7 @@ function mergeStdinRateLimits(stdinRateLimits, usageResult) {
     // The payload's five-hour/seven-day figures are live for this frame, so a
     // `stale` flag the API cache earned must not paint them with `*` / `~` —
     // the marker is per fragment, not per bucket. What the cache still
-    // contributes (the Opus/Sonnet weekly and `extra:` buckets) may then be up
+    // contributes (the per-model weekly and `extra:` buckets) may then be up
     // to 15 min old without saying so; their reset countdowns are computed live.
     const merged = {
         ...(usageResult ?? {}),
@@ -129,7 +129,7 @@ async function main() {
         const sessionStart = lead?.sessionStart ?? null;
         // Merge Claude Code stdin generic buckets with API/cache-specific fields.
         // Stdin owns fresher five-hour/seven-day values, while getUsage() may provide
-        // Sonnet/Opus weekly, monthly, extra, stale, and error metadata.
+        // the per-model weekly and extra buckets, stale, and error metadata.
         const stdinRateLimits = getRateLimitsFromStdin(stdin);
         // statusline.sh sets HUD_SYNC_RENDER=1 and HUD_USAGE_BUDGET_MS only for
         // a synchronous render, which Claude Code is waiting on: there the slow
