@@ -18,7 +18,7 @@ rate limits, git (or Subversion) info, session time, and more.
 ```
 statusline.sh       # entry point Claude Code calls (caches + renders)
 statusline.mjs      # Node launcher: installs the proxy tunnel, loads src/
-find-node.sh        # locates node (PATH / nvm / fnm / homebrew)
+find-node.sh        # locates node (PATH / nvm / fnm / mise / asdf / volta / homebrew)
 preview-themes.mjs  # renders every theme as a sample line, to compare them
 src/                # the renderer (ESM, Node built-ins only)
 cache/              # render cache + state, one subfolder per session (gitignored)
