@@ -171,6 +171,7 @@ function writeCache(opts) {
             rateLimitedCount: opts.rateLimitedCount && opts.rateLimitedCount > 0 ? opts.rateLimitedCount : undefined,
             rateLimitedUntil: opts.rateLimitedUntil,
             lastSuccessAt: opts.lastSuccessAt,
+            rejectedToken: opts.rejectedToken,
         };
         // Atomic write: this file is shared across sessions and read on an
         // unlocked fast path, so a torn read must never be possible.
@@ -202,7 +203,21 @@ function getUsagePollIntervalMs() {
 }
 function getRateLimitedBackoffMs(pollIntervalMs, count) {
     const normalizedPollIntervalMs = sanitizePollIntervalMs(pollIntervalMs);
-    return Math.min(normalizedPollIntervalMs * Math.pow(2, Math.max(0, count - 1)), MAX_RATE_LIMITED_BACKOFF_MS);
+    // Never sooner than the normal poll: with a poll interval above the 5 min
+    // cap, a 429 used to bring the next attempt *forward*.
+    return Math.max(normalizedPollIntervalMs, Math.min(normalizedPollIntervalMs * Math.pow(2, Math.max(0, count - 1)), MAX_RATE_LIMITED_BACKOFF_MS));
+}
+// Ceiling on a server's Retry-After, so a huge value cannot freeze the cache
+// in the rate-limited state.
+const MAX_RETRY_AFTER_MS = 60 * 60 * 1000;
+/**
+ * A 429's Retry-After in ms: the delta-seconds form only (the HTTP-date form
+ * is ignored), capped at MAX_RETRY_AFTER_MS. 0 when absent or unusable.
+ */
+function parseRetryAfterMs(value) {
+    if (typeof value !== 'string' || !/^\s*\d+\s*$/.test(value))
+        return 0;
+    return Math.min(parseInt(value, 10) * 1000, MAX_RETRY_AFTER_MS);
 }
 function getTransientNetworkBackoffMs(pollIntervalMs) {
     return Math.max(CACHE_TTL_TRANSIENT_NETWORK_MS, sanitizePollIntervalMs(pollIntervalMs));
@@ -247,7 +262,27 @@ function getCachedUsageResult(cache) {
     }
     return { rateLimits: cache.data };
 }
-function createRateLimitedCacheEntry(source, data, pollIntervalMs, previousCount, lastSuccessAt) {
+/**
+ * Record a failed fetch: keep the last good numbers (while recent enough to
+ * mean anything) and their lastSuccessAt, and serve them stale-marked. The
+ * reason picks the retry TTL in isCacheValid ('network' → transient backoff,
+ * anything else → CACHE_TTL_FAILURE_MS) and the badge in limits.js.
+ */
+function recordFailure(source, cache, errorReason, rejectedToken) {
+    const fallbackData = hasUsableStaleData(cache) ? cache.data : null;
+    writeCache({
+        data: fallbackData,
+        error: true,
+        source,
+        errorReason,
+        lastSuccessAt: cache?.lastSuccessAt,
+        rejectedToken,
+    });
+    return fallbackData
+        ? { rateLimits: fallbackData, error: errorReason, stale: true }
+        : { rateLimits: null, error: errorReason };
+}
+function createRateLimitedCacheEntry(source, data, pollIntervalMs, previousCount, lastSuccessAt, retryAfterMs = 0) {
     const timestamp = Date.now();
     const rateLimitedCount = previousCount + 1;
     return {
@@ -258,7 +293,7 @@ function createRateLimitedCacheEntry(source, data, pollIntervalMs, previousCount
         source,
         rateLimited: true,
         rateLimitedCount,
-        rateLimitedUntil: timestamp + getRateLimitedBackoffMs(pollIntervalMs, rateLimitedCount),
+        rateLimitedUntil: timestamp + Math.max(getRateLimitedBackoffMs(pollIntervalMs, rateLimitedCount), retryAfterMs),
         lastSuccessAt,
     };
 }
@@ -277,6 +312,13 @@ function getKeychainServiceName() {
         return `Claude Code-credentials-${hash}`;
     }
     return 'Claude Code-credentials';
+}
+/**
+ * A short one-way fingerprint of an access token, to recognise a token the
+ * server rejected without storing the token. Never the token itself.
+ */
+function fingerprintToken(token) {
+    return require('crypto').createHash('sha256').update(String(token)).digest('hex').slice(0, 16);
 }
 function isCredentialExpired(creds) {
     return creds.expiresAt != null && creds.expiresAt <= Date.now();
@@ -448,7 +490,14 @@ function fetchUsageFromApi(accessToken, budgetMs) {
                     if (process.env.HUD_DEBUG) {
                         console.error(`[usage-api] Anthropic API returned 429 (rate limited)`);
                     }
-                    resolve({ data: null, rateLimited: true });
+                    resolve({ data: null, rateLimited: true, retryAfterMs: parseRetryAfterMs(res.headers['retry-after']) });
+                }
+                else if (res.statusCode === 401) {
+                    // The server rejected a token that is valid by its clock
+                    // (revoked, or rotated by a /login elsewhere). Only 401: a
+                    // 403 is also what a region block answers, which no
+                    // credential re-read fixes.
+                    resolve({ data: null, authRejected: true });
                 }
                 else {
                     resolve({ data: null });
@@ -674,7 +723,7 @@ async function fetchAndCacheUsage(opts) {
     }
     if (result.rateLimited) {
         const prevLastSuccess = cache?.lastSuccessAt;
-        const rateLimitedCache = createRateLimitedCacheEntry(source, cache?.data || null, pollIntervalMs, cache?.rateLimitedCount || 0, prevLastSuccess);
+        const rateLimitedCache = createRateLimitedCacheEntry(source, cache?.data || null, pollIntervalMs, cache?.rateLimitedCount || 0, prevLastSuccess, result.retryAfterMs);
         writeCache({
             data: rateLimitedCache.data,
             error: rateLimitedCache.error,
@@ -693,19 +742,15 @@ async function fetchAndCacheUsage(opts) {
         }
         return { rateLimits: null, error: 'rate_limited' };
     }
+    if (result.authRejected) {
+        // 'auth' has the short TTL, so the store Claude Code rewrites is
+        // re-read within 15 s, and the badge reads [API auth], not [API err].
+        // The rejected token's fingerprint keeps that re-read from re-sending
+        // the same token (see getUsage).
+        return recordFailure(source, cache, 'auth', opts.tokenFingerprint);
+    }
     if (!result.data) {
-        const fallbackData = hasUsableStaleData(cache) ? cache.data : null;
-        writeCache({
-            data: fallbackData,
-            error: true,
-            source,
-            errorReason: 'network',
-            lastSuccessAt: cache?.lastSuccessAt,
-        });
-        if (fallbackData) {
-            return { rateLimits: fallbackData, error: 'network', stale: true };
-        }
-        return { rateLimits: null, error: 'network' };
+        return recordFailure(source, cache, 'network');
     }
     let usage = null;
     try {
@@ -724,17 +769,7 @@ async function fetchAndCacheUsage(opts) {
             const keys = result.data && typeof result.data === 'object' ? Object.keys(result.data).join(',') : typeof result.data;
             console.error(`[usage-api] unusable 200 response; top-level keys: ${keys}`);
         }
-        const fallbackData = hasUsableStaleData(cache) ? cache.data : null;
-        writeCache({
-            data: fallbackData,
-            error: true,
-            source,
-            errorReason: 'network',
-            lastSuccessAt: cache?.lastSuccessAt,
-        });
-        return fallbackData
-            ? { rateLimits: fallbackData, error: 'network', stale: true }
-            : { rateLimits: null, error: 'network' };
+        return recordFailure(source, cache, 'network');
     }
     writeCache({ data: usage, error: false, source, lastSuccessAt: Date.now() });
     return { rateLimits: usage };
@@ -746,7 +781,7 @@ async function fetchAndCacheUsage(opts) {
  * - rateLimits: RateLimits on success, null on failure/no credentials
  * - error: categorized reason when API call fails (undefined on success or no credentials)
  *   - 'network': API call failed (timeout, HTTP error, parse error)
- *   - 'auth': credentials expired (never refreshed here — Claude Code does that; stale data served if recent)
+ *   - 'auth': credentials expired, or rejected with a 401 (never refreshed here — Claude Code does that; stale data served if recent)
  *   - 'no_credentials': no OAuth credentials available (expected for API key users)
  *   - 'rate_limited': API returned 429; stale data served if available, with exponential backoff
  *
@@ -787,22 +822,20 @@ export async function getUsage(opts) {
                     // and the short 'auth' TTL re-reads it soon after. Until
                     // then serve the last good numbers, stale-marked, while
                     // they are recent enough to mean anything.
-                    const fallbackData = hasUsableStaleData(cache) ? cache.data : null;
-                    writeCache({
-                        data: fallbackData,
-                        error: true,
-                        source: 'anthropic',
-                        errorReason: 'auth',
-                        lastSuccessAt: cache?.lastSuccessAt,
-                    });
-                    return fallbackData
-                        ? { rateLimits: fallbackData, error: 'auth', stale: true }
-                        : { rateLimits: null, error: 'auth' };
+                    return recordFailure('anthropic', cache, 'auth');
                 }
                 const accessToken = creds.accessToken;
                 const subscriptionType = creds.subscriptionType;
                 const rateLimitTier = creds.rateLimitTier;
+                // The server answered 401 to this very token: until the store
+                // holds a new one, retry it only at the transient pace.
+                const tokenFingerprint = fingerprintToken(accessToken);
+                if (cache?.errorReason === 'auth' && cache.rejectedToken === tokenFingerprint &&
+                    Date.now() - cache.timestamp < getTransientNetworkBackoffMs(pollIntervalMs)) {
+                    return getCachedUsageResult(cache);
+                }
                 return fetchAndCacheUsage({
+                    tokenFingerprint,
                     source: 'anthropic',
                     fetchFn: () => fetchUsageFromApi(accessToken, budgetMs),
                     parseFn: (data) => parseUsageResponse(data, {
