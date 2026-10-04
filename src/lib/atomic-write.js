@@ -4,7 +4,19 @@
  */
 import * as fsSync from "fs";
 import * as path from "path";
-import * as crypto from "crypto";
+let uniqueSeq = 0;
+/**
+ * A name fragment no other live writer is using: pid + time + a per-process
+ * counter, plus a little randomness for PID namespaces (containers) that share
+ * a cache dir. Not crypto.randomUUID: that needs Node 14.17, and the ESM
+ * `crypto` namespace costs ~6 ms per render to build (measured, Node 24). The
+ * temp files are opened O_EXCL ('wx') anyway, so a clash fails one write
+ * rather than mixing two.
+ */
+export function uniqueToken() {
+    uniqueSeq += 1;
+    return `${process.pid.toString(36)}.${Date.now().toString(36)}.${uniqueSeq.toString(36)}.${Math.random().toString(36).slice(2, 8)}`;
+}
 /**
  * Create directory recursively (inline implementation).
  * Ensures parent directories exist before creating the target directory.
@@ -38,7 +50,7 @@ export function ensureDirSync(dir) {
 export function atomicWriteFileSync(filePath, content) {
     const dir = path.dirname(filePath);
     const base = path.basename(filePath);
-    const tempPath = path.join(dir, `.${base}.tmp.${crypto.randomUUID()}`);
+    const tempPath = path.join(dir, `.${base}.tmp.${uniqueToken()}`);
     let fd = null;
     let success = false;
     try {
@@ -106,7 +118,7 @@ export function atomicWriteFileSync(filePath, content) {
 export function atomicTouchSync(filePath, mtimeSec) {
     const dir = path.dirname(filePath);
     const base = path.basename(filePath);
-    const tempPath = path.join(dir, `.${base}.tmp.${crypto.randomUUID()}`);
+    const tempPath = path.join(dir, `.${base}.tmp.${uniqueToken()}`);
     let success = false;
     try {
         ensureDirSync(dir);

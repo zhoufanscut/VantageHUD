@@ -10,13 +10,12 @@
  * both judged one stale lock dead could each unlink it, the later one
  * deleting the fresh lock the earlier one had just taken, and both would run
  * as holders (reproduced: up to 7 concurrent holders out of 8 processes).
- * Each lock also carries a random nonce, so a holder only ever removes its
+ * Each lock also carries a unique nonce, so a holder only ever removes its
  * own lock file.
  */
 import { openSync, closeSync, unlinkSync, writeFileSync, readFileSync, statSync, constants as fsConstants, } from "fs";
 import * as path from "path";
-import * as crypto from "crypto";
-import { ensureDirSync } from "./atomic-write.js";
+import { ensureDirSync, uniqueToken } from "./atomic-write.js";
 import { isProcessAlive } from "./platform.js";
 // ============================================================================
 // Constants
@@ -83,7 +82,7 @@ export function lockPathFor(filePath) {
  */
 function createLock(lockPath) {
     const fd = openSync(lockPath, fsConstants.O_CREAT | fsConstants.O_EXCL | fsConstants.O_WRONLY, 0o600);
-    const nonce = crypto.randomUUID();
+    const nonce = uniqueToken();
     try {
         // writeFileSync loops until every byte is written (writeSync may not)
         writeFileSync(fd, JSON.stringify({ pid: process.pid, timestamp: Date.now(), nonce }), "utf-8");

@@ -24,9 +24,8 @@ import { getCacheDir } from '../lib/worktree-paths.js';
 import { join } from 'path';
 import { atomicWriteFileSync, atomicWriteJsonSync } from '../lib/atomic-write.js';
 import { execFileSync } from 'child_process';
-import { createHash } from 'crypto';
+import { createRequire } from 'module';
 import { userInfo } from 'os';
-import https from 'https';
 import { DEFAULT_HUD_USAGE_POLL_INTERVAL_MS, } from './types.js';
 import { readHudConfig } from './state.js';
 import { lockPathFor, withFileLock } from '../lib/file-lock.js';
@@ -37,6 +36,11 @@ const MAX_RATE_LIMITED_BACKOFF_MS = 5 * 60 * 1000; // 5 minutes max for sustaine
 const API_TIMEOUT_MS = 10000;
 const MAX_STALE_DATA_MS = 15 * 60 * 1000; // 15 minutes — discard stale data after this
 const USAGE_CACHE_LOCK_OPTS = { staleLockMs: API_TIMEOUT_MS + 5000 };
+// `https` and `crypto` load at their point of use: almost every frame is a
+// usage-cache hit that needs neither, and loading them costs ~10 ms (measured,
+// Node 24). `require('https')` is the same CJS object statusline.mjs patches
+// for the proxy tunnel. No `node:` prefix: require() takes it only from 14.18.
+const require = createRequire(import.meta.url);
 function isEnterpriseUsageContext(options) {
     if (!options)
         return true;
@@ -259,7 +263,7 @@ function createRateLimitedCacheEntry(source, data, pollIntervalMs, previousCount
 function getKeychainServiceName() {
     const configDir = process.env.CLAUDE_CONFIG_DIR;
     if (configDir) {
-        const hash = createHash('sha256').update(configDir).digest('hex').slice(0, 8);
+        const hash = require('crypto').createHash('sha256').update(configDir).digest('hex').slice(0, 8);
         return `Claude Code-credentials-${hash}`;
     }
     return 'Claude Code-credentials';
@@ -390,7 +394,7 @@ function fetchUsageFromApi(accessToken, budgetMs) {
                 clearTimeout(budgetTimer);
             settle(result);
         };
-        const req = https.request({
+        const req = require('https').request({
             hostname: 'api.anthropic.com',
             path: '/api/oauth/usage',
             method: 'GET',
