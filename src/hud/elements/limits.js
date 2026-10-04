@@ -32,6 +32,16 @@ function formatResetTime(date) {
     return formatDuration(diffMs / 60_000);
 }
 /**
+ * True once a window's reset time has passed. Its percent then describes the
+ * window that just ended — Claude Code drops such a window from the payload,
+ * and the usage-API cache (up to 90 s, or 15 min of stale data) would
+ * otherwise put the pre-reset number back, unmarked. A window without a
+ * reset date is kept: the API can report `resets_at: null`.
+ */
+function hasReset(date) {
+    return date instanceof Date && !isNaN(date.getTime()) && date.getTime() <= Date.now();
+}
+/**
  * The other per-model weekly buckets (`fb:` for Fable, say), from the usage
  * API's `limits[]`. Gated like `sn:`: a model the user barely touches would
  * otherwise sit at 0% on every line. Labels are letters only (parser).
@@ -57,6 +67,8 @@ export function renderRateLimits(limits, stale, sonnetThreshold = 0) {
     const resetPrefix = stale ? '~' : '';
     // One window → faint "5h:" label + gradient percent + faint "(reset)".
     const fmt = (label, percent, resetsAt) => {
+        if (hasReset(resetsAt))
+            return null;
         const pct = Math.min(100, Math.max(0, Math.round(percent)));
         const reset = formatResetTime(resetsAt);
         const head = `${LABEL}${label}:${RESET}${getColor(pct)}${pct}%${RESET}${staleMarker}`;
@@ -84,14 +96,15 @@ export function renderRateLimits(limits, stale, sonnetThreshold = 0) {
         parts.push(fmt('op', limits.opusWeeklyPercent, limits.opusWeeklyResetsAt));
     }
     pushModelWeekly(parts, fmt, limits.modelWeekly, sonnetThreshold);
-    if (limits.extraUsagePercent != null && limits.extraUsageLimitUsd != null) {
+    if (limits.extraUsagePercent != null && limits.extraUsageLimitUsd != null && !hasReset(limits.extraUsageResetsAt)) {
         const extra = Math.min(100, Math.max(0, Math.round(limits.extraUsagePercent)));
         const extraReset = formatResetTime(limits.extraUsageResetsAt);
         const dollarPart = `${FAINT}($${(limits.extraUsageSpentUsd ?? 0).toFixed(2)}/$${limits.extraUsageLimitUsd.toFixed(2)})${RESET}`;
         const extraHead = `${LABEL}extra:${RESET}${getColor(extra)}${extra}%${RESET}${staleMarker}${dollarPart}`;
         parts.push(extraReset ? `${extraHead}${LABEL}(${resetPrefix}${extraReset})${RESET}` : extraHead);
     }
-    return parts.length > 0 ? parts.join(' ') : null;
+    const shown = parts.filter(Boolean);
+    return shown.length > 0 ? shown.join(' ') : null;
 }
 /**
  * Render rate limits with visual progress bars.
@@ -105,6 +118,8 @@ export function renderRateLimitsWithBar(limits, barWidth = 8, stale, sonnetThres
     const resetPrefix = stale ? '~' : '';
     // One window → faint label + gradient block-bar + gradient percent + faint reset.
     const fmt = (label, percent, resetsAt) => {
+        if (hasReset(resetsAt))
+            return null;
         const pct = Math.min(100, Math.max(0, Math.round(percent)));
         const color = getColor(pct);
         const filled = Math.round((pct / 100) * barWidth);
@@ -133,7 +148,7 @@ export function renderRateLimitsWithBar(limits, barWidth = 8, stale, sonnetThres
         parts.push(fmt('op', limits.opusWeeklyPercent, limits.opusWeeklyResetsAt));
     }
     pushModelWeekly(parts, fmt, limits.modelWeekly, sonnetThreshold);
-    if (limits.extraUsagePercent != null && limits.extraUsageLimitUsd != null) {
+    if (limits.extraUsagePercent != null && limits.extraUsageLimitUsd != null && !hasReset(limits.extraUsageResetsAt)) {
         const extra = Math.min(100, Math.max(0, Math.round(limits.extraUsagePercent)));
         const color = getColor(extra);
         const filled = Math.round((extra / 100) * barWidth);
@@ -144,7 +159,8 @@ export function renderRateLimitsWithBar(limits, barWidth = 8, stale, sonnetThres
         const head = `${LABEL}extra:${RESET}[${bar}]${color}${extra}%${RESET}${staleMarker}${dollarPart}`;
         parts.push(extraReset ? `${head}${LABEL}(${resetPrefix}${extraReset})${RESET}` : head);
     }
-    return parts.length > 0 ? parts.join(' ') : null;
+    const shown = parts.filter(Boolean);
+    return shown.length > 0 ? shown.join(' ') : null;
 }
 /**
  * Render an error indicator when the built-in rate limit API call fails.
