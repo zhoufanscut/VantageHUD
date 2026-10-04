@@ -291,12 +291,12 @@ export function getNextTimedTrigger(stdin, nowMs) {
  * omits the model instead of guessing or showing a fake placeholder.
  */
 export function getModelId(stdin) {
-    const modelId = stdin.model?.id?.trim();
-    return modelId || null;
+    const modelId = stdin.model?.id;
+    return typeof modelId === 'string' && modelId.trim() ? modelId.trim() : null;
 }
 export function getModelName(stdin) {
-    const displayName = stdin.model?.display_name?.trim();
-    return displayName || getModelId(stdin);
+    const displayName = stdin.model?.display_name;
+    return typeof displayName === 'string' && displayName.trim() ? displayName.trim() : getModelId(stdin);
 }
 export function getEffortLevel(stdin) {
     const level = stdin.effort?.level;

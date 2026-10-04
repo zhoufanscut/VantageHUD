@@ -85,8 +85,9 @@ async function main() {
         // every per-session cache file) falls back to it when the shell
         // wrapper didn't export HUD_SESSION_KEY.
         let stdin = await readStdin();
-        if (!stdin) {
-            // No piped stdin (e.g. invoked directly) — nothing to render.
+        if (!stdin || typeof stdin !== "object" || Array.isArray(stdin)) {
+            // No piped stdin (e.g. invoked directly), or not a payload object —
+            // nothing to render.
             return;
         }
         const sessionKey = resolveSessionKey(stdin);
@@ -96,7 +97,9 @@ async function main() {
         const previousStdinCache = readStdinCache(sessionKey);
         stdin = stabilizeContextPercent(stdin, previousStdinCache);
         writeStdinCache(stdin, sessionKey);
-        const cwd = resolveToWorktreeRoot(stdin.cwd || undefined);
+        // Claude Code sends strings; anything else is treated as absent rather
+        // than reaching path.resolve / fs calls that throw on it.
+        const cwd = resolveToWorktreeRoot(typeof stdin.cwd === "string" && stdin.cwd ? stdin.cwd : undefined);
         // Read configuration.
         // Clone to avoid mutating shared DEFAULT_HUD_CONFIG when applying runtime width detection
         const config = { ...readHudConfig() };
@@ -115,7 +118,7 @@ async function main() {
             }
         }
         // Resolve worktree-mismatched transcript paths (issue #1094)
-        const resolvedTranscriptPath = resolveTranscriptPath(stdin.transcript_path, cwd);
+        const resolvedTranscriptPath = resolveTranscriptPath(typeof stdin.transcript_path === "string" ? stdin.transcript_path : undefined, cwd);
         // Everything cumulative — the token total, the tool/agent/skill counts
         // and the session start — comes from the incremental whole-file tally
         // (token-tally.js), memoized per session so each frame parses only the
