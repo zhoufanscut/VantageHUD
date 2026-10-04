@@ -376,8 +376,20 @@ function validateCredentials(creds) {
 /**
  * Fetch usage from Anthropic API
  */
-function fetchUsageFromApi(accessToken) {
-    return new Promise((resolve) => {
+/**
+ * @param accessToken OAuth access token
+ * @param budgetMs    0 = no budget. Otherwise give up after this many ms and
+ *                    resolve `{ overBudget: true }` — the caller's cue to leave
+ *                    the cache alone (see getUsage).
+ */
+function fetchUsageFromApi(accessToken, budgetMs) {
+    return new Promise((settle) => {
+        let budgetTimer = null;
+        const resolve = (result) => {
+            if (budgetTimer)
+                clearTimeout(budgetTimer);
+            settle(result);
+        };
         const req = https.request({
             hostname: 'api.anthropic.com',
             path: '/api/oauth/usage',
@@ -418,6 +430,14 @@ function fetchUsageFromApi(accessToken) {
             req.destroy();
             resolve({ data: null });
         });
+        if (budgetMs > 0) {
+            budgetTimer = setTimeout(() => {
+                // Settle first: destroy() emits 'error', whose { data: null }
+                // must not be the result.
+                settle({ data: null, overBudget: true });
+                req.destroy();
+            }, budgetMs);
+        }
         req.end();
     });
 }
@@ -537,6 +557,16 @@ export function parseUsageResponse(response, options) {
 async function fetchAndCacheUsage(opts) {
     const { source, fetchFn, parseFn, cache, pollIntervalMs } = opts;
     const result = await fetchFn();
+    if (result.overBudget) {
+        // Not a failure: the API was never given its full timeout. Writing the
+        // 'network' entry here would suppress fetches for the 2-minute
+        // transient backoff; leave the cache as it was so the next unbudgeted
+        // render fetches, and serve what it holds meanwhile.
+        if (cache?.data && hasUsableStaleData(cache)) {
+            return { rateLimits: cache.data, stale: true };
+        }
+        return { rateLimits: null };
+    }
     if (result.rateLimited) {
         const prevLastSuccess = cache?.lastSuccessAt;
         const rateLimitedCache = createRateLimitedCacheEntry(source, cache?.data || null, pollIntervalMs, cache?.rateLimitedCount || 0, prevLastSuccess);
@@ -586,8 +616,12 @@ async function fetchAndCacheUsage(opts) {
  *   - 'auth': credentials expired (never refreshed here — Claude Code does that; stale data served if recent)
  *   - 'no_credentials': no OAuth credentials available (expected for API key users)
  *   - 'rate_limited': API returned 429; stale data served if available, with exponential backoff
+ *
+ * `opts.budgetMs` caps the wait on the API (0/absent = API_TIMEOUT_MS only).
+ * Past it the cached data, if any, is served and the cache is left untouched.
  */
-export async function getUsage() {
+export async function getUsage(opts) {
+    const budgetMs = opts?.budgetMs > 0 ? opts.budgetMs : 0;
     const baseUrl = process.env.ANTHROPIC_BASE_URL;
     const currentSource = 'anthropic';
     // Custom gateway guard: when ANTHROPIC_BASE_URL points to a third-party provider
@@ -637,7 +671,7 @@ export async function getUsage() {
                 const rateLimitTier = creds.rateLimitTier;
                 return fetchAndCacheUsage({
                     source: 'anthropic',
-                    fetchFn: () => fetchUsageFromApi(accessToken),
+                    fetchFn: () => fetchUsageFromApi(accessToken, budgetMs),
                     parseFn: (data) => parseUsageResponse(data, {
                         subscriptionType,
                         rateLimitTier,

@@ -59,6 +59,13 @@ const STATUS_TIMEOUT_MS = 3000;
 /** How long a memoized status stays authoritative before a rescan. */
 const STATUS_MEMO_TTL_MS = 30_000;
 /**
+ * How long a failed rescan (timeout, `svn` missing) suppresses the next one.
+ * Without it a working copy whose walk outlasts STATUS_TIMEOUT_MS never gets a
+ * memo written, so once the TTL lapses *every* frame pays the full timeout and
+ * fails again — a 28 s walk on a Windows checkout cost each render ~3 s.
+ */
+const STATUS_FAILURE_BACKOFF_MS = 5 * 60_000;
+/**
  * Read the memoized status counts for `cwd`, at any age.
  *
  * The memo lives on disk (`cache/<session>/svn-status.json`) because the HUD
@@ -74,7 +81,12 @@ function readStatusMemo(sessionKey, cwdKey) {
     }
     try {
         const memo = JSON.parse(readFileSync(sessionCacheFile('svn-status', sessionKey), 'utf-8'));
-        if (memo?.cwd !== cwdKey || !memo.counts || typeof memo.at !== 'number') {
+        if (memo?.cwd !== cwdKey || typeof memo.at !== 'number') {
+            return null;
+        }
+        // Counts may be null only on a failure record (`failedAt`): a working
+        // copy that has never been walked successfully still needs its backoff.
+        if (!memo.counts && typeof memo.failedAt !== 'number') {
             return null;
         }
         // A memo written before the stamp existed has no `wcDb`; it compares
@@ -391,11 +403,17 @@ export function getSvnInfo(cwd) {
  * times out falls back to the last good counts rather than blanking the
  * element, since stale counts beat a fragment that vanishes.
  *
+ * A failed rescan is recorded in the memo and not retried for
+ * `STATUS_FAILURE_BACKOFF_MS`. With `noScan` (a synchronous render, which
+ * Claude Code is waiting on) the walk never runs: the memo is served at any
+ * age, or nothing — the background refreshes do the walking.
+ *
  * @param cwd - Working directory
  * @param sessionKey - Session key naming the cache folder (no memo without it)
+ * @param noScan - Serve the memo only; never run `svn status`
  * @returns Counts, or null outside a working copy / with nothing yet measured
  */
-export function getSvnStatusCounts(cwd, sessionKey) {
+export function getSvnStatusCounts(cwd, sessionKey, noScan = false) {
     const root = getSvnWorkingCopyRoot(cwd);
     if (!root) {
         return null;
@@ -415,8 +433,11 @@ export function getSvnStatusCounts(cwd, sessionKey) {
     // the stamp catches a schedule change (`svn delete`/`add`/`revert`) on the
     // very next frame, and the clock catches the working-file changes the stamp
     // cannot see (an edit, a plain `rm`, a new unversioned file).
-    if (memo && Date.now() - memo.at < STATUS_MEMO_TTL_MS && memo.wcDb === readWcDbStamp(root)) {
+    if (memo && memo.counts && Date.now() - memo.at < STATUS_MEMO_TTL_MS && memo.wcDb === readWcDbStamp(root)) {
         result = memo.counts;
+    }
+    else if (noScan || (memo && Date.now() - (memo.failedAt ?? 0) < STATUS_FAILURE_BACKOFF_MS)) {
+        result = memo ? memo.counts : null;
     }
     else {
         try {
@@ -427,7 +448,23 @@ export function getSvnStatusCounts(cwd, sessionKey) {
             writeStatusMemo(sessionKey, key, result, readWcDbStamp(root));
         }
         catch {
+            // Keep the last good counts — and their `at`/`wcDb`, so the memo
+            // still reads as stale — and start the backoff.
             result = memo ? memo.counts : null;
+            if (sessionKey) {
+                try {
+                    atomicWriteJsonSync(sessionCacheFile('svn-status', sessionKey), {
+                        cwd: key,
+                        counts: result,
+                        wcDb: memo?.wcDb ?? null,
+                        at: memo?.at ?? 0,
+                        failedAt: Date.now(),
+                    });
+                }
+                catch {
+                    // Best-effort, as in writeStatusMemo.
+                }
+            }
         }
     }
     statusCache.set(cacheKey, { value: result, expiresAt: Date.now() + CACHE_TTL_MS });
@@ -480,10 +517,11 @@ export function renderSvnBranch(cwd) {
  * @param cwd - Working directory
  * @param labels - Resolved HUD labels
  * @param sessionKey - Session key, for the cross-render status memo
+ * @param noScan - Serve the memo only (see getSvnStatusCounts)
  * @returns Formatted status or null when clean / outside a working copy
  */
-export function renderSvnStatus(cwd, labels = DEFAULT_HUD_LABELS, sessionKey) {
-    const counts = getSvnStatusCounts(cwd, sessionKey);
+export function renderSvnStatus(cwd, labels = DEFAULT_HUD_LABELS, sessionKey, noScan = false) {
+    const counts = getSvnStatusCounts(cwd, sessionKey, noScan);
     if (!counts) {
         return null;
     }

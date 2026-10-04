@@ -14,7 +14,7 @@ import { getUsage } from "./usage-api.js";
 import { render } from "./render.js";
 import { sanitizeOutput } from "./sanitize.js";
 import { resolveToWorktreeRoot, resolveTranscriptPath, sessionCacheFile } from "../lib/worktree-paths.js";
-import { atomicWriteJsonSync } from "../lib/atomic-write.js";
+import { atomicWriteFileSync, atomicWriteJsonSync } from "../lib/atomic-write.js";
 /**
  * Extract session ID (UUID) from a transcript path.
  */
@@ -125,7 +125,15 @@ async function main() {
         // Stdin owns fresher five-hour/seven-day values, while getUsage() may provide
         // Sonnet/Opus weekly, monthly, extra, stale, and error metadata.
         const stdinRateLimits = getRateLimitsFromStdin(stdin);
-        const usageResult = config.elements.rateLimits === false ? null : await getUsage();
+        // statusline.sh sets HUD_SYNC_RENDER=1 and HUD_USAGE_BUDGET_MS only for
+        // a synchronous render, which Claude Code is waiting on: there the slow
+        // work — the usage API, the `svn status` walk — must not run long.
+        // Background refreshes do it unbudgeted and keep their caches fresh.
+        const syncRender = process.env.HUD_SYNC_RENDER === "1";
+        const usageBudgetMs = parseInt(process.env.HUD_USAGE_BUDGET_MS ?? "", 10) || 0;
+        const usageResult = config.elements.rateLimits === false
+            ? null
+            : await getUsage({ budgetMs: usageBudgetMs });
         const rateLimitsResult = config.elements.rateLimits === false
             ? null
             : mergeStdinRateLimits(stdinRateLimits, usageResult);
@@ -176,6 +184,8 @@ async function main() {
             // Threaded through so elements can memoize across renders (the SVN
             // status walk does; one process per render kills in-memory caches).
             sessionKey,
+            // A synchronous render serves the SVN status memo instead of walking.
+            syncRender,
             modelName: getModelName(stdin),
             modelId: getModelId(stdin),
             effortLevel: getEffortLevel(stdin),
@@ -228,15 +238,36 @@ async function main() {
         // explicit false overrides platform detection: process.platform === 'win32'
         const useSafeMode = config.elements.safeMode !== false &&
             (config.elements.safeMode || process.platform === "win32");
-        if (useSafeMode) {
-            output = sanitizeOutput(output);
+        const line = useSafeMode
             // In safe mode, use regular spaces (don't convert to non-breaking)
-            console.log(output);
-        }
-        else {
+            ? sanitizeOutput(output)
             // Replace spaces with non-breaking spaces for terminal alignment
-            const formattedOutput = output.replace(/ /g, "\u00A0");
-            console.log(formattedOutput);
+            : output.replace(/ /g, "\u00A0");
+        // statusline.sh names its cached line in HUD_OUTPUT_FILE. Writing it
+        // here, the moment the line exists, means a wrapper killed while still
+        // waiting on this process (Claude Code cancels an in-flight statusLine
+        // command when a new trigger fires) can no longer lose a finished
+        // render — without a cached line every frame takes the slow
+        // synchronous path again. Only good lines: a "[HUD] ..." fallback is
+        // the wrapper's to keep or not.
+        if (process.env.HUD_OUTPUT_FILE) {
+            try {
+                atomicWriteFileSync(process.env.HUD_OUTPUT_FILE, `${line}\n`);
+            }
+            catch (error) {
+                if (process.env.HUD_DEBUG) {
+                    console.error("[HUD] Output cache write error:", error instanceof Error ? error.message : error);
+                }
+            }
+        }
+        console.log(line);
+        // An abandoned usage request can keep the process alive past the
+        // budget — through a proxy, the pending CONNECT holds the event loop
+        // for its own 10 s timeout (measured). The wrapper waits for exit, so
+        // a synchronous render leaves as soon as its line is flushed. Nothing
+        // else is pending by then: every cache write above is synchronous.
+        if (syncRender || usageBudgetMs > 0) {
+            process.stdout.write("", () => process.exit(0));
         }
     }
     catch (error) {

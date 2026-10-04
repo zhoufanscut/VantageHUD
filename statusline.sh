@@ -60,15 +60,25 @@ config_newer_than() {
   [ "$cfg_mtime" -gt "$ref_mtime" ]
 }
 
-cleanup_empty_temp_files() {
-  for temp_path in "$CACHE_DIR"/stdin.*.tmp "$CACHE_DIR"/*/statusline.*.tmp "$CACHE_DIR"/*/statusline.*.err; do
-    [ -f "$temp_path" ] || continue
-    [ -s "$temp_path" ] && continue
-    is_stale_path "$temp_path" || continue
-    rm -f "$temp_path" 2>/dev/null || :
-  done
+# Orphans of a wrapper that died mid-render (killed, or a failed fork). A
+# stdin/statusline .tmp goes whatever its size: a killed render leaves a
+# complete line in it that nothing will ever promote. A .err is kept while
+# non-empty — it is the only record of why that render died. One `find`, not a
+# per-file loop costing ~6 forks a file: forks are exactly what is scarce when
+# orphans pile up (a Windows/Git Bash run sweeping ~35 of them during a fork
+# storm took 2m15s for the whole wrapper). -mmin +1 (older than a minute or
+# two) is far past any live render, and one that did outlive it has already
+# written its line itself (HUD_OUTPUT_FILE). Runs from the locked refresh path,
+# never the hot path, like the two sweeps below.
+cleanup_stale_temp_files() {
+  find "$CACHE_DIR" -maxdepth 2 -type f -mmin +1 \
+    \( -name 'stdin.*.tmp' -o -name 'statusline.*.tmp' \
+    -o \( -name 'statusline.*.err' -size 0 \) \) \
+    -exec rm -f {} + 2>/dev/null || :
 }
 
+# Other sessions' abandoned locks; this session's own is handled by
+# try_acquire_lock.
 cleanup_stale_render_locks() {
   for stale_lock_dir in "$CACHE_DIR"/*/render.lock; do
     [ -d "$stale_lock_dir" ] || continue
@@ -107,9 +117,6 @@ prune_old_cache() {
   find "$CACHE_DIR" -mindepth 1 -maxdepth 1 -type d -mtime +"$CACHE_MAX_AGE_DAYS" \
     -exec rm -rf {} + 2>/dev/null || :
 }
-
-cleanup_empty_temp_files
-cleanup_stale_render_locks
 
 # Capture Claude's current statusLine stdin first so rendered output can be
 # scoped per session/worktree instead of leaking across concurrent sessions.
@@ -166,6 +173,8 @@ OUTPUT_FILE="$SESSION_DIR/statusline.txt"
 LOCK_DIR="$SESSION_DIR/render.lock"
 NODE_STDOUT_TMP="$SESSION_DIR/statusline.$$.tmp"
 NODE_STDERR_TMP="$SESSION_DIR/statusline.$$.err"
+SYNC_RENDER=
+USAGE_BUDGET_MS=
 
 if [ -s "$INPUT_TMP" ]; then
   mv "$INPUT_TMP" "$INPUT_FILE" 2>/dev/null || cp "$INPUT_TMP" "$INPUT_FILE" 2>/dev/null || :
@@ -204,10 +213,19 @@ refresh_cache() {
   # HUD_SESSION_KEY hands Node the exact key that named this session folder, so
   # the renderer's cache files land in the same folder even when the key came
   # from a fallback (transcript/cwd checksum) Node cannot recompute itself.
+  # HUD_OUTPUT_FILE lets Node write the cached line itself as soon as it has
+  # one, so a wrapper killed before its own mv below still leaves it behind.
+  # HUD_SYNC_RENDER / HUD_USAGE_BUDGET_MS are set by the caller for a
+  # synchronous render only: Node then skips the `svn status` walk and caps
+  # its wait on the usage API.
   if [ -x "$SCRIPT_DIR/find-node.sh" ]; then
-    HUD_SESSION_KEY="$SESSION_KEY" sh "$SCRIPT_DIR/find-node.sh" "$HUD_SCRIPT" < "$INPUT_FILE" > "$NODE_STDOUT_TMP" 2> "$NODE_STDERR_TMP"
+    HUD_SESSION_KEY="$SESSION_KEY" HUD_OUTPUT_FILE="$OUTPUT_FILE" \
+      HUD_SYNC_RENDER="$SYNC_RENDER" HUD_USAGE_BUDGET_MS="$USAGE_BUDGET_MS" \
+      sh "$SCRIPT_DIR/find-node.sh" "$HUD_SCRIPT" < "$INPUT_FILE" > "$NODE_STDOUT_TMP" 2> "$NODE_STDERR_TMP"
   else
-    HUD_SESSION_KEY="$SESSION_KEY" node "$HUD_SCRIPT" < "$INPUT_FILE" > "$NODE_STDOUT_TMP" 2> "$NODE_STDERR_TMP"
+    HUD_SESSION_KEY="$SESSION_KEY" HUD_OUTPUT_FILE="$OUTPUT_FILE" \
+      HUD_SYNC_RENDER="$SYNC_RENDER" HUD_USAGE_BUDGET_MS="$USAGE_BUDGET_MS" \
+      node "$HUD_SCRIPT" < "$INPUT_FILE" > "$NODE_STDOUT_TMP" 2> "$NODE_STDERR_TMP"
   fi
 
   # A failed render either leaves stdout empty (crash, timeout, no node) or
@@ -227,6 +245,8 @@ refresh_cache() {
     mv "$NODE_STDOUT_TMP" "$OUTPUT_FILE" 2>/dev/null || cp "$NODE_STDOUT_TMP" "$OUTPUT_FILE" 2>/dev/null || :
   fi
 
+  cleanup_stale_temp_files
+  cleanup_stale_render_locks
   prune_old_cache
 
   rm -f "$NODE_STDOUT_TMP" "$NODE_STDERR_TMP" 2>/dev/null || :
@@ -255,7 +275,13 @@ fi
 # a permission-mode or vim toggle, a configured refreshInterval), so an async
 # background refresh can leave the pane stuck on the old frame (or
 # "[HUD] Starting...") for a long time.
+# Claude Code is waiting on this render, so Node skips its slow work: the
+# usage API gets a budget (cached numbers past it) and `svn status` is served
+# from its memo. The background refreshes above run in full and keep both
+# caches fresh.
 if [ -s "$INPUT_FILE" ] && try_acquire_lock; then
+  SYNC_RENDER=1
+  USAGE_BUDGET_MS=${HUD_SYNC_USAGE_BUDGET_MS:-1000}
   refresh_cache
   if [ -s "$OUTPUT_FILE" ]; then
     cat "$OUTPUT_FILE" 2>/dev/null && exit 0

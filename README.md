@@ -267,6 +267,9 @@ git -C ~/.claude/hud pull
   `config.json`), `HUD_CACHE_DIR` (override that cache/state dir; default is the
   HUD install's own `cache/`), `HUD_CACHE_MAX_AGE_DAYS` (idle-session retention,
   default 14), `HUD_LOCK_STALE_SECONDS` (age after which another frame may
-  take over a render lock, default 10), `HUD_SYNC_REFRESH=1` (testing only:
+  take over a render lock, default 10), `HUD_SYNC_USAGE_BUDGET_MS` (how long a
+  synchronous render — the first one per session, or one after a config edit —
+  waits on the usage API before rendering with the cached numbers; default
+  1000, `0` waits the full 10 s timeout), `HUD_SYNC_REFRESH=1` (testing only:
   bypass the render cache and render this payload synchronously; set globally
   it would cost every frame a full Node render), `HUD_DEBUG=1` (verbose).

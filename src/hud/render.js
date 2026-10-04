@@ -203,7 +203,7 @@ export async function render(context, config) {
     }
     if (enabledElements.gitStatus) {
         const statusElement = useSvn
-            ? renderSvnStatus(context.cwd, hudLabels, context.sessionKey)
+            ? renderSvnStatus(context.cwd, hudLabels, context.sessionKey, context.syncRender)
             : renderGitStatus(context.cwd, hudLabels);
         if (statusElement)
             rendered.set("gitStatus", statusElement);
