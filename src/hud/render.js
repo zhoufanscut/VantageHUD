@@ -21,8 +21,51 @@ import { renderCallCounts } from "./elements/call-counts.js";
  */
 const ANSI_REGEX = /\x1b\[[0-9;]*[a-zA-Z]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/;
 const PLAIN_SEPARATOR = " | ";
+// C0/C1 controls. A fragment may carry ESC (its own SGR colors) and nothing
+// else: a newline, CR or BEL from a directory, model or repo name would split
+// the single line or move the cursor, and width math counts each as a column.
+const FRAGMENT_CONTROLS = /[\x00-\x1a\x1c-\x1f\x7f-\x9f]/g;
+// Payload text painted as-is (path, model name) loses ESC too: a raw escape
+// there would be the payload's, not ours.
+const TEXT_CONTROLS = /[\x00-\x1f\x7f-\x9f]/g;
+function cleanText(text) {
+    return String(text).replace(TEXT_CONTROLS, "?");
+}
+/**
+ * Shorten a `home` prefix of `cwd` to `~`. Separators are compared as `/`
+ * either way round (Windows paths arrive as `C:\Users\x` from the payload and
+ * `C:/Users/x` from git), a trailing separator on HOME is ignored, and on
+ * win32 the comparison ignores case. A home that is a filesystem root (`/`,
+ * `C:\`) never shortens anything.
+ */
+export function shortenHomePath(cwd, home) {
+    if (!home)
+        return cwd;
+    const slashes = (p) => p.replace(/\\/g, "/");
+    const root = slashes(home).replace(/\/+$/, "");
+    if (root === "" || /^[A-Za-z]:$/.test(root))
+        return cwd;
+    const fold = process.platform === "win32" ? (p) => p.toLowerCase() : (p) => p;
+    const path = fold(slashes(cwd));
+    const prefix = fold(root);
+    if (path === prefix || path.startsWith(prefix + "/"))
+        return "~" + cwd.slice(root.length);
+    return cwd;
+}
 // Tint the " | " separator with the active palette's hairline slate.
 const DIM_SEPARATOR = paint(PALETTE.sep, PLAIN_SEPARATOR);
+/**
+ * `layout.main` is authoritative — what it leaves out stays hidden — but a
+ * repeated or unknown name is dropped, and an empty list counts as unset: it
+ * would print an empty line over the cached good one.
+ */
+function buildLayoutMainOrder(layoutMain) {
+    if (!Array.isArray(layoutMain))
+        return null;
+    const known = new Set(DEFAULT_ELEMENT_ORDER.main);
+    const order = [...new Set(layoutMain)].filter((name) => known.has(name));
+    return order.length > 0 ? order : null;
+}
 function buildMainElementOrder(elementOrder) {
     if (!Array.isArray(elementOrder) || elementOrder.length === 0) {
         return DEFAULT_ELEMENT_ORDER.main;
@@ -52,8 +95,9 @@ export function truncateLineToMaxWidth(line, maxWidth) {
         return "";
     if (stringWidth(line) <= maxWidth)
         return line;
-    const ELLIPSIS = "...";
-    const ellipsisWidth = 3;
+    // Below 3 columns the ellipsis itself is cut to fit.
+    const ELLIPSIS = "...".slice(0, maxWidth);
+    const ellipsisWidth = ELLIPSIS.length;
     const targetWidth = Math.max(0, maxWidth - ellipsisWidth);
     let visibleWidth = 0;
     let result = "";
@@ -156,7 +200,12 @@ function applyMaxWidthByMode(lines, maxWidth, wrapMode) {
  * @returns Trimmed array of lines
  */
 export function limitOutputLines(lines, maxLines) {
-    const limit = Math.max(1, maxLines ?? DEFAULT_HUD_CONFIG.elements.maxOutputLines);
+    // A non-numeric limit made every comparison false and left only the
+    // "... (+NaN lines)" indicator; fall back to the default instead.
+    const requested = Math.floor(Number(maxLines));
+    const limit = Number.isFinite(requested) && requested >= 1
+        ? requested
+        : DEFAULT_HUD_CONFIG.elements.maxOutputLines;
     if (lines.length <= limit) {
         return lines;
     }
@@ -173,6 +222,22 @@ export async function render(context, config) {
     // Each element is rendered independently and stored by name.
     // The layout (or DEFAULT_ELEMENT_ORDER) determines final ordering.
     const rendered = new Map();
+    // One element's throw must cost only its own fragment, not the whole
+    // line (which index.js would replace with "[HUD] HUD error").
+    const put = (name, build) => {
+        let fragment = null;
+        try {
+            fragment = build();
+        }
+        catch (error) {
+            if (process.env.HUD_DEBUG) {
+                console.error(`[HUD] ${name} element failed:`, error instanceof Error ? error.message : error);
+            }
+            return;
+        }
+        if (fragment)
+            rendered.set(name, String(fragment).replace(FRAGMENT_CONTROLS, "?"));
+    };
     // -- main-line elements --
     // The three `git*` elements are VCS slots covering both supported systems.
     // The choice is made ONCE, here, rather than per slot: an element-by-element
@@ -188,25 +253,25 @@ export async function render(context, config) {
     // and an SVN checkout never spawns the git element commands. The repo name
     // and worktree suffix come from the payload's `workspace` when Claude Code
     // supplies them (index.js), which spares three more git spawns per frame.
-    const useSvn = wantsVcs
-        && getWorktreeRoot(context.cwd) === null
-        && isSvnWorkingCopy(context.cwd);
+    let useSvn = false;
+    try {
+        useSvn = wantsVcs
+            && getWorktreeRoot(context.cwd) === null
+            && isSvnWorkingCopy(context.cwd);
+    }
+    catch {
+        // Undecidable: the git slots answer (and hide themselves) as before.
+    }
     if (enabledElements.gitRepo) {
-        const repoElement = useSvn ? renderSvnRepo(context.cwd) : renderGitRepo(context.cwd, context.repoName);
-        if (repoElement)
-            rendered.set("gitRepo", repoElement);
+        put("gitRepo", () => useSvn ? renderSvnRepo(context.cwd) : renderGitRepo(context.cwd, context.repoName));
     }
     if (enabledElements.gitBranch) {
-        const branchElement = useSvn ? renderSvnBranch(context.cwd) : renderGitBranch(context.cwd, context.worktreeHint);
-        if (branchElement)
-            rendered.set("gitBranch", branchElement);
+        put("gitBranch", () => useSvn ? renderSvnBranch(context.cwd) : renderGitBranch(context.cwd, context.worktreeHint));
     }
     if (enabledElements.gitStatus) {
-        const statusElement = useSvn
+        put("gitStatus", () => useSvn
             ? renderSvnStatus(context.cwd, hudLabels, context.sessionKey, context.syncRender)
-            : renderGitStatus(context.cwd, hudLabels);
-        if (statusElement)
-            rendered.set("gitStatus", statusElement);
+            : renderGitStatus(context.cwd, hudLabels));
     }
     const modelSource = enabledElements.modelFormat === 'full'
         ? context.modelId ?? context.modelName
@@ -214,66 +279,48 @@ export async function render(context, config) {
     if (enabledElements.model && modelSource) {
         // Effort level (max|xhigh|high|medium|low) is folded into the model element.
         const effortLevel = enabledElements.effort !== false ? context.effortLevel : null;
-        const modelElement = renderModel(modelSource, enabledElements.modelFormat, effortLevel);
-        if (modelElement)
-            rendered.set("model", modelElement);
+        put("model", () => renderModel(cleanText(modelSource), enabledElements.modelFormat, effortLevel));
     }
 
     // show the working-folder path here (replaces the former version label),
     // shortening the $HOME prefix to ~ to keep it compact.
     if (enabledElements.pathLabel && context.cwd) {
         const home = process.env.HOME || process.env.USERPROFILE || "";
-        const shortCwd = home && (context.cwd === home || context.cwd.startsWith(home + "/"))
-            ? "~" + context.cwd.slice(home.length)
-            : context.cwd;
         // Same bold path text, tinted with the palette's soft slate.
-        rendered.set("pathLabel", `\x1b[1m${paint(PALETTE.text, shortCwd)}`);
+        put("pathLabel", () => `\x1b[1m${paint(PALETTE.text, cleanText(shortenHomePath(context.cwd, home)))}`);
     }
     // Rate limits (5h and weekly) - data takes priority over error indicator.
     if (enabledElements.rateLimits && context.rateLimitsResult) {
-        if (context.rateLimitsResult.rateLimits) {
-            const stale = context.rateLimitsResult.stale;
-            const snThreshold = config.thresholds?.sonnetWeeklyVisibility ?? 80;
-            const limits = enabledElements.useBars
-                ? renderRateLimitsWithBar(context.rateLimitsResult.rateLimits, undefined, stale, snThreshold)
-                : renderRateLimits(context.rateLimitsResult.rateLimits, stale, snThreshold);
-            if (limits)
-                rendered.set("rateLimits", limits);
-        }
-        else {
-            const errorIndicator = renderRateLimitsError(context.rateLimitsResult);
-            if (errorIndicator)
-                rendered.set("rateLimits", errorIndicator);
-        }
+        put("rateLimits", () => {
+            if (context.rateLimitsResult.rateLimits) {
+                const stale = context.rateLimitsResult.stale;
+                const snThreshold = config.thresholds?.sonnetWeeklyVisibility ?? 80;
+                return enabledElements.useBars
+                    ? renderRateLimitsWithBar(context.rateLimitsResult.rateLimits, undefined, stale, snThreshold)
+                    : renderRateLimits(context.rateLimitsResult.rateLimits, stale, snThreshold);
+            }
+            return renderRateLimitsError(context.rateLimitsResult);
+        });
     }
     if (enabledElements.sessionHealth && context.sessionHealth) {
-        const session = renderSession(context.sessionHealth);
-        if (session)
-            rendered.set("session", session);
+        put("session", () => renderSession(context.sessionHealth));
     }
     if (enabledElements.showTokens === true) {
-        const tokenUsage = renderTokenUsage(context.sessionTotalTokens, hudLabels);
-        if (tokenUsage)
-            rendered.set("tokens", tokenUsage);
+        put("tokens", () => renderTokenUsage(context.sessionTotalTokens, hudLabels));
     }
     if (enabledElements.contextBar) {
-        const ctx = enabledElements.useBars
+        put("contextBar", () => enabledElements.useBars
             ? renderContextWithBar(context.contextPercent, config.thresholds, 10, hudLabels)
-            : renderContext(context.contextPercent, config.thresholds, hudLabels);
-        if (ctx)
-            rendered.set("contextBar", ctx);
+            : renderContext(context.contextPercent, config.thresholds, hudLabels));
     }
     const showCounts = enabledElements.showCallCounts ?? true;
     if (showCounts) {
-        const counts = renderCallCounts(context.toolCallCount, context.agentCallCount, context.skillCallCount, enabledElements.callCountsFormat ?? 'auto', hudLabels);
-        if (counts)
-            rendered.set("callCounts", counts);
+        put("callCounts", () => renderCallCounts(context.toolCallCount, context.agentCallCount, context.skillCallCount, enabledElements.callCountsFormat ?? 'auto', hudLabels));
     }
     // ── Assemble output (single line) ──────────────────────────────────
-    const safeArray = (v, fallback) => Array.isArray(v) ? v : fallback;
     // Single-line HUD: only the `main` zone renders. `layout.main` is the advanced
     // authoritative ordering control; `elementOrder` is a convenience alias for it.
-    const mainOrder = safeArray(config.layout?.main, buildMainElementOrder(config.elementOrder));
+    const mainOrder = buildLayoutMainOrder(config.layout?.main) ?? buildMainElementOrder(config.elementOrder);
     /** Collect inline elements in layout order. */
     function collectInline(order) {
         const result = [];

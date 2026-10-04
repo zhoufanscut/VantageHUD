@@ -253,7 +253,8 @@ git -C ~/.claude/hud pull
 ```
 
 ## Notes
-- The working-folder path shows `~` in place of `$HOME` to stay compact.
+- The working-folder path shows `~` in place of `$HOME` (or `%USERPROFILE%`)
+  to stay compact.
 - `repo:` / `branch:` / working-tree counts cover **git and Subversion**. In an
   SVN checkout the branch comes from the URL convention (`trunk`,
   `branches/<name>`, `tags/<name>`) and carries the working-copy revision, e.g.
