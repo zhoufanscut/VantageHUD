@@ -87,12 +87,38 @@ function getLegacyCachePath() {
     return join(getCacheDir(), '.usage-cache.json');
 }
 /**
- * Get the provider-specific cache file path. Shared across sessions, so it sits
- * at the cache root alongside `.last-prune` — the pattern-specific pruner in
- * statusline.sh never matches `.usage-cache-*.json`, so it is not evicted.
+ * Which account's numbers a cache file holds, as a file-name suffix. Sessions
+ * share one install (and one HUD_CACHE_DIR) across Claude config dirs, and
+ * each config dir is its own login: one shared file showed account A's
+ * numbers — `extra:` included — in a session of account B, or of an API-key
+ * user with no credentials at all, until it expired. The credentials are
+ * found by CLAUDE_CONFIG_DIR (the file under it, or a Keychain service named
+ * after its raw value), so that is the key: '' for the default dir, which
+ * keeps the old file name, else an FNV-1a hash of the raw value and the
+ * resolved dir. A path, not a secret, hence no crypto (~10 ms to load). A
+ * `/login` to another account inside one config dir is not detected; the
+ * old numbers then last until the next poll.
+ */
+function getAccountSuffix() {
+    const raw = process.env.CLAUDE_CONFIG_DIR;
+    if (!raw)
+        return '';
+    const text = `${raw}\n${getClaudeConfigDir()}`;
+    let hash = 0x811c9dc5;
+    for (let i = 0; i < text.length; i++) {
+        hash ^= text.charCodeAt(i);
+        hash = Math.imul(hash, 0x01000193) >>> 0;
+    }
+    return `-${hash.toString(16).padStart(8, '0')}`;
+}
+/**
+ * Get the provider-specific cache file path for this account (see
+ * getAccountSuffix). Shared across sessions, so it sits at the cache root
+ * alongside `.last-prune` — the pattern-specific pruner in statusline.sh
+ * never matches `.usage-cache-*.json`, so it is not evicted.
  */
 function getCachePath(source) {
-    return join(getCacheDir(), `.usage-cache-${source}.json`);
+    return join(getCacheDir(), `.usage-cache-${source}${getAccountSuffix()}.json`);
 }
 /**
  * Migrate legacy single-file cache to provider-specific file.
