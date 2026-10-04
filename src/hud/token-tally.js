@@ -89,6 +89,9 @@ import { atomicWriteJsonSync } from "../lib/atomic-write.js";
 // first row carries its session id and start timestamp, so a rewrite that keeps
 // the first 512 bytes byte-identical is not a rewrite we need to distinguish.
 const FINGERPRINT_BYTES = 512;
+// Most bytes read and decoded at once. Bounds peak memory on a cold scan of a
+// large transcript; a line longer than this widens the window for that read.
+const SLICE_BYTES = 8 * 1024 * 1024;
 /** tool_use names counted as an agent invocation (the `A` count). */
 const AGENT_TOOLS = new Set(["Task", "proxy_Task", "Agent"]);
 /** tool_use names counted as a skill invocation (the `S` count). */
@@ -286,86 +289,102 @@ export function tallyFile(filePath, size, memo) {
             : null;
         let unsettled = resumable ? memo.unsettled : 0;
         let lastSettled = resumable ? memo.lastSettled : null;
-        const chunk = readRange(filePath, start, size - start);
-        if (chunk.length === 0) {
-            return resumable ? { ...memo, fp } : empty;
-        }
-        // Only consume through the last complete line: a writer may be midway
-        // through appending the next one. Slicing on the newline *byte* also
-        // keeps the decode on a valid UTF-8 boundary, since `start` is itself
-        // always a line boundary.
-        const lastNewline = chunk.lastIndexOf(0x0a);
-        if (lastNewline < 0) {
-            // A partial line with no terminator yet — consume nothing.
-            return resumable ? { ...memo, fp } : empty;
-        }
-        const consumed = start + lastNewline + 1;
-        const text = chunk.subarray(0, lastNewline + 1).toString("utf8");
-        for (const line of text.split("\n")) {
-            if (!line.trim()) {
+        // Read in bounded slices so peak memory stays near SLICE_BYTES however
+        // much is unread (a cold scan reads the whole file), and so no decode
+        // can hit V8's string limit (~512 MiB). Each slice is cut after its
+        // last newline: a writer may be midway through appending the next
+        // line, and a cut on the newline *byte* keeps the decode on a valid
+        // UTF-8 boundary, since `start` is itself always a line boundary.
+        let consumed = start;
+        let window = SLICE_BYTES;
+        while (consumed < size) {
+            const want = Math.min(window, size - consumed);
+            const chunk = readRange(filePath, consumed, want);
+            const lastNewline = chunk.lastIndexOf(0x0a);
+            if (lastNewline < 0) {
+                // No complete line here. At the end of the file (or on a short
+                // read) that is a partial line still being written: consume
+                // nothing more. Otherwise a single line outgrew the window, so
+                // widen it and read again.
+                if (chunk.length < want || consumed + chunk.length >= size) {
+                    break;
+                }
+                window *= 2;
                 continue;
             }
-            let entry;
-            try {
-                entry = JSON.parse(line);
-            }
-            catch {
-                continue; // Skip malformed lines
-            }
-            if (!entry || typeof entry !== "object") {
-                continue;
-            }
-            if (firstTimestamp === null && typeof entry.timestamp === "string" && entry.timestamp) {
-                firstTimestamp = entry.timestamp;
-            }
-            // Call counts. Safe to count per row: each assistant row carries
-            // exactly one content block (0 rows with several, 0 repeated
-            // tool_use ids, across 50 transcripts / 16,330 rows), so the rows
-            // of one message never repeat a block.
-            const content = entry.message?.content;
-            if (Array.isArray(content)) {
-                for (const block of content) {
-                    if (!block || block.type !== "tool_use" || !block.id || !block.name) {
-                        continue;
-                    }
-                    toolCalls++;
-                    if (AGENT_TOOLS.has(block.name)) {
-                        agentCalls++;
-                    }
-                    else if (SKILL_TOOLS.has(block.name)) {
-                        skillCalls++;
+            const text = chunk.subarray(0, lastNewline + 1).toString("utf8");
+            consumed += lastNewline + 1;
+            window = SLICE_BYTES;
+            for (const line of text.split("\n")) {
+                if (!line.trim()) {
+                    continue;
+                }
+                let entry;
+                try {
+                    entry = JSON.parse(line);
+                }
+                catch {
+                    continue; // Skip malformed lines
+                }
+                if (!entry || typeof entry !== "object") {
+                    continue;
+                }
+                if (firstTimestamp === null && typeof entry.timestamp === "string" && entry.timestamp) {
+                    firstTimestamp = entry.timestamp;
+                }
+                // Call counts. Safe to count per row: each assistant row carries
+                // exactly one content block (0 rows with several, 0 repeated
+                // tool_use ids, across 50 transcripts / 16,330 rows), so the rows
+                // of one message never repeat a block.
+                const content = entry.message?.content;
+                if (Array.isArray(content)) {
+                    for (const block of content) {
+                        if (!block || block.type !== "tool_use" || !block.id || !block.name) {
+                            continue;
+                        }
+                        toolCalls++;
+                        if (AGENT_TOOLS.has(block.name)) {
+                            agentCalls++;
+                        }
+                        else if (SKILL_TOOLS.has(block.name)) {
+                            skillCalls++;
+                        }
                     }
                 }
-            }
-            const usage = entry.message?.usage;
-            if (!usage) {
-                continue;
-            }
-            const tokens = tokensFromUsage(usage);
-            const id = typeof entry.message?.id === "string" && entry.message.id
-                ? entry.message.id
-                : null;
-            const settled = entry.message.stop_reason !== null;
-            if (id && id === lastId) {
-                // Another content block of the call we already counted. Replace
-                // rather than add: rows of a group are non-decreasing snapshots
-                // of one call's usage, so the last row is the settled value and
-                // equals the max (0 decreasing groups measured). On current
-                // subagent files that last row may itself be an unsettled
-                // placeholder; see the header.
-                total += tokens - lastIdTokens;
+                const usage = entry.message?.usage;
+                if (!usage) {
+                    continue;
+                }
+                const tokens = tokensFromUsage(usage);
+                const id = typeof entry.message?.id === "string" && entry.message.id
+                    ? entry.message.id
+                    : null;
+                const settled = entry.message.stop_reason !== null;
+                if (id && id === lastId) {
+                    // Another content block of the call we already counted. Replace
+                    // rather than add: rows of a group are non-decreasing snapshots
+                    // of one call's usage, so the last row is the settled value and
+                    // equals the max (0 decreasing groups measured). On current
+                    // subagent files that last row may itself be an unsettled
+                    // placeholder; see the header.
+                    total += tokens - lastIdTokens;
+                    lastIdTokens = tokens;
+                    lastSettled = settled;
+                    continue;
+                }
+                // A new group closes the previous one.
+                if (lastSettled === false) {
+                    unsettled++;
+                }
+                total += tokens;
+                lastId = id;
                 lastIdTokens = tokens;
                 lastSettled = settled;
-                continue;
             }
-            // A new group closes the previous one.
-            if (lastSettled === false) {
-                unsettled++;
-            }
-            total += tokens;
-            lastId = id;
-            lastIdTokens = tokens;
-            lastSettled = settled;
+        }
+        if (consumed === start) {
+            // Nothing complete appended since the last frame.
+            return resumable ? { ...memo, fp } : empty;
         }
         return {
             fp, consumed, total: Math.max(0, total), lastId, lastIdTokens,
