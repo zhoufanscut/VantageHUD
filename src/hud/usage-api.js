@@ -68,6 +68,15 @@ export function isAnthropicHost(urlString) {
         return false;
     }
 }
+// Claude Code's switches for a non-Anthropic model provider.
+const THIRD_PARTY_PROVIDER_FLAGS = ['CLAUDE_CODE_USE_BEDROCK', 'CLAUDE_CODE_USE_VERTEX', 'CLAUDE_CODE_USE_FOUNDRY'];
+/** An env switch is on unless empty, `0`, `false`, `no` or `off`. */
+function isEnvFlagOn(value) {
+    if (typeof value !== 'string')
+        return false;
+    const v = value.trim().toLowerCase();
+    return v !== '' && v !== '0' && v !== 'false' && v !== 'no' && v !== 'off';
+}
 /**
  * Get the legacy (pre-split) cache file path.
  *
@@ -809,14 +818,17 @@ async function fetchAndCacheUsage(opts) {
  */
 export async function getUsage(opts) {
     const budgetMs = opts?.budgetMs > 0 ? opts.budgetMs : 0;
-    const baseUrl = process.env.ANTHROPIC_BASE_URL;
+    // Empty counts as unset, as it does for Claude Code (`export VAR=` in a
+    // profile); `new URL('')` throws, which used to read as a third party.
+    const baseUrl = (process.env.ANTHROPIC_BASE_URL || '').trim();
     const currentSource = 'anthropic';
     // Custom gateway guard: when ANTHROPIC_BASE_URL points to a third-party provider
-    // that is not Anthropic, there is no usage endpoint to query. Querying Anthropic's
-    // OAuth usage here would surface the local Claude subscription's limits, which do
-    // not describe the active provider — so report no credentials and let the HUD
-    // render nothing. Runs before any cache read so a stale cache cannot leak through.
-    if (baseUrl != null && !isAnthropicHost(baseUrl)) {
+    // that is not Anthropic, or Claude Code runs on Bedrock / Vertex / Foundry,
+    // there is no usage endpoint to query. Querying Anthropic's OAuth usage here
+    // would surface a leftover local subscription's limits, which do not describe
+    // the active provider — so report no credentials and let the HUD render
+    // nothing. Runs before any cache read so a stale cache cannot leak through.
+    if ((baseUrl && !isAnthropicHost(baseUrl)) || THIRD_PARTY_PROVIDER_FLAGS.some((name) => isEnvFlagOn(process.env[name]))) {
         return { rateLimits: null, error: 'no_credentials' };
     }
     const pollIntervalMs = getUsagePollIntervalMs();
