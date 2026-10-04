@@ -22,7 +22,7 @@ import { existsSync, readFileSync } from 'fs';
 import { getClaudeConfigDir } from '../lib/config-dir.js';
 import { getCacheDir } from '../lib/worktree-paths.js';
 import { join } from 'path';
-import { atomicWriteFileSync, atomicWriteJsonSync } from '../lib/atomic-write.js';
+import { atomicWriteJsonSync } from '../lib/atomic-write.js';
 import { execFileSync } from 'child_process';
 import { createRequire } from 'module';
 import { userInfo } from 'os';
@@ -78,15 +78,6 @@ function isEnvFlagOn(value) {
     return v !== '' && v !== '0' && v !== 'false' && v !== 'no' && v !== 'off';
 }
 /**
- * Get the legacy (pre-split) cache file path.
- *
- * Lives at the cache root (not a per-session subfolder): the usage cache is
- * shared across all sessions — one rate-limit backoff state per account.
- */
-function getLegacyCachePath() {
-    return join(getCacheDir(), '.usage-cache.json');
-}
-/**
  * Which account's numbers a cache file holds, as a file-name suffix. Sessions
  * share one install (and one HUD_CACHE_DIR) across Claude config dirs, and
  * each config dir is its own login: one shared file showed account A's
@@ -121,32 +112,6 @@ function getCachePath(source) {
     return join(getCacheDir(), `.usage-cache-${source}${getAccountSuffix()}.json`);
 }
 /**
- * Migrate legacy single-file cache to provider-specific file.
- * One-shot: only runs when the provider-specific file does not yet exist
- * and the legacy cache's source matches the current provider.
- * Does NOT delete the legacy file (rolling update safety).
- */
-function migrateLegacyCache(source) {
-    try {
-        const legacyPath = getLegacyCachePath();
-        if (!existsSync(legacyPath))
-            return;
-        // One-shot guard: skip if new file already exists
-        if (existsSync(getCachePath(source)))
-            return;
-        const content = readFileSync(legacyPath, 'utf-8');
-        const cache = JSON.parse(content);
-        // Source mismatch guard: only migrate if legacy cache belongs to this provider
-        if (cache.source !== source)
-            return;
-        // Atomic write (creates the parent dir itself).
-        atomicWriteFileSync(getCachePath(source), content);
-    }
-    catch {
-        // Best-effort migration — failures are harmless
-    }
-}
-/**
  * Read cached usage data for a specific provider
  */
 function readCache(source) {
@@ -169,9 +134,6 @@ function readCache(source) {
             }
             if (cache.data.opusWeeklyResetsAt) {
                 cache.data.opusWeeklyResetsAt = new Date(cache.data.opusWeeklyResetsAt);
-            }
-            if (cache.data.monthlyResetsAt) {
-                cache.data.monthlyResetsAt = new Date(cache.data.monthlyResetsAt);
             }
             if (cache.data.extraUsageResetsAt) {
                 cache.data.extraUsageResetsAt = new Date(cache.data.extraUsageResetsAt);
@@ -760,7 +722,8 @@ export function parseUsageResponse(response, options) {
 /**
  * Generic provider fetch-and-cache cycle.
  * Handles 429 backoff, stale data fallback, and cache writes.
- * Provider-specific pre-fetch logic (e.g., credential refresh) runs before calling this.
+ * The caller has already checked the credentials (read-only: an expired token
+ * is never refreshed here — see the header).
  */
 async function fetchAndCacheUsage(opts) {
     const { source, fetchFn, parseFn, cache, pollIntervalMs } = opts;
@@ -860,8 +823,6 @@ export async function getUsage(opts) {
         return { rateLimits: null, error: 'no_credentials' };
     }
     const pollIntervalMs = getUsagePollIntervalMs();
-    // Migrate legacy single-file cache to provider-specific file (one-shot, best-effort)
-    migrateLegacyCache(currentSource);
     const initialCache = readCache(currentSource);
     if (initialCache && isCacheValid(initialCache, pollIntervalMs) && initialCache.source === currentSource) {
         return getCachedUsageResult(initialCache);

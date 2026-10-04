@@ -58,7 +58,7 @@ function pushModelWeekly(parts, fmt, buckets, threshold) {
 /**
  * Render rate limits display.
  *
- * Format: 5h:45%(3h42m) 7d:12%(2d5h) mo:8%(15d3h) sn:20%(1d2h) op:5%(1d2h) fb:90%(1d2h)
+ * Format: 5h:45%(3h42m) 7d:12%(2d5h) sn:20%(1d2h) op:5%(1d2h) fb:90%(1d2h)
  */
 export function renderRateLimits(limits, stale, sonnetThreshold = 0) {
     if (!limits)
@@ -83,9 +83,6 @@ export function renderRateLimits(limits, stale, sonnetThreshold = 0) {
     }
     if (limits.weeklyPercent != null) {
         parts.push(fmt('7d', limits.weeklyPercent, limits.weeklyResetsAt));
-    }
-    if (limits.monthlyPercent != null) {
-        parts.push(fmt('mo', limits.monthlyPercent, limits.monthlyResetsAt));
     }
     // Sonnet weekly (sn) is a low-signal bucket for Opus-heavy users (often 0%);
     // only surface it once it approaches its cap (>= sonnetThreshold, 0 = always).
@@ -136,9 +133,6 @@ export function renderRateLimitsWithBar(limits, barWidth = 8, stale, sonnetThres
     if (limits.weeklyPercent != null) {
         parts.push(fmt('7d', limits.weeklyPercent, limits.weeklyResetsAt));
     }
-    if (limits.monthlyPercent != null) {
-        parts.push(fmt('mo', limits.monthlyPercent, limits.monthlyResetsAt));
-    }
     // Sonnet weekly (sn) is a low-signal bucket for Opus-heavy users (often 0%);
     // only surface it once it approaches its cap (>= sonnetThreshold, 0 = always).
     if (limits.sonnetWeeklyPercent != null && Math.round(limits.sonnetWeeklyPercent) >= sonnetThreshold) {
@@ -166,7 +160,7 @@ export function renderRateLimitsWithBar(limits, barWidth = 8, stale, sonnetThres
  * Render an error indicator when the built-in rate limit API call fails.
  *
  * - 'network': API timeout, HTTP error, or parse failure → [API err]
- * - 'auth': credentials expired, refresh failed → [API auth]
+ * - 'auth': credentials expired or rejected (401); never refreshed here — Claude Code rewrites the store → [API auth]
  * - 'no_credentials': no OAuth credentials (expected for API key users) → null (no display)
  */
 export function renderRateLimitsError(result) {
