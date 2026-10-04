@@ -79,8 +79,9 @@ export const DEFAULT_HUD_CONFIG = {
     theme: 'aurora',
     // User-defined palettes, merged over the bundled ones and selectable by
     // `theme` / `HUD_THEME`. Each entry may set any subset of the 10 `#rrggbb`
-    // tokens plus a reserved `base` (the palette to inherit the rest from,
-    // default 'aurora'). Read and resolved in `themes.js`, same import-time parse
+    // tokens plus a reserved `base` (the palette to inherit the rest from:
+    // by default the bundled palette of the same name when the entry shadows
+    // one — a retint — else `DEFAULT_THEME`). Read and resolved in `themes.js`, same import-time parse
     // as `theme`. See `config.json.example` for a full 10-token entry.
     themes: {},
     labels: DEFAULT_HUD_LABELS,

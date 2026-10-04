@@ -4,7 +4,7 @@
  * Composes statusline output from render context.
  */
 import { DEFAULT_HUD_CONFIG, DEFAULT_ELEMENT_ORDER, DEFAULT_HUD_LABELS } from "./types.js";
-import { paint, PALETTE } from "./colors.js";
+import { paint, paintWarn, PALETTE } from "./colors.js";
 import { stringWidth, getCharWidth } from "../lib/string-width.js";
 import { renderContext, renderContextWithBar } from "./elements/context.js";
 import { renderRateLimits, renderRateLimitsWithBar, renderRateLimitsError } from "./elements/limits.js";
@@ -332,6 +332,11 @@ export async function render(context, config) {
         return result;
     }
     const elements = collectInline(mainOrder);
+    // config.json exists but did not parse (state.js#readHudConfig): every
+    // setting fell back to its default, so say so — first, where truncation
+    // cannot cut it. The parser's message is on stderr (HUD_DEBUG=1 to see it).
+    if (config.configError)
+        elements.unshift(paintWarn("[cfg err]"));
     // Compose output (single line)
     const headerLine = elements.length > 0 ? elements.join(DIM_SEPARATOR) : null;
     const outputLines = headerLine ? [headerLine] : [];

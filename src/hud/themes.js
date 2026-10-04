@@ -52,6 +52,7 @@
  */
 import { existsSync, readFileSync } from 'fs';
 import { getHudConfigFile } from '../lib/install-paths.js';
+import { parseJsonText } from '../lib/json-text.js';
 
 /** @typedef {[number, number, number]} Rgb */
 /** @typedef {'text'|'label'|'faint'|'sep'|'gradLow'|'gradMid'|'gradHigh'|'add'|'del'|'track'} Token */
@@ -266,7 +267,7 @@ function readThemeConfig() {
         const file = getHudConfigFile();
         if (!existsSync(file))
             return { name: null, themes };
-        const config = JSON.parse(readFileSync(file, 'utf-8'));
+        const config = parseJsonText(readFileSync(file, 'utf-8'));
         const raw = config?.themes;
         if (raw !== undefined) {
             if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {

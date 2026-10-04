@@ -100,15 +100,31 @@ cp ~/.claude/hud/config.json.example ~/.claude/hud/config.json
 - Common knobs: `theme`, `locale` (`en` | `zh-CN`), and the
   `elements` toggles (e.g. `gitBranch`, `contextBar`, `rateLimits`, `showTokens`).
   See `config.json.example` for the full list.
+- **A file that does not parse** (a trailing comma is the usual culprit) puts
+  `[cfg err]` at the start of the line, and every setting falls back to its
+  default until it is fixed; `HUD_DEBUG=1` prints the parser's message. A UTF-8
+  byte-order mark (Windows PowerShell's `-Encoding UTF8`) is fine. An unknown or
+  misspelled key is ignored — `HUD_DEBUG=1` names it, with a hint when only
+  the case is wrong (`gitstatus` → `gitStatus`).
 - `elementOrder` (top level, e.g. `["model", "contextBar", "pathLabel"]`)
   reorders the line: named elements come first in that order, the rest follow
-  in the default order, unknown names are ignored.
+  in the default order, unknown names are ignored. `layout: { "main": [...] }`
+  is the strict form: only the elements it names are shown, in that order
+  (repeats and unknown names dropped; an empty list counts as unset).
+- `labels` (top level) renames the fragment labels over the `locale`'s, e.g.
+  `"labels": { "context": "ctx", "tokens": "tok" }`. Keys: `context`,
+  `tokens`, `tool`, `agent`, `skill`, `staged`, `modified`, `untracked`,
+  `conflict`, `ahead`, `behind`.
+- `usageApiPollIntervalMs` (default `90000`, minimum `30000`): how often the
+  usage API is polled for the buckets the payload does not carry.
 - **Colors** are set by `theme`, and you can define your own palettes under
   `themes` — see [Themes](#themes) below.
 - `maxWidth` / `wrapMode`: the line is cut to `maxWidth` columns with `...`
   (`wrapMode: "truncate"`, the default) or broken at the ` | ` separators
-  (`"wrap"`). Without `maxWidth` the width comes from `COLUMNS` when Claude
-  Code provides it; the line is left alone otherwise.
+  (`"wrap"`). Without `maxWidth` the width comes from the terminal when the
+  renderer runs directly in one (`node statusline.mjs` by hand), else from
+  `COLUMNS` when Claude Code provides it; the line is left alone otherwise —
+  which is the usual case through `statusline.sh`.
 - `modelFormat` (inside `elements`) sets how the model name reads: `short`
   (`opus`, the default), `versioned` (`opus 4.8`), or `full` (raw id,
   `claude-opus-4-8`). The `:effort` suffix is a separate `effort` toggle.

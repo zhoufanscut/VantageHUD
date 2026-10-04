@@ -176,11 +176,14 @@ function writeCache(opts) {
 /**
  * Check if cache is still valid
  */
+// Floor for usageApiPollIntervalMs. The endpoint answers 429 to a few fetches
+// a minute (seen while testing), and a 1 s floor allowed one per render.
+const MIN_POLL_INTERVAL_MS = 30 * 1000;
 function sanitizePollIntervalMs(value) {
     if (value == null || !Number.isFinite(value) || value <= 0) {
         return DEFAULT_HUD_USAGE_POLL_INTERVAL_MS;
     }
-    return Math.max(1000, Math.floor(value));
+    return Math.max(MIN_POLL_INTERVAL_MS, Math.floor(value));
 }
 function getUsagePollIntervalMs() {
     try {
