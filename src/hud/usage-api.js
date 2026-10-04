@@ -686,10 +686,17 @@ export async function getUsage(opts) {
     }
     catch (err) {
         // Lock acquisition failed — return stale cache without touching the cache file
-        // to avoid racing with the lock holder writing fresh data
+        // to avoid racing with the lock holder writing fresh data. The same
+        // MAX_STALE_DATA_MS cap and error reason apply as on any other stale serve,
+        // so a lock that stays held cannot surface numbers of any age.
         if (err instanceof Error && err.message.startsWith('Failed to acquire file lock')) {
-            if (initialCache?.data) {
-                return { rateLimits: initialCache.data, stale: true };
+            if (hasUsableStaleData(initialCache)) {
+                const reason = initialCache.rateLimited
+                    ? 'rate_limited'
+                    : initialCache.error ? initialCache.errorReason || 'network' : undefined;
+                return reason
+                    ? { rateLimits: initialCache.data, error: reason, stale: true }
+                    : { rateLimits: initialCache.data, stale: true };
             }
             return { rateLimits: null, error: 'network' };
         }
