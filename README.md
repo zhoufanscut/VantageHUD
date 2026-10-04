@@ -47,7 +47,7 @@ keep your existing keys (`model`, `permissions`, …) and just add this one:
   // ...your existing settings...
   "statusLine": {
     "type": "command",
-    "command": "sh ${CLAUDE_CONFIG_DIR:-$HOME/.claude}/hud/statusline.sh ${CLAUDE_CONFIG_DIR:-$HOME/.claude}/hud/statusline.mjs"
+    "command": "sh \"${CLAUDE_CONFIG_DIR:-$HOME/.claude}/hud/statusline.sh\" \"${CLAUDE_CONFIG_DIR:-$HOME/.claude}/hud/statusline.mjs\""
   }
 }
 ```
@@ -55,7 +55,9 @@ keep your existing keys (`model`, `permissions`, …) and just add this one:
 - If you cloned somewhere other than `~/.claude/hud`, put that absolute path in
   the command instead.
 - `${CLAUDE_CONFIG_DIR:-$HOME/.claude}` makes it work even with a custom config
-  dir; a plain `~/.claude/hud/...` path is fine too.
+  dir; a plain `~/.claude/hud/...` path is fine too. Keep the escaped quotes
+  around each path: without them a home folder with a space in it (common on
+  Windows, e.g. `C:\Users\John Doe`) splits the path and the bar stays blank.
 - Add `"refreshInterval": 5` (seconds, minimum `1`) beside `"command"` if you
   want the bar to keep moving while the session is idle. Claude Code otherwise
   re-runs it only on its own events — session start, a new assistant message,
