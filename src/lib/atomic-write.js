@@ -46,8 +46,10 @@ export function atomicWriteFileSync(filePath, content) {
         ensureDirSync(dir);
         // Open temp file with exclusive creation (O_CREAT | O_EXCL | O_WRONLY)
         fd = fsSync.openSync(tempPath, "wx", 0o600);
-        // Write content
-        fsSync.writeSync(fd, content, 0, "utf-8");
+        // Write content. writeFileSync loops until every byte is written and
+        // throws otherwise; a bare writeSync is one write(2), whose short count
+        // (disk filling up) would be fsynced and renamed into place truncated.
+        fsSync.writeFileSync(fd, content, "utf-8");
         // Sync file data to disk before rename
         fsSync.fsyncSync(fd);
         // Close before rename
