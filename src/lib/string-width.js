@@ -67,24 +67,47 @@ export function isCJKCharacter(codePoint) {
  * not cover them, so without this they'd be under-counted as width 1 and the
  * right side of the HUD would drift one column per glyph.
  *
- * The Misc Technical block (U+2300-23FF) is mixed, so only its Wide members
- * are listed explicitly — narrow siblings such as U+23F1 (⏱) and U+23F2 (⏲)
- * deliberately stay width 1.
+ * The BMP symbol blocks (U+2000-2BFF) are mixed, so only their Wide members
+ * are listed — narrow siblings such as U+23F1 (⏱) and U+23F2 (⏲)
+ * deliberately stay width 1. That list is every East_Asian_Width=W code point
+ * in U+2000-2BFF as of Unicode 15.1 (generated with Python's unicodedata):
+ * ✅ ❌ ⭐ ☕ ⚡ and friends.
+ *
+ * Regional indicators (U+1F1E6-1F1FF) are excluded and count 1 each, so a
+ * flag — always a pair — measures 2. Still approximate: ZWJ sequences
+ * (👨‍👩‍👧) count every member, and a text-default symbol followed by VS16
+ * counts 1 where most terminals now draw 2.
  */
+const WIDE_BMP_SYMBOLS = [
+    [0x231a, 0x231b], [0x2329, 0x232a], [0x23e9, 0x23ec], [0x23f0, 0x23f0],
+    [0x23f3, 0x23f3], [0x25fd, 0x25fe], [0x2614, 0x2615], [0x2648, 0x2653],
+    [0x267f, 0x267f], [0x2693, 0x2693], [0x26a1, 0x26a1], [0x26aa, 0x26ab],
+    [0x26bd, 0x26be], [0x26c4, 0x26c5], [0x26ce, 0x26ce], [0x26d4, 0x26d4],
+    [0x26ea, 0x26ea], [0x26f2, 0x26f3], [0x26f5, 0x26f5], [0x26fa, 0x26fa],
+    [0x26fd, 0x26fd], [0x2705, 0x2705], [0x270a, 0x270b], [0x2728, 0x2728],
+    [0x274c, 0x274c], [0x274e, 0x274e], [0x2753, 0x2755], [0x2757, 0x2757],
+    [0x2795, 0x2797], [0x27b0, 0x27b0], [0x27bf, 0x27bf], [0x2b1b, 0x2b1c],
+    [0x2b50, 0x2b50], [0x2b55, 0x2b55],
+];
 export function isWideEmoji(codePoint) {
-    return (
+    if (codePoint >= 0x1f1e6 && codePoint <= 0x1f1ff)
+        return false; // regional indicator: half of a flag
+    if (
     // Supplemental emoji planes: emoticons, pictographs, transport,
     // symbols & pictographs A/B — e.g. 🔧 (U+1F527), 🤖 (U+1F916).
     (codePoint >= 0x1f300 && codePoint <= 0x1faff) ||
         // Enclosed supplement, mahjong tiles, dominoes, playing cards.
-        (codePoint >= 0x1f000 && codePoint <= 0x1f2ff) ||
-        // High Voltage ⚡ (U+26A1), used as the skill icon in call-counts.
-        codePoint === 0x26a1 ||
-        // Wide members of Misc Technical: ⌚⌛ (U+231A/1B), media transport
-        // (U+23E9-23EC), ⏰ alarm clock (U+23F0), ⏳ hourglass (U+23F3).
-        codePoint === 0x231a || codePoint === 0x231b ||
-        (codePoint >= 0x23e9 && codePoint <= 0x23ec) ||
-        codePoint === 0x23f0 || codePoint === 0x23f3);
+        (codePoint >= 0x1f000 && codePoint <= 0x1f2ff))
+        return true;
+    if (codePoint < 0x231a || codePoint > 0x2b55)
+        return false;
+    for (const [lo, hi] of WIDE_BMP_SYMBOLS) {
+        if (codePoint < lo)
+            return false;
+        if (codePoint <= hi)
+            return true;
+    }
+    return false;
 }
 /**
  * Check if a character is a zero-width character.
@@ -106,7 +129,12 @@ export function isZeroWidth(codePoint) {
         // Combining Diacritical Marks for Symbols
         (codePoint >= 0x20d0 && codePoint <= 0x20ff) ||
         // Combining Half Marks
-        (codePoint >= 0xfe20 && codePoint <= 0xfe2f));
+        (codePoint >= 0xfe20 && codePoint <= 0xfe2f) ||
+        // Variation selectors (VS16 turns ⚡ into ⚡️ — still 2 columns, not 3)
+        (codePoint >= 0xfe00 && codePoint <= 0xfe0f) ||
+        (codePoint >= 0xe0100 && codePoint <= 0xe01ef) ||
+        // Emoji skin-tone modifiers: they recolor the emoji before them
+        (codePoint >= 0x1f3fb && codePoint <= 0x1f3ff));
 }
 /**
  * Get the visual width of a single character.
