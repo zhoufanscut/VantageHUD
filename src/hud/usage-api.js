@@ -484,6 +484,10 @@ function clamp(v) {
  * Parse API response into RateLimits
  */
 export function parseUsageResponse(response, options) {
+    // `null`, an array or a scalar is valid JSON too; reading a bucket off
+    // `null` would throw.
+    if (!response || typeof response !== 'object' || Array.isArray(response))
+        return null;
     const fiveHour = response.five_hour?.utilization;
     const sevenDay = response.seven_day?.utilization;
     const sonnetSevenDay = response.seven_day_sonnet?.utilization;
@@ -523,10 +527,14 @@ export function parseUsageResponse(response, options) {
     // Per-model quotas are at the top level (flat structure)
     // e.g., response.seven_day_sonnet, response.seven_day_opus
     const sonnetResetsAt = response.seven_day_sonnet?.resets_at;
-    const result = {
-        fiveHourPercent: clamp(fiveHour),
-        fiveHourResetsAt: parseDate(response.five_hour?.resets_at),
-    };
+    const result = {};
+    // Only the windows the API reported: clamp(undefined) is 0, so an
+    // unconditional assignment invented `5h:0%` for an account without a
+    // five-hour window (enterprise, or model-scoped buckets only).
+    if (fiveHour != null) {
+        result.fiveHourPercent = clamp(fiveHour);
+        result.fiveHourResetsAt = parseDate(response.five_hour?.resets_at);
+    }
     if (sevenDay != null) {
         result.weeklyPercent = clamp(sevenDay);
         result.weeklyResetsAt = parseDate(response.seven_day?.resets_at);
@@ -633,8 +641,36 @@ async function fetchAndCacheUsage(opts) {
         }
         return { rateLimits: null, error: 'network' };
     }
-    const usage = parseFn(result.data);
-    writeCache({ data: usage, error: !usage, source, lastSuccessAt: Date.now() });
+    let usage = null;
+    try {
+        usage = parseFn(result.data);
+    }
+    catch {
+        // Treated as unusable below, like a null parse.
+    }
+    if (!usage) {
+        // A 200 the parser cannot use (shape drift, a proxy or captive portal
+        // answering 200) is a failure like any other: keep the last good
+        // numbers and their lastSuccessAt, and back off for the transient
+        // TTL. Writing `data: null` with no reason wiped the cache and
+        // re-polled every 15 s.
+        if (process.env.HUD_DEBUG) {
+            const keys = result.data && typeof result.data === 'object' ? Object.keys(result.data).join(',') : typeof result.data;
+            console.error(`[usage-api] unusable 200 response; top-level keys: ${keys}`);
+        }
+        const fallbackData = hasUsableStaleData(cache) ? cache.data : null;
+        writeCache({
+            data: fallbackData,
+            error: true,
+            source,
+            errorReason: 'network',
+            lastSuccessAt: cache?.lastSuccessAt,
+        });
+        return fallbackData
+            ? { rateLimits: fallbackData, error: 'network', stale: true }
+            : { rateLimits: null, error: 'network' };
+    }
+    writeCache({ data: usage, error: false, source, lastSuccessAt: Date.now() });
     return { rateLimits: usage };
 }
 /**
