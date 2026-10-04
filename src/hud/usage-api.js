@@ -282,6 +282,25 @@ function recordFailure(source, cache, errorReason, rejectedToken) {
         ? { rateLimits: fallbackData, error: errorReason, stale: true }
         : { rateLimits: null, error: errorReason };
 }
+/**
+ * What to serve when this process will not fetch. Recent data is served
+ * stale-marked with the error the cache recorded; past MAX_STALE_DATA_MS it
+ * is not served at all. With nothing recent, only an error the cache itself
+ * recorded is passed on (so no_credentials stays hidden and auth keeps its
+ * badge): a peer mid-fetch is not a failure, and an invented [API err] on a
+ * synchronous first frame was cached as that frame's line.
+ */
+function serveWithoutFetch(cache) {
+    const reason = cache?.rateLimited
+        ? 'rate_limited'
+        : cache?.error ? cache.errorReason || 'network' : undefined;
+    if (hasUsableStaleData(cache)) {
+        return reason
+            ? { rateLimits: cache.data, error: reason, stale: true }
+            : { rateLimits: cache.data, stale: true };
+    }
+    return reason ? { rateLimits: null, error: reason } : { rateLimits: null };
+}
 function createRateLimitedCacheEntry(source, data, pollIntervalMs, previousCount, lastSuccessAt, retryAfterMs = 0) {
     const timestamp = Date.now();
     const rateLimitedCount = previousCount + 1;
@@ -851,21 +870,13 @@ export async function getUsage(opts) {
         }, USAGE_CACHE_LOCK_OPTS);
     }
     catch (err) {
-        // Lock acquisition failed — return stale cache without touching the cache file
-        // to avoid racing with the lock holder writing fresh data. The same
-        // MAX_STALE_DATA_MS cap and error reason apply as on any other stale serve,
-        // so a lock that stays held cannot surface numbers of any age.
-        if (err instanceof Error && err.message.startsWith('Failed to acquire file lock')) {
-            if (hasUsableStaleData(initialCache)) {
-                const reason = initialCache.rateLimited
-                    ? 'rate_limited'
-                    : initialCache.error ? initialCache.errorReason || 'network' : undefined;
-                return reason
-                    ? { rateLimits: initialCache.data, error: reason, stale: true }
-                    : { rateLimits: initialCache.data, stale: true };
-            }
-            return { rateLimits: null, error: 'network' };
+        // The lock is held by a peer (which is fetching), or could not be
+        // taken at all (EACCES/EROFS on the cache dir, ENOSPC, EPERM on a
+        // Windows lock file pending delete). Either way the cache file is
+        // left to whoever can write it, and its contents are served.
+        if (process.env.HUD_DEBUG && !(err instanceof Error && err.message.startsWith('Failed to acquire file lock'))) {
+            console.error('[usage-api] usage lock error:', err instanceof Error ? err.message : err);
         }
-        return { rateLimits: null, error: 'network' };
+        return serveWithoutFetch(initialCache);
     }
 }
