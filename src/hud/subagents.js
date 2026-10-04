@@ -49,14 +49,16 @@ import { atomicWriteJsonSync } from "../lib/atomic-write.js";
 // teammates) and depth 2 (workflows/wf_<id>/); the headroom covers further
 // nesting without letting a pathological tree stall a render.
 const MAX_WALK_DEPTH = 4;
-// Backstop for pathological teams, not a budget. The old cap of 64 truncated
-// real work — the exact undercount this module exists to prevent — because a
-// single Workflow run nests dozens of agents under one session. There is no true
-// ceiling to size against (a session can run several workflows), so this sits far
-// above any team seen in practice and degrades honestly if it ever does bite: we
-// prefer larger files and say so under HUD_DEBUG, so a capped sum never reads as
-// "counted everything".
-const MAX_SUBAGENT_FILES = 512;
+// Most files tallied (opened and parsed) in one frame: a backstop for a huge
+// team's first frame, not a cap on the sum. Every file found is summed and
+// keeps its memo; an unchanged one costs one stat() and never counts against
+// this. Past the bound, a changed file adds its last memo total and an unseen
+// one adds 0, both are tallied on a later frame, and `token:` shows `~` until
+// then. An older version summed only the 512 largest files instead, so a small
+// file outgrowing a token-heavy one dropped that one from the sum (the total ran
+// backwards) and pruned its memo. Measured: 500 files of ~50 KB tally cold in
+// ~62 ms, and ~7 ms warm.
+const MAX_TALLIES_PER_FRAME = 512;
 /** The result when there is nothing to sum, or on any error. */
 const NONE = { total: 0, approximate: false };
 /**
@@ -133,19 +135,6 @@ export function sumSubagentTokens(leadTranscriptPath, sessionKey) {
         if (found.length === 0) {
             return NONE;
         }
-        let files = found;
-        if (found.length > MAX_SUBAGENT_FILES) {
-            // Prefer larger files. Size is only a rough proxy for token count —
-            // cache read/creation tokens bloat bytes without counting toward the
-            // input+output sum — but it beats an arbitrary readdir slice.
-            files = found
-                .slice()
-                .sort((a, b) => b.size - a.size)
-                .slice(0, MAX_SUBAGENT_FILES);
-            if (process.env.HUD_DEBUG) {
-                console.error(`[HUD] subagent token sum: ${found.length} teammate files, summing the ${MAX_SUBAGENT_FILES} largest`);
-            }
-        }
         // Per-file memo, keyed by path relative to the subagents dir → a
         // tallyFile memo plus a "size:mtime" stamp. Survives the
         // one-process-per-render model by living in the session cache dir. Stale
@@ -165,7 +154,9 @@ export function sumSubagentTokens(leadTranscriptPath, sessionKey) {
         let total = 0;
         let approximate = false;
         let changed = false;
-        for (const file of files) {
+        let tallied = 0;
+        let deferred = 0;
+        for (const file of found) {
             const stamp = `${file.size}:${Math.round(file.mtimeMs)}`;
             const hit = cache[file.rel];
             // Fast path: the file has not been touched since we last tallied it,
@@ -200,6 +191,19 @@ export function sumSubagentTokens(leadTranscriptPath, sessionKey) {
                 }
                 continue;
             }
+            if (tallied >= MAX_TALLIES_PER_FRAME) {
+                // Over this frame's bound: carry the last memo (stamp and all,
+                // so the next frame still sees it as changed) and say the sum
+                // is short.
+                if (hit) {
+                    next[file.rel] = hit;
+                    total += typeof hit.total === "number" ? hit.total : 0;
+                }
+                approximate = true;
+                deferred++;
+                continue;
+            }
+            tallied++;
             // Changed (or unseen): resume the tally at the memo's byte offset so
             // only the appended bytes are parsed. Entries written by the older
             // `{ key, tokens }` format carry no `fp`, so tallyFile rescans them
@@ -211,6 +215,9 @@ export function sumSubagentTokens(leadTranscriptPath, sessionKey) {
                 approximate = true;
             }
             changed = true;
+        }
+        if (deferred > 0 && process.env.HUD_DEBUG) {
+            console.error(`[HUD] subagent token sum: ${deferred} of ${found.length} teammate files left for a later frame`);
         }
         // Persist when a file changed or the set of teammates changed (prune).
         if (cachePath &&
