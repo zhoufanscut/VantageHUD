@@ -841,6 +841,8 @@ async function fetchAndCacheUsage(opts) {
  *
  * `opts.budgetMs` caps the wait on the API (0/absent = API_TIMEOUT_MS only).
  * Past it the cached data, if any, is served and the cache is left untouched.
+ * `opts.cacheOnly` never fetches: an expired cache is served as on lock
+ * contention (serveWithoutFetch).
  */
 export async function getUsage(opts) {
     const budgetMs = opts?.budgetMs > 0 ? opts.budgetMs : 0;
@@ -863,6 +865,11 @@ export async function getUsage(opts) {
     const initialCache = readCache(currentSource);
     if (initialCache && isCacheValid(initialCache, pollIntervalMs) && initialCache.source === currentSource) {
         return getCachedUsageResult(initialCache);
+    }
+    // The caller already has what a fetch would mostly add (see index.js):
+    // serve what the cache holds and leave the fetch to a background render.
+    if (opts?.cacheOnly) {
+        return serveWithoutFetch(initialCache);
     }
     try {
         return await withFileLock(lockPathFor(getCachePath(currentSource)), async () => {

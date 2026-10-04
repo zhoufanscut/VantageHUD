@@ -137,9 +137,18 @@ async function main() {
         // Background refreshes do it unbudgeted and keep their caches fresh.
         const syncRender = process.env.HUD_SYNC_RENDER === "1";
         const usageBudgetMs = parseInt(process.env.HUD_USAGE_BUDGET_MS ?? "", 10) || 0;
+        // A synchronous render whose payload already carries both windows does
+        // not wait on the API at all: what a fetch would add (the per-model
+        // weekly and extra: buckets) is not worth up to the whole budget on
+        // the frame Claude Code is waiting for, and the next background
+        // refresh fetches it. A payload missing either window — a fresh
+        // session's first frame has none — still fetches, budgeted.
+        const usageCacheOnly = syncRender &&
+            stdinRateLimits?.fiveHourPercent != null &&
+            stdinRateLimits?.weeklyPercent != null;
         const usageResult = config.elements.rateLimits === false
             ? null
-            : await getUsage({ budgetMs: usageBudgetMs });
+            : await getUsage({ budgetMs: usageBudgetMs, cacheOnly: usageCacheOnly });
         const rateLimitsResult = config.elements.rateLimits === false
             ? null
             : mergeStdinRateLimits(stdinRateLimits, usageResult);

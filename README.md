@@ -303,7 +303,8 @@ git -C ~/.claude/hud pull
   render still running keeps its lock for up to 120 s), `HUD_SYNC_USAGE_BUDGET_MS` (how long a
   synchronous render — the first one per session, or one after a config edit —
   waits on the usage API before rendering with the cached numbers; default
-  1000, `0` waits the full 10 s timeout), `HUD_SYNC_REFRESH=1` (testing only:
+  1000, `0` waits the full 10 s timeout; it does not wait at all when the
+  payload already carries both the 5h and 7d windows), `HUD_SYNC_REFRESH=1` (testing only:
   bypass the render cache and render this payload synchronously; set globally
   it would cost every frame a full Node render), `HUD_DEBUG=1` (verbose; the
   wrapper also names the path each frame took, as `[HUD sh] …` on stderr).
