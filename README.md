@@ -95,7 +95,8 @@ cp ~/.claude/hud/config.json.example ~/.claude/hud/config.json
   key is optional; omit any and its built-in default applies. `config.json` is
   gitignored, so `git pull` never clobbers your settings.
 - **Edits apply on the next status-line refresh** — no Claude Code restart
-  needed. The HUD notices `config.json` changed (by mtime) and re-renders.
+  needed. The HUD notices `config.json` changed (its mtime, size or inode
+  differs from the render it cached) and re-renders.
 - Common knobs: `theme`, `locale` (`en` | `zh-CN`), and the
   `elements` toggles (e.g. `gitBranch`, `contextBar`, `rateLimits`, `showTokens`).
   See `config.json.example` for the full list.
@@ -147,8 +148,8 @@ To make the *live* HUD use it that way you have to `export HUD_THEME=nebula`
 **before** starting Claude Code — the statusline is spawned with Claude Code's
 launch environment, so exporting it in an already-running session changes
 nothing. Editing `config.json` is the reliable way, and it is also the only one
-that forces an immediate re-render: the shell wrapper bypasses its cache on
-`config.json`'s mtime, so an env change would land a frame late.
+that forces an immediate re-render: the shell wrapper bypasses its cache when
+`config.json` changes, so an env change would land a frame late.
 
 **On a light terminal, use `daylight`.** The other four are built for a dark
 background and wash out on white.
@@ -260,18 +261,25 @@ git -C ~/.claude/hud pull
   `cache/<session>/<name>.json` (the render cache, the token/call-count tally
   memos, and the context-stabilization snapshot grouped per session). Centralized under the HUD
   install dir, never inside your project; safe to delete anytime. Session folders
-  idle for more than 14 days are pruned automatically.
+  idle for roughly two weeks are pruned automatically (14 days on macOS, 15 on
+  Linux, where `find` counts whole days). If the install's `cache/` is not
+  writable (a read-only or shared install), the HUD uses
+  `${XDG_CACHE_HOME:-~/.cache}/vantagehud` instead.
 - If a render fails, the renderer's stderr is kept as
   `cache/<session>/statusline.err` (cleared by the next successful render) —
   check it when the bar shows `[HUD] HUD error`.
 - Optional env: `HUD_CONFIG` (path to the config file; default is the HUD
   install's own `config.json`), `HUD_THEME` (any bundled or user theme name, overrides
   `config.json`), `HUD_CACHE_DIR` (override that cache/state dir; default is the
-  HUD install's own `cache/`), `HUD_CACHE_MAX_AGE_DAYS` (idle-session retention,
-  default 14), `HUD_LOCK_STALE_SECONDS` (age after which another frame may
-  take over a render lock, default 10), `HUD_SYNC_USAGE_BUDGET_MS` (how long a
+  HUD install's own `cache/`. Give it a folder of its own: the HUD cleans up
+  only a folder it created itself, marked by a `.vantagehud-cache` file, and
+  leaves an existing one unswept), `HUD_CACHE_MAX_AGE_DAYS` (idle-session
+  retention, default 14), `HUD_LOCK_STALE_SECONDS` (age after which another
+  frame may take over a render lock whose owner has exited, default 10; a
+  render still running keeps its lock for up to 120 s), `HUD_SYNC_USAGE_BUDGET_MS` (how long a
   synchronous render — the first one per session, or one after a config edit —
   waits on the usage API before rendering with the cached numbers; default
   1000, `0` waits the full 10 s timeout), `HUD_SYNC_REFRESH=1` (testing only:
   bypass the render cache and render this payload synchronously; set globally
-  it would cost every frame a full Node render), `HUD_DEBUG=1` (verbose).
+  it would cost every frame a full Node render), `HUD_DEBUG=1` (verbose; the
+  wrapper also names the path each frame took, as `[HUD sh] …` on stderr).

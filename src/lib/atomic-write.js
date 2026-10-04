@@ -94,6 +94,39 @@ export function atomicWriteFileSync(filePath, content) {
     }
 }
 /**
+ * Atomically put an empty file at `filePath` whose mtime is `mtimeSec` (epoch
+ * seconds): the mtime is set on the temp file before the rename, so no reader
+ * ever sees it carrying the current time instead. Used for statusline.sh's
+ * deadline file, which the shell compares with `-ot` at no fork cost.
+ *
+ * @param filePath Target file path
+ * @param mtimeSec Modification (and access) time, in epoch seconds
+ * @throws Error if any step fails
+ */
+export function atomicTouchSync(filePath, mtimeSec) {
+    const dir = path.dirname(filePath);
+    const base = path.basename(filePath);
+    const tempPath = path.join(dir, `.${base}.tmp.${crypto.randomUUID()}`);
+    let success = false;
+    try {
+        ensureDirSync(dir);
+        fsSync.closeSync(fsSync.openSync(tempPath, "wx", 0o600));
+        fsSync.utimesSync(tempPath, mtimeSec, mtimeSec);
+        fsSync.renameSync(tempPath, filePath);
+        success = true;
+    }
+    finally {
+        if (!success) {
+            try {
+                fsSync.unlinkSync(tempPath);
+            }
+            catch {
+                // Ignore cleanup errors
+            }
+        }
+    }
+}
+/**
  * Write JSON data atomically to a file (synchronous version).
  * Uses temp file + atomic rename pattern with fsync for durability.
  *

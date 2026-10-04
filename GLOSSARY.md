@@ -73,6 +73,18 @@ skimming. Add a term back (or a new one) when it earns its place; keep this shor
 - **cache dir** — `cache/` under the install (`HUD_CACHE_DIR` overrides); each
   session gets its own `cache/<session>/` subfolder. Resolve via
   `src/lib/worktree-paths.js` — never hardcode.
+- **cache marker** — `.vantagehud-cache` at the cache-dir root. Every shell sweep
+  (orphan temps, stale locks, the daily prune) runs only where it exists, so a
+  `HUD_CACHE_DIR` pointed at a shared folder is never pruned.
+- **render lock** — `cache/<session>/render.lock/`, the wrapper's `mkdir` lock
+  around a render; `pid` inside names its owner. Not the Node `file-lock.js`
+  locks.
+- **config stamp** / **deadline file** / **dirty flag** — per-session wrapper
+  files: the config's `mtime:size:inode` when the cached line was rendered
+  (`config.stamp`); an empty file whose mtime is the payload's next
+  `resets_at`/`expires_at` (`statusline.deadline`); a payload left for the
+  render holding the lock (`render.dirty`). The first two make the hot path
+  render synchronously, the last makes the holder render once more.
 - **smoke test** — the only verification (no tests/linter/CI): pipe a sample
   payload through `statusline.sh` with `HUD_SYNC_REFRESH=1`, expect a line
   containing `opus:high`. See `AGENTS.md` › Verification.

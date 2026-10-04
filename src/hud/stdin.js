@@ -268,6 +268,36 @@ export function getRateLimitsFromStdin(stdin) {
     return result;
 }
 /**
+ * The earliest moment after `nowMs` at which Claude Code re-runs the statusLine
+ * command on its own: a rate-limit window in this payload reaching its
+ * `resets_at`, or a warm prompt cache reaching its `expires_at` (both
+ * documented triggers). Every `rate_limits` window counts, not only the two
+ * the HUD renders. Epoch milliseconds, or null when the payload names none.
+ */
+export function getNextTimedTrigger(stdin, nowMs) {
+    const candidates = [];
+    const limits = stdin?.rate_limits;
+    if (limits && typeof limits === 'object') {
+        for (const bucket of Object.values(limits)) {
+            if (bucket && typeof bucket === 'object') {
+                candidates.push(bucket.resets_at);
+            }
+        }
+    }
+    const cache = stdin?.prompt_cache;
+    if (cache && typeof cache === 'object' && cache.warm !== false) {
+        candidates.push(cache.expires_at);
+    }
+    let next = null;
+    for (const value of candidates) {
+        const at = parseResetDate(value)?.getTime();
+        if (at != null && Number.isFinite(at) && at > nowMs && (next === null || at < next)) {
+            next = at;
+        }
+    }
+    return next;
+}
+/**
  * Get model display name from stdin.
  * Prefer the official display name field, then fall back to the raw model id.
  * Returns null when Claude Code does not provide model metadata so the HUD

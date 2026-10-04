@@ -31,7 +31,8 @@ export function getHudInstallRoot() {
  * to start customizing.
  */
 export function getHudConfigFile() {
-    const override = process.env.HUD_CONFIG?.trim();
+    // Not trimmed: statusline.sh watches this same path for edits, verbatim.
+    const override = process.env.HUD_CONFIG;
     if (override) {
         return override;
     }

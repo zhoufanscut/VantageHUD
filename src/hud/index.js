@@ -5,7 +5,7 @@
  * Statusline command that renders the VantageHUD status line.
  * Receives stdin JSON from Claude Code and outputs formatted statusline.
  */
-import { readStdin, writeStdinCache, readStdinCache, getContextPercent, getContextPercentFromUsage, getModelId, getModelName, getEffortLevel, getRateLimitsFromStdin, stabilizeContextPercent, } from "./stdin.js";
+import { readStdin, writeStdinCache, readStdinCache, getContextPercent, getContextPercentFromUsage, getModelId, getModelName, getEffortLevel, getRateLimitsFromStdin, getNextTimedTrigger, stabilizeContextPercent, } from "./stdin.js";
 import { parseTranscript } from "./transcript.js";
 import { sumSubagentTokens } from "./subagents.js";
 import { tallyLead } from "./token-tally.js";
@@ -14,7 +14,8 @@ import { getUsage } from "./usage-api.js";
 import { render } from "./render.js";
 import { sanitizeOutput } from "./sanitize.js";
 import { resolveToWorktreeRoot, resolveTranscriptPath, sessionCacheFile } from "../lib/worktree-paths.js";
-import { atomicWriteFileSync, atomicWriteJsonSync } from "../lib/atomic-write.js";
+import { unlinkSync } from "fs";
+import { atomicTouchSync, atomicWriteFileSync, atomicWriteJsonSync } from "../lib/atomic-write.js";
 /**
  * Extract session ID (UUID) from a transcript path.
  */
@@ -257,6 +258,29 @@ async function main() {
             catch (error) {
                 if (process.env.HUD_DEBUG) {
                     console.error("[HUD] Output cache write error:", error instanceof Error ? error.message : error);
+                }
+            }
+        }
+        // statusline.sh's HUD_DEADLINE_FILE: an empty file whose mtime is the
+        // next time trigger in this payload (a rate-limit reset, a prompt-cache
+        // expiry) less a second — the slack keeps a trigger that fires a little
+        // early, or a shell whose `-ot` compares whole seconds, from missing
+        // it. Once it has passed, the wrapper renders that frame synchronously
+        // instead of serving the line cached before it. Absent when there is
+        // no future trigger.
+        if (process.env.HUD_DEADLINE_FILE) {
+            try {
+                const next = getNextTimedTrigger(stdin, Date.now());
+                if (next != null) {
+                    atomicTouchSync(process.env.HUD_DEADLINE_FILE, Math.floor(next / 1000) - 1);
+                }
+                else {
+                    unlinkSync(process.env.HUD_DEADLINE_FILE);
+                }
+            }
+            catch (error) {
+                if (process.env.HUD_DEBUG && error?.code !== "ENOENT") {
+                    console.error("[HUD] Deadline file write error:", error instanceof Error ? error.message : error);
                 }
             }
         }
