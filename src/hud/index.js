@@ -38,12 +38,16 @@ function extractSessionIdFromPath(transcriptPath) {
  * `default`) cover direct `node statusline.mjs` runs without the wrapper.
  */
 function resolveSessionKey(stdin) {
-    return (process.env.HUD_SESSION_KEY
-        || stdin?.session_id
-        || process.env.CLAUDE_CODE_SESSION_ID
-        || process.env.CLAUDE_SESSION_ID
-        || process.env.CLAUDECODE_SESSION_ID
-        || extractSessionIdFromPath(stdin?.transcript_path ?? "")
+    // A blank or non-string candidate falls through to the next one, so the
+    // key is never whitespace (sanitizeSessionKey would turn that into
+    // `default` for the folder while the raw value went elsewhere).
+    const usable = (value) => (typeof value === "string" && value.trim() ? value : null);
+    return (usable(process.env.HUD_SESSION_KEY)
+        || usable(stdin?.session_id)
+        || usable(process.env.CLAUDE_CODE_SESSION_ID)
+        || usable(process.env.CLAUDE_SESSION_ID)
+        || usable(process.env.CLAUDECODE_SESSION_ID)
+        || extractSessionIdFromPath(typeof stdin?.transcript_path === "string" ? stdin.transcript_path : "")
         || "default");
 }
 function mergeStdinRateLimits(stdinRateLimits, usageResult) {

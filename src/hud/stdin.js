@@ -5,7 +5,7 @@
  * Based on claude-hud reference implementation.
  */
 import { readFileSync } from 'fs';
-import { sessionCacheFile, listSessionCacheFiles, } from '../lib/worktree-paths.js';
+import { sessionCacheFile } from '../lib/worktree-paths.js';
 import { atomicWriteJsonSync } from '../lib/atomic-write.js';
 const TRANSIENT_CONTEXT_PERCENT_TOLERANCE = 3;
 // ============================================================================
@@ -30,31 +30,18 @@ export function writeStdinCache(stdin, sessionKey) {
     }
 }
 /**
- * Read the cached stdin JSON for a session.
- *
- * With a session key, the per-session file is authoritative. Without one (e.g.
- * a detached watch process that never received the stdin payload), fall back to
- * the most recently modified `<session>/hud-stdin-cache.json` so the view is not
- * stuck empty. Returns null if no cache exists or it is unreadable.
+ * Read the cached stdin JSON for a session (index.js always has a key: its
+ * resolveSessionKey ends in `default`). Returns null if no cache exists or it
+ * is unreadable.
  */
 export function readStdinCache(sessionKey) {
-    const tryRead = (path) => {
-        if (!path)
-            return null;
-        try {
-            return JSON.parse(readFileSync(path, 'utf-8'));
-        }
-        catch {
-            // Missing/unreadable cache — treat as no previous snapshot.
-            return null;
-        }
-    };
-    if (sessionKey != null && String(sessionKey).trim() !== '') {
-        return tryRead(sessionCacheFile('hud-stdin-cache', sessionKey));
+    try {
+        return JSON.parse(readFileSync(sessionCacheFile('hud-stdin-cache', sessionKey), 'utf-8'));
     }
-    // Env-less reader: surface the most recent session's cache.
-    const [mostRecent] = listSessionCacheFiles('hud-stdin-cache');
-    return tryRead(mostRecent ?? null);
+    catch {
+        // Missing/unreadable cache — treat as no previous snapshot.
+        return null;
+    }
 }
 // ============================================================================
 // Stdin Reader

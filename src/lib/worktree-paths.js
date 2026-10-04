@@ -11,8 +11,8 @@
  * sessions (and projects sharing one install) never collide.
  */
 import { execSync } from 'child_process';
-import { existsSync, realpathSync, readdirSync, statSync } from 'fs';
-import { resolve, relative, sep, join, isAbsolute, dirname } from 'path';
+import { existsSync, realpathSync, statSync } from 'fs';
+import { resolve, sep, join, dirname } from 'path';
 import { getClaudeConfigDir } from './config-dir.js';
 import { getHudInstallRoot } from './install-paths.js';
 /**
@@ -112,38 +112,6 @@ export function getSessionCacheDir(sessionKey) {
  */
 export function sessionCacheFile(baseName, sessionKey) {
     return join(getSessionCacheDir(sessionKey), `${baseName}.json`);
-}
-/**
- * List existing `<session>/<baseName>.json` cache files across every session
- * subfolder, most-recently-modified first (absolute paths). Used only as a
- * fallback for readers that have no session key (e.g. a detached watch
- * process); the primary path always passes a key.
- */
-export function listSessionCacheFiles(baseName) {
-    const dir = getCacheDir();
-    if (!existsSync(dir)) {
-        return [];
-    }
-    const fileName = `${baseName}.json`;
-    try {
-        return readdirSync(dir, { withFileTypes: true })
-            .filter((entry) => entry.isDirectory())
-            .map((entry) => join(dir, entry.name, fileName))
-            .filter((path) => existsSync(path))
-            .map((path) => {
-            try {
-                return { path, mtime: statSync(path).mtimeMs };
-            }
-            catch {
-                return { path, mtime: -Infinity };
-            }
-        })
-            .sort((a, b) => b.mtime - a.mtime)
-            .map((entry) => entry.path);
-    }
-    catch {
-        return [];
-    }
 }
 /** Upward `.svn` search bound — a stop for pathological paths, never reached in practice. */
 const MAX_SVN_WALK_DEPTH = 64;
@@ -347,68 +315,4 @@ export function resolveTranscriptPath(transcriptPath, cwd) {
     // No resolution found — return original path.
     // Callers should handle non-existent paths gracefully.
     return transcriptPath;
-}
-/**
- * Validate that a workingDirectory is within the trusted worktree root.
- * The trusted root is derived from process.cwd(), NOT from user input.
- *
- * Always returns a git worktree root — never a subdirectory.
- * This prevents .claude-statusline/state/ from being created in subdirectories (#576).
- *
- * @param workingDirectory - User-supplied working directory
- * @returns The validated worktree root
- * @throws Error if workingDirectory is outside trusted root
- */
-export function validateWorkingDirectory(workingDirectory) {
-    const trustedRoot = getWorktreeRoot(process.cwd()) || process.cwd();
-    if (!workingDirectory) {
-        return trustedRoot;
-    }
-    // Resolve to absolute
-    const resolved = resolve(workingDirectory);
-    let trustedRootReal;
-    try {
-        trustedRootReal = realpathSync(trustedRoot);
-    }
-    catch {
-        trustedRootReal = trustedRoot;
-    }
-    // Try to resolve the provided directory to a git worktree root.
-    const providedRoot = getWorktreeRoot(resolved);
-    if (providedRoot) {
-        // Git resolution succeeded — require exact worktree identity.
-        let providedRootReal;
-        try {
-            providedRootReal = realpathSync(providedRoot);
-        }
-        catch {
-            throw new Error(`workingDirectory '${workingDirectory}' does not exist or is not accessible.`);
-        }
-        if (providedRootReal !== trustedRootReal) {
-            console.error('[worktree] workingDirectory resolved to different git worktree root, using trusted root', {
-                workingDirectory: resolved,
-                providedRoot: providedRootReal,
-                trustedRoot: trustedRootReal,
-            });
-            return trustedRoot;
-        }
-        return providedRoot;
-    }
-    // Git resolution failed (lock contention, env issues, non-repo dir).
-    // Validate that the raw directory is under the trusted root before falling
-    // back — otherwise reject it as truly outside (#576).
-    let resolvedReal;
-    try {
-        resolvedReal = realpathSync(resolved);
-    }
-    catch {
-        throw new Error(`workingDirectory '${workingDirectory}' does not exist or is not accessible.`);
-    }
-    const rel = relative(trustedRootReal, resolvedReal);
-    if (rel.startsWith('..') || isAbsolute(rel)) {
-        throw new Error(`workingDirectory '${workingDirectory}' is outside the trusted worktree root '${trustedRoot}'.`);
-    }
-    // Directory is under trusted root but git failed — return trusted root,
-    // never the subdirectory, to prevent .claude-statusline/ creation in subdirs (#576).
-    return trustedRoot;
 }

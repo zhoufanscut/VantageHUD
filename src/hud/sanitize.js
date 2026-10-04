@@ -39,7 +39,7 @@ const SIMPLE_ESC_REGEX = /\x1b[^[\]]/g;
  * - Cursor movement: \x1b[A (up), \x1b[B (down), etc.
  * - Cursor visibility: \x1b[?25l (hide), \x1b[?25h (show)
  */
-export function stripAnsi(text) {
+export function stripControlSequences(text) {
     return text
         .replace(CSI_NON_SGR_REGEX, '') // Strip non-SGR CSI sequences
         .replace(OSC_REGEX, '') // Strip OSC sequences
@@ -74,7 +74,7 @@ export function replaceUnicodeBlocks(text) {
  */
 export function sanitizeOutput(output) {
     // Step 1: Strip terminal control sequences (preserving color/style SGR codes)
-    let sanitized = stripAnsi(output);
+    let sanitized = stripControlSequences(output);
     // Step 2: Replace variable-width Unicode with ASCII
     sanitized = replaceUnicodeBlocks(sanitized);
     // Step 3: Preserve multi-line output, just trim each line
