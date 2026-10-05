@@ -120,7 +120,7 @@ function sample(palette) {
         `${lbl('ctx:')}[${bar(palette, 'gradMid', 80, 10)}]${paint(palette, 'gradMid', '80% COMPRESS?')}`,
     ].join(sep);
     const rest = [
-        `${lbl('token:')}${paint(palette, 'gradLow', '1.2M')}`,
+        `${lbl('token:')}${paint(palette, 'gradLow', '1.20M')}`,
         `${lbl('extra:')}${paint(palette, 'gradLow', '12%')}${paint(palette, 'faint', '($12.40/$50.00)')}`,
         `${lbl('session:')}${paint(palette, 'gradLow', '3h12m')}`,
         `${lbl('repo:')}${paint(palette, 'gradLow', 'hud')}`,

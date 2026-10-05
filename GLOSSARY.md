@@ -116,7 +116,7 @@ skimming. Add a term back (or a new one) when it earns its place; keep this shor
 - **unsettled group** / **`~` on `token:`** — an API call (`message.id` group)
   whose last transcript row still has `stop_reason: null`, so it holds only
   the streaming placeholder count. Most subagent calls stay that way from
-  Claude Code 2.1.283, and the real count is on disk nowhere. `token:~1.2M`
+  Claude Code 2.1.283, and the real count is on disk nowhere. `token:~1.20M`
   means the total includes such calls and is therefore a lower bound
   (`sessionTokensApproximate`).
 - **`gitRepo` / `gitBranch` / `gitStatus`** — the three **VCS slots**, not

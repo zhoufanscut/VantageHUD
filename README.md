@@ -255,7 +255,7 @@ knowing before you change them:
 | --- | --- |
 | `text` | the cwd path |
 | `label` | every `xxx:` prefix, `(reset)` tails, the `callCounts` numbers |
-| `faint` | `($spent/$limit)`, the stale `*`, the approximate `~` of `token:~1.2M`, `[API 429]` |
+| `faint` | `($spent/$limit)`, the stale `*`, the approximate `~` of `token:~1.20M`, `[API 429]` |
 | `sep` | the ` \| ` separator **and** the empty gauge track (`░`) |
 | `gradLow` | usage under 70%, **and** the `repo:` / `branch:` / `token:` values, and effort `max` |
 | `gradMid` | usage 70–84%, `[API auth]` / `[API err]`, effort `high` |
@@ -263,6 +263,10 @@ knowing before you change them:
 | `add` | staged / ahead counts |
 | `del` | modified / behind counts |
 | `track` | untracked counts |
+
+The usage ranges are the defaults. `ctx:` cuts at
+`thresholds.contextWarning` / `contextCritical` instead (70 / 85 unless you
+change them); the `5h:` / `7d:` / weekly gauges always cut at 70 / 85.
 
 So a very dim `sep` also dims every empty gauge bar, and `gradLow` sets both the
 "all calm" color and your repo/branch text.
@@ -356,7 +360,10 @@ git -C ~/.claude/hud pull
   cached for up to 30s (sooner after `svn add`/`delete`/`revert`) so a large
   checkout is not re-walked every frame. A git repository whose `git status`
   takes 300 ms or more is cached the same way (sooner after staging or a
-  commit); a faster one is re-read every frame.
+  commit); a faster one is re-read every frame. "Sooner" holds only while a
+  scan takes under a second: a slower tree is re-scanned at most once per 10×
+  its scan time, which past a 3 s scan is longer than 30s (a 28 s scan: about
+  4.7 min).
 - Runtime files live in a per-session subfolder of `cache/`, i.e.
   `cache/<session>/<name>.json` (the render cache, the token/call-count tally
   memos, the git/SVN status memo, and the context-stabilization snapshot

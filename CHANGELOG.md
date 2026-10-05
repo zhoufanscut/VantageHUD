@@ -18,7 +18,7 @@ folders or lose its cached line, and a faster frame.
   letter and the first consonant after it — `fb:91%(21h8m)` for Fable — and
   hidden below `thresholds.sonnetWeeklyVisibility` like `sn:` (`op:` still
   always shows). `limits[]` also fills an absent `5h`/`7d`.
-- **`token:~1.2M`**: a faint `~` marks the total as a lower bound. From Claude
+- **`token:~1.20M`**: a faint `~` marks the total as a lower bound. From Claude
   Code 2.1.283 most subagent calls never write their final usage row, and the
   real count is on disk nowhere, so nearly every multi-agent session on
   current Claude Code shows it. Lead transcripts are not affected.
@@ -43,8 +43,10 @@ folders or lose its cached line, and a faster frame.
 - `find-node.sh` also finds node under `$NVM_DIR`, XDG nvm, `$FNM_DIR`, mise,
   asdf and Volta, and probes each default location without its env var — a
   GUI-launched Claude Code often lacks them.
-- On Node older than 14.17 the line reads
+- When the renderer fails to load on a Node older than 14.17, the line reads
   `[HUD] Node >=14.17 required (found vX)` instead of a bare `SyntaxError`.
+- `HUD_DEBUG=1` also makes `statusline.sh` name the path each frame took
+  (`[HUD sh] …`) and pass on a good render's stderr.
 
 ### Changed
 
@@ -73,7 +75,9 @@ folders or lose its cached line, and a faster frame.
   has exited. A render still running keeps its lock for up to 120 s.
 - **A slow git repo is memoized like SVN.** One whose `git status` takes
   300 ms or more is cached in `cache/<session>/git-status.json` (refreshed
-  sooner after staging or a commit); a faster one is still read every frame.
+  sooner after staging or a commit while a walk takes under 1 s; a slower
+  tree is re-walked at most every 10× its walk time, which can exceed 30 s);
+  a faster one is still read every frame.
   Once a memo exists, git and SVN walks in the background get 30 s instead of
   the first walk's short timeout, so a working copy slower than that shows
   counts.
@@ -84,13 +88,16 @@ folders or lose its cached line, and a faster frame.
   spelling, unless the link points into the tree.
 - An unwritable install `cache/` falls back to
   `${XDG_CACHE_HOME:-~/.cache}/vantagehud`.
+- **The wrapper's cache files are private** (`umask 077`), like the Node
+  side's 0600 writes: `stdin.json` is the whole payload. This matters if you
+  share one cache dir between users.
 - The README's `statusLine` command now quotes both paths, so a home folder
   with a space in it (common on Windows) works. Your `settings.json` is not
   changed: if your home path has a space, update the command by hand.
 - `HUD_CONFIG` is no longer trimmed, so the wrapper and Node watch the same
   file; a whitespace-only value means the defaults.
-- **Faster frames.** A cache-hit render no longer loads `https`, `http`,
-  `tls` or `crypto` (p50 126 → 93 ms); the transcript tail is read only when
+- **Faster frames.** A cache-hit render no longer loads `crypto`, nor
+  `https`/`http`/`tls` unless a proxy is set (p50 126 → 93 ms without one); the transcript tail is read only when
   `ctx:` needs it, and backwards (5.5 MB transcript: ~28 → ~2 ms); the
   wrapper's hot path runs ~12 processes instead of ~32 (21.8 → 12.9 ms); and a
   directory outside any repo spawns 1 git process instead of 5.
@@ -114,7 +121,7 @@ folders or lose its cached line, and a faster frame.
   frame renders synchronously.
 - **A payload that arrived during a render was dropped**, so an idle session
   could show a frame two payloads old. It now sets `render.dirty` and the
-  running render renders once more.
+  running render renders again, until no payload is waiting.
 - **Two renders could run side by side.** The render lock now names its owner
   and is released only by it, and a takeover is serialized; the older render
   used to land last, over the newer line. The Node-side locks got the same
@@ -122,7 +129,8 @@ folders or lose its cached line, and a faster frame.
   lock whose PID was reused was never reaped.
 - **Config edits in the same second as a render were missed**, and a config
   dated in the future forced a synchronous render on every frame. Changes are
-  now detected by an `mtime:size:inode` stamp compared for inequality.
+  now detected by an `mtime:size:inode` stamp compared for inequality, taken
+  through a symlinked config to its target.
 - **`5h:92%` right after the window reset.** A window whose reset time has
   passed is hidden instead of refilled, unmarked, from the API cache.
 - **The usage numbers.** An account with no five-hour window no longer shows a
@@ -153,8 +161,12 @@ folders or lose its cached line, and a faster frame.
 - **Linked worktrees found no transcript** when the main repo path held `_`, a
   space or a drive colon: project folders are now named the way Claude Code
   names them.
-- **Width**: `stringWidth` measures VS16, skin tones, flags and wide symbols
-  such as ✅ correctly, so `maxWidth` no longer overflows on them.
+- **Width**: `stringWidth` counts skin tones and variation selectors as zero
+  width, flags as 2, and wide symbols such as ✅ as 2, so `maxWidth` no longer
+  overflows on them. A text-default symbol made emoji by VS16 (❤️) still
+  counts 1.
+- A cache file vanishing mid-frame could abort the wrapper on GNU `stat`
+  (a blank bar for that frame).
 - `token:` printed `1000.0k` for 999,950–999,999; it switches to `M` there.
 - `layout.main` drops repeated names, and an empty list counts as unset (it
   printed an empty line). A non-numeric `maxOutputLines` takes the default
