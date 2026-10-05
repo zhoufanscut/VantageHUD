@@ -2,13 +2,14 @@
 
 A small, self-contained [Claude Code](https://claude.com/claude-code) statusline
 (HUD). From the JSON Claude Code pipes to the `statusLine` command it renders the
-working folder, the model with thinking effort (`opus:max`), context %,
+project folder, the model with thinking effort (`opus:max`), context %,
 rate limits, git (or Subversion) info, session time, and more.
 
 - **No dependencies.** Pure Node built-ins — no `node_modules`, no native code.
 - **Five built-in themes** — dark, light and near-monochrome. See them all with
   `node preview-themes.mjs`, or build your own. [Themes ↓](#themes)
 - **Portable.** Clone anywhere, on macOS or Linux, with any Node `>=14.17`.
+  Windows works through Git Bash or WSL — see [Windows](#windows).
 - **Proxy aware.** Honors `HTTPS_PROXY` / `https_proxy` — including
   `user:pass@` credentials and `https://` proxies — for the usage/rate-limit
   API via a CONNECT tunnel (no-op when unset), and `NO_PROXY` / `no_proxy`.
@@ -29,6 +30,17 @@ cache/              # render cache + state, one subfolder per session (gitignore
 ### 1. Prerequisites
 - Claude Code installed (this is its statusline).
 - Node `>=14.17` on the machine (`node --version`). No `npm install` needed.
+- A POSIX `sh` to run the wrapper — any macOS or Linux box has one.
+
+#### Windows
+Claude Code runs the `statusLine` command through a shell, and the wrapper is a
+POSIX `sh` script, so `sh` must be on `PATH`: install
+[Git for Windows](https://git-scm.com/download/win) (Git Bash), or run Claude
+Code inside WSL, where the Linux steps apply as written. Under Git Bash, `~` is
+`%USERPROFILE%` and the clone goes to `~/.claude/hud` as below; `node` must be
+on Git Bash's `PATH` too. `safeMode` is on by default, which swaps the gauge
+glyphs for ASCII, and `callCounts` uses ASCII (`T:42`) on Windows and WSL unless
+`callCountsFormat` says otherwise.
 
 ### 2. Get the folder
 Clone it anywhere — `~/.claude/hud` is the conventional spot:
@@ -66,9 +78,12 @@ keep your existing keys (`model`, `permissions`, …) and just add this one:
   cache in tens of milliseconds, with a full re-render (~150 ms of Node) behind it.
 - Prefer a tool? Merge it with `jq`:
   ```sh
-  f=~/.claude/settings.json; tmp=$(mktemp)
-  jq '.statusLine = {type:"command", command:"sh ~/.claude/hud/statusline.sh ~/.claude/hud/statusline.mjs"}' "$f" > "$tmp" && mv "$tmp" "$f"
+  f="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json"; tmp=$(mktemp)
+  jq '.statusLine = {type: "command", command: "sh \"${CLAUDE_CONFIG_DIR:-$HOME/.claude}/hud/statusline.sh\" \"${CLAUDE_CONFIG_DIR:-$HOME/.claude}/hud/statusline.mjs\""}' "$f" > "$tmp" &&
+    cat "$tmp" > "$f" && rm -f "$tmp"
   ```
+  (`cat >` writes through a symlinked `settings.json` — a dotfiles setup —
+  where `mv` would replace the link with a private copy.)
 
 ### 4. (Re)start Claude Code
 A new session renders the bar from the first frame. An already-open session
@@ -78,11 +93,11 @@ needs a restart to pick up the `settings.json` change.
 From inside the folder, feed it a sample payload:
 ```sh
 cd ~/.claude/hud
-echo '{"session_id":"t","cwd":"'"$HOME"'/example","effort":{"level":"high"},"model":{"id":"claude-opus-4-8","display_name":"Opus 4.8"}}' \
+echo '{"session_id":"t","cwd":"'"$HOME"'/example","effort":{"level":"high"},"model":{"id":"claude-opus-5-5[1m]","display_name":"Opus 5.5 (1M context)"}}' \
   | HUD_SYNC_REFRESH=1 sh statusline.sh statusline.mjs
 ```
-Expected: a single line containing `opus:high` (the leading
-path is your working directory).
+Expected: a single line containing `opus:high`. The leading path is
+`~/example`, taken from the sample payload's `cwd`.
 
 ## Configure (optional)
 The HUD runs on sensible defaults out of the box. To customize, copy the example
@@ -110,7 +125,22 @@ cp ~/.claude/hud/config.json.example ~/.claude/hud/config.json
   reorders the line: named elements come first in that order, the rest follow
   in the default order, unknown names are ignored. `layout: { "main": [...] }`
   is the strict form: only the elements it names are shown, in that order
-  (repeats and unknown names dropped; an empty list counts as unset).
+  (repeats and unknown names dropped; an empty list counts as unset). Both
+  take **element names**, which differ from the enable flags in three places
+  — the default order, with each one's flag under `elements`:
+
+  | element name | enable flag |
+  | --- | --- |
+  | `pathLabel` | `pathLabel` |
+  | `model` | `model` (plus `effort` for the `:high` suffix) |
+  | `rateLimits` | `rateLimits` |
+  | `contextBar` | `contextBar` |
+  | `tokens` | `showTokens` |
+  | `session` | `sessionHealth` |
+  | `callCounts` | `showCallCounts` |
+  | `gitRepo` | `gitRepo` |
+  | `gitBranch` | `gitBranch` |
+  | `gitStatus` | `gitStatus` |
 - `labels` (top level) renames the fragment labels over the `locale`'s, e.g.
   `"labels": { "context": "ctx", "tokens": "tok" }`. Keys: `context`,
   `tokens`, `session`, `critical` and `compress` (the `CRITICAL` / `COMPRESS?`
@@ -133,9 +163,15 @@ cp ~/.claude/hud/config.json.example ~/.claude/hud/config.json
   renderer runs directly in one (`node statusline.mjs` by hand), else from
   `COLUMNS` when Claude Code provides it; the line is left alone otherwise —
   which is the usual case through `statusline.sh`.
+- More `elements` options: `useBars` (default `false`) draws `ctx:` and the
+  rate limits as gauges; `callCountsFormat` is `auto` (the default: ASCII
+  `T:42` on Windows and WSL, emoji `🔧42` elsewhere), `ascii` or `emoji`;
+  `safeMode` (default `true`) strips terminal control sequences and draws the
+  gauges in ASCII; `maxOutputLines` (default `4`) caps the lines
+  `wrapMode: "wrap"` may produce.
 - `modelFormat` (inside `elements`) sets how the model name reads: `short`
-  (`opus`, the default), `versioned` (`opus 4.8`), or `full` (raw id,
-  `claude-opus-4-8`). The `:effort` suffix is a separate `effort` toggle.
+  (`opus`, the default), `versioned` (`opus 5.5`), or `full` (raw id,
+  `claude-opus-5-5[1m]`). The `:effort` suffix is a separate `effort` toggle.
 - No file needed for a quick test: `HUD_THEME=ember` overrides the theme, and
   `HUD_CONFIG=/abs/path/config.json` points the HUD at a config elsewhere.
 
@@ -162,13 +198,14 @@ Pick one in `config.json`:
 { "theme": "nebula" }
 ```
 
-Or look at one without touching a file — `HUD_THEME` wins over `config.json`:
+Or preview just that one, without touching a file:
 
 ```sh
-HUD_THEME=nebula node ~/.claude/hud/preview-themes.mjs
+node ~/.claude/hud/preview-themes.mjs nebula
 ```
 
-To make the *live* HUD use it that way you have to `export HUD_THEME=nebula`
+`HUD_THEME` also picks the theme, and wins over `config.json`. To make the
+*live* HUD use it that way you have to `export HUD_THEME=nebula`
 **before** starting Claude Code — the statusline is spawned with Claude Code's
 launch environment, so exporting it in an already-running session changes
 nothing. Editing `config.json` is the reliable way, and it is also the only one
@@ -275,6 +312,17 @@ with all 10 tokens spelled out if you would rather start from a full palette.
   rather than breaking the line. Run with `HUD_DEBUG=1` to see what was rejected
   and why.
 
+## Where the rate limits come from
+`5h:` and `7d:` come from the payload's `rate_limits`, which current Claude
+Code sends when you are logged in with a Claude.ai subscription. Everything
+else in that fragment — the per-model weekly buckets (`op:`, `sn:`, `fb:`, …),
+`extra:`, and `5h`/`7d` on a Claude Code too old to send them — comes from
+Anthropic's usage API, called with the same Claude.ai login, read-only (the HUD
+never refreshes a token). The API is skipped with an API key and no
+Claude.ai login, with `ANTHROPIC_BASE_URL` pointing at another host, and under
+`CLAUDE_CODE_USE_BEDROCK` / `_VERTEX` / `_FOUNDRY`; you then see only what the
+payload carries, often no rate-limit fragment at all.
+
 ## Behind a proxy
 ```sh
 export HTTPS_PROXY=http://proxy.example.com:8080
@@ -295,8 +343,10 @@ git -C ~/.claude/hud pull
 ```
 
 ## Notes
-- The working-folder path shows `~` in place of `$HOME` (or `%USERPROFILE%`)
-  to stay compact.
+- The leading path is the project folder: the root of the git repository or
+  SVN working copy the session is in (so a session in `packages/foo` still
+  shows the repo root), else the session's own directory. It shows `~` in
+  place of `$HOME` (or `%USERPROFILE%`) to stay compact.
 - `repo:` / `branch:` / working-tree counts cover **git and Subversion**. In an
   SVN checkout the branch comes from the URL convention (`trunk`,
   `branches/<name>`, `tags/<name>`) and carries the working-copy revision, e.g.
@@ -306,10 +356,16 @@ git -C ~/.claude/hud pull
   checkout is not re-walked every frame. A git repository whose `git status`
   takes 300 ms or more is cached the same way (sooner after staging or a
   commit); a faster one is re-read every frame.
-- All runtime files live in a per-session subfolder of `cache/`, i.e.
+- Runtime files live in a per-session subfolder of `cache/`, i.e.
   `cache/<session>/<name>.json` (the render cache, the token/call-count tally
-  memos, the git/SVN status memo, and the context-stabilization snapshot grouped per session). Centralized under the HUD
-  install dir, never inside your project; safe to delete anytime. Session folders
+  memos, the git/SVN status memo, and the context-stabilization snapshot
+  grouped per session). A few sit at the root of `cache/`, shared by every
+  session: the usage-API cache (`.usage-cache-anthropic.json`, or
+  `.usage-cache-anthropic-<hash>.json` per `CLAUDE_CONFIG_DIR`; a `.lock`
+  beside it while a fetch runs), the daily-prune stamp `.last-prune`, and the
+  `.vantagehud-cache` marker — so deleting one session's folder does not reset the rate-limit
+  data. Centralized under the HUD install dir, never inside your project;
+  safe to delete anytime. Session folders
   idle for roughly two weeks are pruned automatically (14 days on macOS, 15 on
   Linux, where `find` counts whole days). If the install's `cache/` is not
   writable (a read-only or shared install), the HUD uses
