@@ -177,10 +177,14 @@ function readDetachedRefName(gitDir, sha) {
     catch { /* no packed-refs */ }
     return null;
 }
+/** What a reftable repository keeps in `HEAD`, whatever HEAD points at. */
+const REFTABLE_HEAD = 'ref: refs/heads/.invalid';
 /**
  * Describe a detached HEAD from the files in the git dir, without spawning git
  * unless `HEAD` itself holds no sha (a reftable repository): then one
- * `git rev-parse --short HEAD`.
+ * `git rev-parse --short HEAD`. A `HEAD` naming a branch returns null: the
+ * caller only gets here when `symbolic-ref` returned nothing, and for an
+ * attached HEAD that is a failure or timeout, not a detached one.
  *
  * - Mid-rebase (and `git am`) the branch being rebased is named, from
  *   `head-name`, with the step: `{ name: 'feat', onBranch: true,
@@ -208,6 +212,15 @@ export function getDetachedHead(cwd) {
         if (!gitDir) {
             return null;
         }
+        // An attached HEAD (`ref: refs/heads/main`) means `symbolic-ref` failed
+        // or timed out rather than HEAD being detached: hide the slot, as with
+        // the flag off. A reftable repository's `HEAD` always holds the
+        // placeholder `ref: refs/heads/.invalid`, so only that one falls
+        // through to the files below and the `rev-parse` fallback.
+        const head = readStateFile(join(gitDir, 'HEAD'));
+        if (head && head.startsWith('ref: ') && head !== REFTABLE_HEAD) {
+            return null;
+        }
         let operation = null;
         let progress = '';
         let branch = null;
@@ -228,7 +241,6 @@ export function getDetachedHead(cwd) {
         if (branch) {
             return { name: branch, onBranch: true, operation, progress };
         }
-        const head = readStateFile(join(gitDir, 'HEAD'));
         let name = null;
         if (head && FULL_SHA.test(head)) {
             name = (!operation && readDetachedRefName(gitDir, head)) || head.slice(0, SHORT_SHA_LENGTH);

@@ -127,7 +127,8 @@ skimming. Add a term back (or a new one) when it earns its place; keep this shor
   (`src/hud/token-tally.js`). With the opt-in `workflowRuns` flag (off by
   default) `🔀`/`W:` adds the Workflow-tool runs launched: a Workflow call that
   does not carry `input.resumeFromRunId`. A run is not an agent — one starts a
-  whole `subagents/workflows/wf_<id>/` of them (8–25 in the measured runs) —
+  whole `subagents/workflows/wf_<id>/` of them (many: one local session's
+  3 runs held 15–25 each, and were still growing) —
   so it gets its own glyph instead of joining `🤖`, where one Agent call is one
   agent.
 - **cache** / **prompt cache** — the opt-in `cache:` element (enable flag
@@ -164,7 +165,10 @@ skimming. Add a term back (or a new one) when it earns its place; keep this shor
   `rebase-apply/` `head-name`), or `(am)`, `(merge)`, `(cherry-pick)`,
   `(revert)`, `(bisect)` from `rebase-apply/`, `MERGE_HEAD`,
   `CHERRY_PICK_HEAD`, `REVERT_HEAD`, `BISECT_LOG`. The `@` marks a commit, not
-  a branch.
+  a branch. Those markers show only while HEAD is detached: a merge,
+  cherry-pick, revert or `git am` on a branch keeps `branch:main`, and a
+  `HEAD` file naming a branch (a `symbolic-ref` that failed or timed out)
+  hides the slot as with the flag off.
 - **working copy** *(SVN)* — the SVN counterpart to a git worktree: the tree
   holding a `.svn` directory. `findSvnWorkingCopyRoot`
   (`src/lib/worktree-paths.js`) finds its root by filesystem walk, never by

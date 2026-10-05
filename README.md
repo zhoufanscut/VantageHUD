@@ -208,8 +208,9 @@ cp ~/.claude/hud/config.json.example ~/.claude/hud/config.json
   the number of Workflow-tool runs the session has launched to the call
   counts, after the agents: `🔧42 🤖7 🔀2 ⚡3` (`T:42 A:7 W:2 S:3` in ASCII).
   Without it a session that starts agents only through workflows shows no
-  `🤖`, because `🤖` counts Agent-tool calls, each of which starts one agent,
-  while one workflow run starts many. Resuming a run does not count again.
+  sign of them; with it, it shows `🔀N`. `🤖` still counts Agent-tool calls
+  only, each of which starts one agent, while one workflow run starts many,
+  so the flag never adds a `🤖`. Resuming a run does not count again.
   Each Workflow call stays in `🔧` either way.
 - `detachedHead` (inside `elements`, default `false`): set it to `true` to
   keep the `branch:` fragment when git's HEAD is detached — during a rebase,
@@ -219,10 +220,14 @@ cp ~/.claude/hud/config.json.example ~/.claude/hud/config.json
   `branch:@a1b2c3d` shows the commit's first 7 sha digits. During a rebase it
   names the branch being rebased and the step, `branch:feat (rebase 2/3)`;
   `(am 1/2)`, `(bisect)`, `(merge)`, `(cherry-pick)` and `(revert)` mark the
-  other operations git can stop in. It reads files in the `.git` directory and
-  costs no extra `git` call (one, `rev-parse --short HEAD`, in a reftable
-  repository, which then shows the sha rather than a tag name). SVN checkouts
-  are not affected.
+  other operations git can stop in while HEAD is detached; a merge,
+  cherry-pick, revert or `git am` on a branch still reads `branch:main`. It
+  reads files in the `.git` directory and costs no extra `git` call when the
+  payload carries `workspace.repo` (current Claude Code, in a repo with a
+  remote); otherwise a detached HEAD costs one `rev-parse --git-dir
+  --git-common-dir` for the `(wt:)` suffix, as a shown branch always does. A
+  reftable repository adds one `rev-parse --short HEAD`, and then shows the
+  sha rather than a tag name. SVN checkouts are not affected.
 - `modelFormat` (inside `elements`) sets how the model name reads: `short`
   (`opus`, the default), `versioned` (`opus 5.5`), or `full` (raw id,
   `claude-opus-5-5[1m]`). The `:effort` suffix is a separate `effort` toggle.
@@ -298,6 +303,12 @@ SSH does not forward `COLORTERM`, so a truecolor terminal reached over SSH gets
 256 colors. To get truecolor there, set `HUD_COLOR_DEPTH=2` (or
 `COLORTERM=truecolor`) under `env` in Claude Code's `settings.json`. With no
 color, bold and resets are still printed.
+
+At 16 colors the dim grays (faint text, the ` | ` separator, the `░` track)
+are drawn in bright black. A few schemes, such as Solarized Dark, use bright
+black as the background color, which hides them; set `HUD_COLOR_DEPTH=1`, or
+give your theme lighter `faint`/`sep`/`label` colors. `daylight`'s separator
+stays white at 16 colors, so on a white background it is not visible.
 
 ### What each color paints
 
