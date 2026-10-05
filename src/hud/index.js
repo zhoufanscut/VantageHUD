@@ -13,9 +13,9 @@ import { readHudConfig } from "./state.js";
 import { getUsage } from "./usage-api.js";
 import { render } from "./render.js";
 import { sanitizeOutput } from "./sanitize.js";
-import { resolveToWorktreeRoot, resolveTranscriptPath, sessionCacheFile } from "../lib/worktree-paths.js";
+import { resolveToWorktreeRoot, resolveTranscriptPath } from "../lib/worktree-paths.js";
 import { unlinkSync } from "fs";
-import { atomicTouchSync, atomicWriteFileSync, atomicWriteJsonSync } from "../lib/atomic-write.js";
+import { atomicTouchSync, atomicWriteFileSync } from "../lib/atomic-write.js";
 /**
  * Extract session ID (UUID) from a transcript path.
  */
@@ -229,28 +229,6 @@ async function main() {
         if (process.env.HUD_DEBUG) {
             console.error("[HUD DEBUG] stdin.context_window:", JSON.stringify(stdin.context_window));
             console.error("[HUD DEBUG] sessionHealth:", JSON.stringify(context.sessionHealth));
-        }
-        // autoCompact: write trigger file when token context exceeds threshold.
-        // Payload pressure is warning-only for now because statusline hooks can
-        // estimate from local transcript artifacts but do not receive Claude Code's
-        // exact serialized API request body.
-        // A companion hook can read this file to inject a /compact suggestion.
-        if (config.contextLimitWarning.autoCompact &&
-            context.contextPercent >= config.contextLimitWarning.threshold) {
-            try {
-                const triggerFile = sessionCacheFile("compact-requested", sessionKey);
-                atomicWriteJsonSync(triggerFile, {
-                    requestedAt: new Date().toISOString(),
-                    contextPercent: context.contextPercent,
-                    threshold: config.contextLimitWarning.threshold,
-                });
-            }
-            catch (error) {
-                // Silent failure — don't break HUD rendering
-                if (process.env.HUD_DEBUG) {
-                    console.error("[HUD] Auto-compact trigger write error:", error instanceof Error ? error.message : error);
-                }
-            }
         }
         // Render and output
         let output = await render(context, config);

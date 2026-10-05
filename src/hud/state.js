@@ -44,6 +44,10 @@ export function readHudConfig() {
 }
 // Keys mergeWithDefaults reads besides the ones DEFAULT_HUD_CONFIG spells out.
 const OPTIONAL_TOP_LEVEL_KEYS = ["elementOrder", "maxWidth", "layout"];
+// Options that used to exist: still accepted (and ignored), named as removed.
+// contextLimitWarning ({threshold, autoCompact}) only wrote a
+// compact-requested.json that nothing read.
+const REMOVED_KEYS = ["contextLimitWarning"];
 const warnedKeys = new Set();
 /**
  * Under HUD_DEBUG, name each key of `section` that the HUD never reads — a
@@ -57,6 +61,10 @@ function warnUnknownKeys(section, known, where) {
         if (known.includes(key) || warnedKeys.has(`${where}${key}`))
             continue;
         warnedKeys.add(`${where}${key}`);
+        if (REMOVED_KEYS.includes(`${where}${key}`)) {
+            console.error(`[HUD] config.json: "${where}${key}" was removed and is ignored; safe to delete`);
+            continue;
+        }
         const near = byLower.get(key.toLowerCase());
         console.error(`[HUD] config.json: unknown key "${where}${key}" ignored${near ? ` (did you mean "${near}"?)` : ""}`);
     }
@@ -73,7 +81,6 @@ function mergeWithDefaults(config) {
     warnUnknownKeys(config, [...Object.keys(DEFAULT_HUD_CONFIG), ...OPTIONAL_TOP_LEVEL_KEYS], "");
     warnUnknownKeys(config.elements, Object.keys(DEFAULT_HUD_CONFIG.elements), "elements.");
     warnUnknownKeys(config.thresholds, Object.keys(DEFAULT_HUD_CONFIG.thresholds), "thresholds.");
-    warnUnknownKeys(config.contextLimitWarning, Object.keys(DEFAULT_HUD_CONFIG.contextLimitWarning), "contextLimitWarning.");
     warnUnknownKeys(config.labels, Object.keys(DEFAULT_HUD_CONFIG.labels), "labels.");
     const locale = isHudLocale(config.locale)
         ? config.locale
@@ -91,10 +98,6 @@ function mergeWithDefaults(config) {
         thresholds: {
             ...DEFAULT_HUD_CONFIG.thresholds,
             ...config.thresholds,
-        },
-        contextLimitWarning: {
-            ...DEFAULT_HUD_CONFIG.contextLimitWarning,
-            ...config.contextLimitWarning,
         },
         usageApiPollIntervalMs: config.usageApiPollIntervalMs ??
             DEFAULT_HUD_CONFIG.usageApiPollIntervalMs,

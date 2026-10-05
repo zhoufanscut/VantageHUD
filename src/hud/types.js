@@ -118,10 +118,6 @@ export const DEFAULT_HUD_CONFIG = {
         contextCritical: 85,
         sonnetWeeklyVisibility: 80, // Hide the Sonnet weekly (sn) bucket, and any other per-model weekly bucket but op (fb = Fable, …), until its usage % reaches this (0 = always show)
     },
-    contextLimitWarning: {
-        threshold: 80,
-        autoCompact: false,
-    },
     usageApiPollIntervalMs: DEFAULT_HUD_USAGE_POLL_INTERVAL_MS,
     wrapMode: 'truncate',
 };
