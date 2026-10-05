@@ -8,7 +8,7 @@
  * This is a lightweight implementation without external dependencies.
  * For full Unicode support, consider using the 'string-width' npm package.
  *
- * Related: Issue #344 - Korean IME input visibility
+ * Related: oh-my-claudecode#344 - Korean IME input visibility
  */
 /**
  * Check if a character code point is a CJK (double-width) character.

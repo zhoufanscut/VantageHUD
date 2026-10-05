@@ -247,7 +247,7 @@ export function resolveToWorktreeRoot(directory) {
     return getWorktreeRoot(process.cwd()) || process.cwd();
 }
 // ============================================================================
-// TRANSCRIPT PATH RESOLUTION (Issue #1094)
+// TRANSCRIPT PATH RESOLUTION (oh-my-claudecode#1094)
 // ============================================================================
 /** Claude Code's cap on an encoded project-dir name before it adds a hash. */
 const MAX_PROJECT_DIR_NAME = 200;

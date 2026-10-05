@@ -3,7 +3,7 @@
  *
  * Renders the session's counts of tool calls, agent invocations, and skill
  * usages; by default it sits just before the repo/branch/status fragments.
- * (Issue #710)
+ * (oh-my-claudecode#710)
  *
  * Format: 🔧42 🤖7 ⚡3  (emoji)
  * Format: T:42 A:7 S:3   (ASCII fallback / explicit override)
@@ -36,7 +36,7 @@ function getIcons(format = 'auto', labels = DEFAULT_HUD_LABELS) {
  * Returns null if all counts are zero (nothing to show).
  *
  * @param toolCalls - Total tool_use blocks seen in transcript
- * @param agentInvocations - Total Task/proxy_Task calls seen in transcript
+ * @param agentInvocations - Total Task/proxy_Task/Agent calls seen in transcript
  * @param skillUsages - Total Skill/proxy_Skill calls seen in transcript
  */
 export function renderCallCounts(toolCalls, agentInvocations, skillUsages, format = 'auto', labels = DEFAULT_HUD_LABELS) {

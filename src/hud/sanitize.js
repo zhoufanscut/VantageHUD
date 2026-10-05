@@ -4,7 +4,7 @@
  * Sanitizes HUD output to prevent terminal rendering corruption
  * when Claude Code's Ink renderer is concurrently updating the display.
  *
- * Issue #346: Terminal rendering corruption during AI generation with HUD enabled.
+ * oh-my-claudecode#346 (the project this HUD grew out of): terminal rendering corruption during AI generation with HUD enabled.
  *
  * Root cause: Multi-line output containing ANSI escape sequences and
  * variable-width Unicode characters (progress bar blocks) can interfere
@@ -13,7 +13,8 @@
  * This module provides:
  * - Terminal control sequence stripping (preserving color/style codes)
  * - Unicode block character replacement with ASCII equivalents
- * - Line count enforcement (collapse to single line if needed)
+ * - Per-line trailing-whitespace trim (newlines are kept; the line count is
+ *   capped by render.js#limitOutputLines, not here)
  */
 // Matches CSI sequences that are NOT SGR (color/style) codes
 // SGR sequences end with 'm' and should be preserved for color output
@@ -79,8 +80,8 @@ export function replaceUnicodeBlocks(text) {
  * 3. Preserves multi-line output (newlines are kept for proper HUD rendering)
  * 4. Trims excessive whitespace within lines
  *
- * Note: Multi-line output is preserved to maintain HUD tree structure display.
- * The original single-line collapse was too aggressive and broke readability.
+ * Note: newlines are preserved. The HUD renders one line, but `wrapMode: "wrap"`
+ * can break it into several, and collapsing them here would undo that.
  *
  * @param output - Raw HUD output (may contain ANSI codes and newlines)
  * @returns Sanitized output safe for concurrent terminal rendering
@@ -91,7 +92,7 @@ export function sanitizeOutput(output) {
     // Step 2: Replace variable-width Unicode with ASCII
     sanitized = replaceUnicodeBlocks(sanitized);
     // Step 3: Preserve multi-line output, just trim each line
-    // Do NOT collapse to single line - HUD needs proper line breaks for tree display
+    // Do NOT collapse to a single line - a wrapped line keeps its breaks
     const lines = sanitized.split('\n').map(line => line.trimEnd());
     sanitized = lines.join('\n');
     // Step 4: Remove leading/trailing empty lines

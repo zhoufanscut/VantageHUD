@@ -190,7 +190,7 @@ function applyMaxWidthByMode(lines, maxWidth, wrapMode) {
     return lines.map((line) => truncateLineToMaxWidth(line, maxWidth));
 }
 /**
- * Limit output lines to prevent input field shrinkage (Issue #222).
+ * Limit output lines to prevent input field shrinkage (oh-my-claudecode#222).
  * Trims lines from the end while preserving the first (header) line.
  *
  * @param lines - Array of output lines

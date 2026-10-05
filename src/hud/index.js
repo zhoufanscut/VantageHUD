@@ -117,7 +117,7 @@ async function main() {
                 config.maxWidth = cols;
             }
         }
-        // Resolve worktree-mismatched transcript paths (issue #1094)
+        // Resolve worktree-mismatched transcript paths (oh-my-claudecode#1094)
         const resolvedTranscriptPath = resolveTranscriptPath(typeof stdin.transcript_path === "string" ? stdin.transcript_path : undefined, cwd);
         // Everything cumulative — the token total, the tool/agent/skill counts
         // and the session start — comes from the incremental whole-file tally
@@ -254,14 +254,13 @@ async function main() {
         }
         // Render and output
         let output = await render(context, config);
-        // Apply safe mode sanitization if enabled (Issue #346)
+        // Apply safe mode sanitization if enabled (oh-my-claudecode#346)
         // This strips ANSI codes and uses ASCII-only output to prevent
         // terminal rendering corruption during concurrent updates.
-        // On Windows, default to safe mode unless the user explicitly sets safeMode: false
-        // (e.g. Windows Terminal and modern terminals support ANSI natively).
-        // The win32 fallback is retained for configs that omit safeMode entirely
-        // (before default merge, e.g. minimal config files or future schema changes).
-        // explicit false overrides platform detection: process.platform === 'win32'
+        // mergeWithDefaults always supplies safeMode (default true), so only the
+        // user's value decides. Explicit `false` turns it off everywhere; the
+        // win32 clause matters only for a falsy non-false value (null, 0),
+        // which keeps safe mode on Windows and turns it off elsewhere.
         const useSafeMode = config.elements.safeMode !== false &&
             (config.elements.safeMode || process.platform === "win32");
         const line = useSafeMode

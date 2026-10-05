@@ -71,7 +71,7 @@ function modelFamilyKey(source) {
     if (!s)
         return null;
     if (s.includes('claude')) {
-        // Current id ("claude-opus-4-8…") / "Claude Opus 4.8": the token after "claude".
+        // Current id ("claude-opus-5-5[1m]") / "Claude Opus 5.5": the token after "claude".
         const m = s.match(/claude[-\s]+([a-z][a-z0-9.]*)/);
         if (m)
             return m[1];
@@ -90,7 +90,7 @@ function modelFamilyKey(source) {
 /**
  * Render the model:effort fragment.
  *
- * Format: opus:high (short, default) · opus 4.8:high (versioned) · claude-opus-4-8:high (full) · opus (no effort level)
+ * Format: opus:high (short, default) · opus 5.5:high (versioned) · claude-opus-5-5[1m]:high (full) · opus (no effort level)
  *
  * Key uses the faint label tone (like `repo:`); the effort value is colored on
  * the effort ramp (max→gradLow … low→gradHigh). When no effort level is present

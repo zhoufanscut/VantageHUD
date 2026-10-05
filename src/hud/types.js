@@ -101,16 +101,16 @@ export const DEFAULT_HUD_CONFIG = {
         contextBar: true,
         showTokens: true, // tokens element — On by default; users can disable in config.json
         sessionHealth: true, // session element
-        showCallCounts: true, // callCounts element — tool/agent/skill counts (Issue #710)
+        showCallCounts: true, // callCounts element — tool/agent/skill counts (oh-my-claudecode#710)
         gitRepo: true, // Show repository name by default
         gitBranch: true, // Show branch (and worktree suffix) by default
         gitStatus: true, // Show working-tree status by default
         // ── Behavioral options / sub-toggles (not standalone display elements) ──
-        modelFormat: 'short', // model element label: 'short' (opus) | 'versioned' (opus 4.8) | 'full' (raw id)
+        modelFormat: 'short', // model element label: 'short' (opus) | 'versioned' (opus 5.5) | 'full' (raw id)
         useBars: false, // Disabled by default for backwards compatibility
         callCountsFormat: 'auto', // Preserve platform-based emoji/ASCII defaults unless explicitly overridden
         maxOutputLines: 4,
-        safeMode: true, // Enabled by default to prevent terminal rendering corruption (Issue #346)
+        safeMode: true, // Enabled by default to prevent terminal rendering corruption (oh-my-claudecode#346)
     },
     thresholds: {
         contextWarning: 70,
