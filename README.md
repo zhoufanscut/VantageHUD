@@ -281,12 +281,12 @@ Handy for forking one — copy a column, change what you want:
 | `label` | `#8fd0d8` | `#a89984` | `#cba6f7` | `#9e9e9e` | `#0550ae` |
 | `faint` | `#6e7896` | `#928374` | `#6c7086` | `#7d7d7d` | `#6e7781` |
 | `sep` | `#48506a` | `#665c54` | `#45475a` | `#3f3f3f` | `#d0d7de` |
-| `gradLow` | `#7fd4c4` | `#98971a` | `#94e2d5` | `#b0b0b0` | `#0a7c5a` |
-| `gradMid` | `#e3c08a` | `#fabd2f` | `#f9e2af` | `#b8964f` | `#9a6d00` |
-| `gradHigh` | `#e0909e` | `#fb4934` | `#f38ba8` | `#c76a6a` | `#cf222e` |
-| `add` | `#8fd0b8` | `#98971a` | `#a6e3a1` | `#8fa88f` | `#116329` |
+| `gradLow` | `#72d3c3` | `#969619` | `#94e2d5` | `#b0b0b0` | `#0a7c5a` |
+| `gradMid` | `#e6c38d` | `#f1bf3c` | `#f9e2af` | `#b8964f` | `#966d00` |
+| `gradHigh` | `#e0909e` | `#fb4934` | `#f38ba8` | `#cd6a6a` | `#cf222e` |
+| `add` | `#8fd0b8` | `#969619` | `#a6e3a1` | `#8fa88f` | `#116329` |
 | `del` | `#e0909e` | `#fb4934` | `#f38ba8` | `#b08f8f` | `#cf222e` |
-| `track` | `#8fc4d8` | `#fe8019` | `#89b4fa` | `#8f9db0` | `#8250df` |
+| `track` | `#8dc2d6` | `#fe8019` | `#89b4fa` | `#8f9db0` | `#8250df` |
 
 ### Your own theme
 

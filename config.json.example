@@ -9,12 +9,12 @@
       "label": "#8fd0d8",
       "faint": "#6e7896",
       "sep": "#48506a",
-      "gradLow": "#7fd4c4",
-      "gradMid": "#e3c08a",
+      "gradLow": "#72d3c3",
+      "gradMid": "#e6c38d",
       "gradHigh": "#e0909e",
       "add": "#8fd0b8",
       "del": "#e0909e",
-      "track": "#8fc4d8"
+      "track": "#8dc2d6"
     }
   },
   "elements": {

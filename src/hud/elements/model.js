@@ -43,8 +43,12 @@ function extractVersion(modelId, family) {
  * Effort is a discrete setting, not a measurement, so it owns an explicit
  * per-level table rather than routing through the (now three-tier) usage gauge —
  * that keeps all five levels as distinct hues, which a tier snap would collapse
- * (high and xhigh would both land in the gauge's calm band). Absent or unknown
- * levels fall back to the max (gradLow) end.
+ * (high and xhigh would both land in the gauge's calm band). Distinct in
+ * truecolor and at 256 colors for every bundled theme (the palettes are tuned
+ * so neither blend quantizes onto a neighbour); at 16 colors there are not
+ * five hues to give, so neighbours merge (medium and low are both red
+ * everywhere) and the level word carries it. Absent or unknown levels fall
+ * back to the max (gradLow) end.
  */
 const EFFORT_COLOR = {
     low: PALETTE.gradHigh, // rose — least effort, loudest

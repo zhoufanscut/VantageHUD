@@ -68,12 +68,12 @@ export const THEMES = {
         label: '#8fd0d8', // cyan-teal
         faint: '#6e7896', // quiet slate
         sep: '#48506a', // hairline
-        gradLow: '#7fd4c4', // teal
-        gradMid: '#e3c08a', // amber
+        gradLow: '#72d3c3', // teal
+        gradMid: '#e6c38d', // amber
         gradHigh: '#e0909e', // rose
         add: '#8fd0b8', // mint-green
         del: '#e0909e', // rose
-        track: '#8fc4d8', // soft cyan
+        track: '#8dc2d6', // soft cyan
     },
     // Ember — warm dark in the Gruvbox family. Toasted-sand text, gold/orange
     // accents, green→gold→red usage ramp. The warm twin of Aurora.
@@ -82,17 +82,17 @@ export const THEMES = {
         label: '#a89984', // tan
         faint: '#928374', // warm gray
         sep: '#665c54', // brown hairline
-        gradLow: '#98971a', // green
-        gradMid: '#fabd2f', // gold
+        gradLow: '#969619', // green
+        gradMid: '#f1bf3c', // gold
         gradHigh: '#fb4934', // red
-        add: '#98971a', // green
+        add: '#969619', // green
         del: '#fb4934', // red
         track: '#fe8019', // orange
     },
     // Nebula — vivid dark with mauve/pink accents (Catppuccin Mocha family).
     // The most saturated of the set, and the one that survives the 16-color
-    // fallback best: a single collision (text=faint), against 2 for daylight,
-    // 7 aurora, 8 ember, 21 graphite.
+    // fallback best: a single collision (faint=sep, both bright black) — as
+    // does daylight (label=track) — against 4 for ember, 7 aurora, 13 graphite.
     nebula: {
         text: '#cdd6f4', // periwinkle
         label: '#cba6f7', // mauve
@@ -107,19 +107,18 @@ export const THEMES = {
     },
     // Graphite — near-monochrome dark, for a HUD that recedes. Only the usage
     // ramp carries real hue; git counts are barely-tinted grays that stay
-    // legible by glyph. Trade-off: at 16 colors every non-ramp token collapses
-    // to white (21 colliding pairs, by far the most of the five) — deliberate,
-    // since saturating them enough to survive `rgbTo16` would lose the point of
-    // the theme, and the +/!/?/✗ glyphs still carry the meaning.
+    // legible by glyph. Trade-off: at 16 colors the non-ramp tokens collapse
+    // onto two grays (13 colliding pairs, by far the most of the five) —
+    // deliberate, since saturating them enough to survive `rgbTo16` would lose
+    // the point of the theme, and the +/!/?/✗ glyphs still carry the meaning.
     graphite: {
         text: '#e6e6e6', // near-white
         label: '#9e9e9e', // mid gray
-        faint: '#7d7d7d', // dim gray (kept above #787878: rgbTo16 sends anything
-        //                     darker to black, which is invisible on a dark terminal)
+        faint: '#7d7d7d', // dim gray
         sep: '#3f3f3f', // charcoal hairline
         gradLow: '#b0b0b0', // light gray (calm reads as "no color")
         gradMid: '#b8964f', // muted gold
-        gradHigh: '#c76a6a', // muted red
+        gradHigh: '#cd6a6a', // muted red
         add: '#8fa88f', // green-gray
         del: '#b08f8f', // red-gray
         track: '#8f9db0', // blue-gray
@@ -134,7 +133,7 @@ export const THEMES = {
         faint: '#6e7781', // gray
         sep: '#d0d7de', // light hairline
         gradLow: '#0a7c5a', // deep teal-green
-        gradMid: '#9a6d00', // dark gold
+        gradMid: '#966d00', // dark gold
         gradHigh: '#cf222e', // red
         add: '#116329', // dark green
         del: '#cf222e', // red

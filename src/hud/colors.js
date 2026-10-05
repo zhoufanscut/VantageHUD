@@ -101,18 +101,25 @@ function rgbTo256(r, g, b) {
 function rgbTo16(r, g, b) {
     const max = Math.max(r, g, b);
     const min = Math.min(r, g, b);
-    const bright = max > 150;
-    // Near-neutral (low saturation) → white/black so slate text stays calm.
-    if (max - min < 40) {
-        return max > 120 ? 37 : 30;
-    }
     // A channel is "on" only if it is near the max — keeps hues distinct
     // (rose → red/magenta, teal → cyan, amber → yellow) instead of all-white.
     const bit = (v) => (v >= max - 50 ? 1 : 0);
     const key = (bit(r) << 2) | (bit(g) << 1) | bit(b);
-    // key: 0 black,1 blue,2 green,3 cyan,4 red,5 magenta,6 yellow,7 white
-    const base = [30, 34, 32, 36, 31, 35, 33, 37][key] ?? 37;
-    return bright ? base + 60 : base;
+    // Near-neutral (low saturation, or every channel "on") → one of three grays
+    // by lightness: black 30, bright black 90 (~128), white 37 (~192). The cut
+    // to white is their midpoint, 160; the cut to black is 48 (rgbTo256's first
+    // cut), not the midpoint 64, because the errors are lopsided — 90 still reads
+    // on a light terminal, black on a dark one does not. A dim gray used to go
+    // to black, which hid the ` | ` separator and the `░` track on every dark
+    // theme, and a mid gray to white, which hid daylight's `faint` on white.
+    // 97 is left out on purpose: it would only make the light text tokens
+    // brighter than they are in truecolor.
+    if (max - min < 40 || key === 7) {
+        return max < 48 ? 30 : max < 160 ? 90 : 37;
+    }
+    // key: 1 blue, 2 green, 3 cyan, 4 red, 5 magenta, 6 yellow (0 and 7 never get here)
+    const base = [30, 34, 32, 36, 31, 35, 33, 37][key];
+    return max > 150 ? base + 60 : base;
 }
 /**
  * Foreground SGR opener for an [r,g,b] triple at the detected color depth.
