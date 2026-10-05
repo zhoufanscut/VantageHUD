@@ -3,6 +3,7 @@
  *
  * Renders session duration.
  */
+import { DEFAULT_HUD_LABELS } from '../types.js';
 import { paint, gradientColor, paintLabel } from '../colors.js';
 import { formatDuration } from '../../lib/formatting.js';
 /**
@@ -16,9 +17,9 @@ import { formatDuration } from '../../lib/formatting.js';
  * Color snaps across the same teal→amber→rose tiers as ctx/limits, mapping
  * session age onto 0–100 (8h → 100%): teal <5.6h, amber 5.6–6.8h, rose ≥6.8h.
  */
-export function renderSession(session) {
+export function renderSession(session, labels = DEFAULT_HUD_LABELS) {
     if (!session)
         return null;
     const color = gradientColor((session.durationMinutes / (60 * 8)) * 100);
-    return `${paintLabel('session:')}${paint(color, formatDuration(session.durationMinutes))}`;
+    return `${paintLabel(`${labels.session}:`)}${paint(color, formatDuration(session.durationMinutes))}`;
 }

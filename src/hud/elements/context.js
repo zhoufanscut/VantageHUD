@@ -33,7 +33,7 @@ function contextTierBounds(thresholds) {
     const crit = num(thresholds?.contextCritical, 85);
     return [Math.min(warn, crit), crit];
 }
-function getContextDisplayStyle(safePercent, thresholds) {
+function getContextDisplayStyle(safePercent, thresholds, labels) {
     // The color snaps across three tiers (teal/amber/rose by default) at
     // contextWarning/contextCritical (70/85 by default); the text suffix adds
     // COMPRESS? from contextCompactSuggestion and CRITICAL from contextCritical.
@@ -41,9 +41,9 @@ function getContextDisplayStyle(safePercent, thresholds) {
     const color = fg(gradientColor(safePercent, contextTierBounds(thresholds)));
     switch (severity) {
         case 'critical':
-            return { color, suffix: ' CRITICAL' };
+            return { color, suffix: ` ${labels.critical}` };
         case 'compact':
-            return { color, suffix: ' COMPRESS?' };
+            return { color, suffix: ` ${labels.compress}` };
         default:
             // 'warning' and 'normal': the color alone tells them apart.
             return { color, suffix: '' };
@@ -60,7 +60,7 @@ function getContextDisplayStyle(safePercent, thresholds) {
  */
 export function renderContext(percent, thresholds, labels = DEFAULT_HUD_LABELS) {
     const safePercent = clampContextPercent(percent);
-    const { color, suffix } = getContextDisplayStyle(safePercent, thresholds);
+    const { color, suffix } = getContextDisplayStyle(safePercent, thresholds, labels);
     return `${paintLabel(`${labels.context}:`)}${color}${safePercent}%${suffix}${RESET}`;
 }
 /**
@@ -72,7 +72,7 @@ export function renderContextWithBar(percent, thresholds, barWidth = 10, labels 
     const safePercent = clampContextPercent(percent);
     const filled = Math.round((safePercent / 100) * barWidth);
     const empty = barWidth - filled;
-    const { color, suffix } = getContextDisplayStyle(safePercent, thresholds);
+    const { color, suffix } = getContextDisplayStyle(safePercent, thresholds, labels);
     const bar = `${color}${'█'.repeat(filled)}${TRACK}${'░'.repeat(empty)}${RESET}`;
     return `${paintLabel(`${labels.context}:`)}[${bar}]${color}${safePercent}%${suffix}${RESET}`;
 }

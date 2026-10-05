@@ -113,8 +113,9 @@ cp ~/.claude/hud/config.json.example ~/.claude/hud/config.json
   (repeats and unknown names dropped; an empty list counts as unset).
 - `labels` (top level) renames the fragment labels over the `locale`'s, e.g.
   `"labels": { "context": "ctx", "tokens": "tok" }`. Keys: `context`,
-  `tokens`, `tool`, `agent`, `skill`, `staged`, `modified`, `untracked`,
-  `conflict`, `ahead`, `behind`.
+  `tokens`, `session`, `critical` and `compress` (the `CRITICAL` / `COMPRESS?`
+  text after `ctx:`), `tool`, `agent`, `skill`, `staged`, `modified`,
+  `untracked`, `conflict`, `ahead`, `behind`.
 - `usageApiPollIntervalMs` (default `90000`, minimum `30000`): how often the
   usage API is polled for the buckets the payload does not carry.
 - `thresholds.contextWarning` / `contextCompactSuggestion` / `contextCritical`

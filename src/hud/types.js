@@ -6,6 +6,9 @@
 export const DEFAULT_HUD_LABELS = {
     context: 'ctx',
     tokens: 'token',
+    session: 'session',
+    critical: 'CRITICAL',
+    compress: 'COMPRESS?',
     tool: 'T',
     agent: 'A',
     skill: 'S',
@@ -21,6 +24,9 @@ export const HUD_LOCALE_LABELS = {
     'zh-CN': {
         context: '上下文',
         tokens: '令牌',
+        session: '会话',
+        critical: '危急',
+        compress: '建议压缩',
         tool: '工具',
         agent: '智能体',
         skill: '技能',

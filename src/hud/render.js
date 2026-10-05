@@ -310,7 +310,7 @@ export async function render(context, config) {
         });
     }
     if (enabledElements.sessionHealth && context.sessionHealth) {
-        put("session", () => renderSession(context.sessionHealth));
+        put("session", () => renderSession(context.sessionHealth, hudLabels));
     }
     if (enabledElements.showTokens === true) {
         put("tokens", () => renderTokenUsage(context.sessionTotalTokens, hudLabels, context.sessionTokensApproximate));
