@@ -140,7 +140,7 @@ cp ~/.claude/hud/config.json.example ~/.claude/hud/config.json
   | `promptCache` | `promptCache` (off by default — see below) |
   | `tokens` | `showTokens` |
   | `session` | `sessionHealth` |
-  | `callCounts` | `showCallCounts` |
+  | `callCounts` | `showCallCounts` (plus `workflowRuns`, off by default — see below) |
   | `gitRepo` | `gitRepo` |
   | `gitBranch` | `gitBranch` (plus `detachedHead`, off by default — see below) |
   | `gitStatus` | `gitStatus` |
@@ -149,7 +149,8 @@ cp ~/.claude/hud/config.json.example ~/.claude/hud/config.json
   `tokens`, `session`, `promptCache`, `cacheWarm`, `cacheCold` (the
   `cache:` / `warm` / `cold` words), `spendLimit` (the `spend:` word),
   `critical` and `compress` (the `CRITICAL` / `COMPRESS?`
-  text after `ctx:`), `tool`, `agent`, `skill`, `staged`, `modified`,
+  text after `ctx:`), `tool`, `agent`, `skill`, `workflow` (the ASCII
+  call-count letters `T`, `A`, `S`, `W`), `staged`, `modified`,
   `untracked`, `conflict`, `ahead`, `behind`, and the `detachedHead` words
   `gitRebase`, `gitAm`, `gitMerge`, `gitCherryPick`, `gitRevert`,
   `gitBisect`.
@@ -203,6 +204,13 @@ cp ~/.claude/hud/config.json.example ~/.claude/hud/config.json
   label is the model name's first letter plus the first consonant after it.
   Each one is hidden until it reaches `thresholds.sonnetWeeklyVisibility`, like
   `sn:`. `sn:` and `op:` show without this flag.
+- `workflowRuns` (inside `elements`, default `false`): set it to `true` to add
+  the number of Workflow-tool runs the session has launched to the call
+  counts, after the agents: `🔧42 🤖7 🔀2 ⚡3` (`T:42 A:7 W:2 S:3` in ASCII).
+  Without it a session that starts agents only through workflows shows no
+  `🤖`, because `🤖` counts Agent-tool calls, each of which starts one agent,
+  while one workflow run starts many. Resuming a run does not count again.
+  Each Workflow call stays in `🔧` either way.
 - `detachedHead` (inside `elements`, default `false`): set it to `true` to
   keep the `branch:` fragment when git's HEAD is detached — during a rebase,
   a bisect, or after checking out a tag or a commit — where it is otherwise

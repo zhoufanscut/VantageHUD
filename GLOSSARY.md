@@ -121,6 +121,15 @@ skimming. Add a term back (or a new one) when it earns its place; keep this shor
   ("ultracode") agents, which is why `src/hud/subagents.js` walks it recursively /
   the tokens those subagents spend, which that module folds into
   `token:` so it reflects the whole run, not just the lead thread.
+- **call counts** / **workflow run** — the `callCounts` element: `🔧` every
+  `tool_use` block in the lead transcript, `🤖` Agent/Task calls, `⚡` Skill
+  calls (`T:`/`A:`/`S:` in ASCII), from the incremental tally
+  (`src/hud/token-tally.js`). With the opt-in `workflowRuns` flag (off by
+  default) `🔀`/`W:` adds the Workflow-tool runs launched: a Workflow call that
+  does not carry `input.resumeFromRunId`. A run is not an agent — one starts a
+  whole `subagents/workflows/wf_<id>/` of them (8–25 in the measured runs) —
+  so it gets its own glyph instead of joining `🤖`, where one Agent call is one
+  agent.
 - **cache** / **prompt cache** — the opt-in `cache:` element (enable flag
   `promptCache`, off by default; `src/hud/elements/prompt-cache.js`), from the
   payload's `prompt_cache` (`getPromptCache` in `src/hud/stdin.js`).

@@ -344,7 +344,9 @@ export async function render(context, config) {
     }
     const showCounts = enabledElements.showCallCounts ?? true;
     if (showCounts) {
-        put("callCounts", () => renderCallCounts(context.toolCallCount, context.agentCallCount, context.skillCallCount, enabledElements.callCountsFormat ?? 'auto', hudLabels));
+        // `workflowRuns` (opt-in, default off) adds the Workflow-tool run count.
+        const workflowRuns = enabledElements.workflowRuns === true ? context.workflowRunCount : 0;
+        put("callCounts", () => renderCallCounts(context.toolCallCount, context.agentCallCount, context.skillCallCount, enabledElements.callCountsFormat ?? 'auto', hudLabels, workflowRuns));
     }
     // ── Assemble output (single line) ──────────────────────────────────
     // Single-line HUD: only the `main` zone renders. `layout.main` is the advanced

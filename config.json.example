@@ -29,6 +29,7 @@
     "showTokens": true,
     "sessionHealth": true,
     "showCallCounts": true,
+    "workflowRuns": false,
     "gitRepo": true,
     "gitBranch": true,
     "detachedHead": false,

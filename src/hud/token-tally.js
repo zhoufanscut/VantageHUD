@@ -79,6 +79,17 @@
  * at any size. A memo written before these fields existed is not resumable: it
  * triggers one full rescan, then carries them from there.
  *
+ * **Workflow runs are counted apart from agent calls** (`workflowRuns`), not
+ * folded into `agentCalls`, because the two are different units. An Agent call
+ * starts one agent: 10 Agent calls across 5 local leads left exactly 10 flat
+ * `subagents/agent-*.jsonl`. A Workflow call starts a whole run: 4 Workflow
+ * calls in one lead left 3 `subagents/workflows/wf_<id>/` dirs holding 8, 15
+ * and 25 agents (48 in all), and the 4th call was a resume
+ * (`input.resumeFromRunId`) that reused an existing run's dir. So a Workflow
+ * call counts as a run only when it is not a resume, and stays a plain tool
+ * call in `toolCalls` either way. A launch that fails still counts, as an
+ * Agent call that fails does.
+ *
  * Everything here fails to a null/zero total rather than throwing: the HUD must
  * never break on a transcript read.
  */
@@ -96,6 +107,8 @@ const SLICE_BYTES = 8 * 1024 * 1024;
 const AGENT_TOOLS = new Set(["Task", "proxy_Task", "Agent"]);
 /** tool_use names counted as a skill invocation (the `S` count). */
 const SKILL_TOOLS = new Set(["Skill", "proxy_Skill"]);
+/** tool_use name of the Workflow tool; a call is a new run unless it resumes one. */
+const WORKFLOW_TOOL = "Workflow";
 /**
  * FNV-1a over a buffer, returned as hex. Not cryptographic — this only has to
  * notice that a file's head changed, and it keeps the memo small (8 chars)
@@ -202,6 +215,7 @@ function tokensFromUsage(usage) {
  * @property {number} toolCalls    tool_use blocks seen — every tool, agents and skills included.
  * @property {number} agentCalls   Of those, Agent/Task invocations.
  * @property {number} skillCalls   Of those, Skill invocations.
+ * @property {number} workflowRuns Of those, Workflow calls that launch a run (resumes excluded).
  * @property {string|null} firstTimestamp `timestamp` of the first row carrying one (the session start).
  * @property {number} unsettled   Closed groups whose last row has `stop_reason: null` (usage never settled).
  * @property {boolean|null} lastSettled Whether `lastId`'s latest row is settled; null when no group is open.
@@ -210,8 +224,8 @@ function tokensFromUsage(usage) {
 function emptyMemo() {
     return {
         fp: "", consumed: 0, total: 0, lastId: null, lastIdTokens: 0,
-        toolCalls: 0, agentCalls: 0, skillCalls: 0, firstTimestamp: null,
-        unsettled: 0, lastSettled: null,
+        toolCalls: 0, agentCalls: 0, skillCalls: 0, workflowRuns: 0,
+        firstTimestamp: null, unsettled: 0, lastSettled: null,
     };
 }
 /** Field-wise memo equality, so a persist can be skipped when nothing moved. */
@@ -255,11 +269,13 @@ export function tallyFile(filePath, size, memo) {
             memo.consumed <= size &&
             typeof memo.total === "number" &&
             Number.isFinite(memo.total) &&
-            // A memo from before the call counts existed carries none; resuming
-            // it would count only the appended rows, so it rescans from 0 once.
+            // A memo from before the call counts (or `workflowRuns`) existed
+            // carries none; resuming it would count only the appended rows, so
+            // it rescans from 0 once.
             typeof memo.toolCalls === "number" &&
             typeof memo.agentCalls === "number" &&
             typeof memo.skillCalls === "number" &&
+            typeof memo.workflowRuns === "number" &&
             // A recorded `null` is honest (no row carried a timestamp yet);
             // anything else means the field was lost, and resuming would adopt
             // a later row's timestamp as the session start.
@@ -284,6 +300,7 @@ export function tallyFile(filePath, size, memo) {
         let toolCalls = resumable ? memo.toolCalls : 0;
         let agentCalls = resumable ? memo.agentCalls : 0;
         let skillCalls = resumable ? memo.skillCalls : 0;
+        let workflowRuns = resumable ? memo.workflowRuns : 0;
         let firstTimestamp = resumable && typeof memo.firstTimestamp === "string"
             ? memo.firstTimestamp
             : null;
@@ -349,6 +366,9 @@ export function tallyFile(filePath, size, memo) {
                         else if (SKILL_TOOLS.has(block.name)) {
                             skillCalls++;
                         }
+                        else if (block.name === WORKFLOW_TOOL && !block.input?.resumeFromRunId) {
+                            workflowRuns++;
+                        }
                     }
                 }
                 const usage = entry.message?.usage;
@@ -388,7 +408,7 @@ export function tallyFile(filePath, size, memo) {
         }
         return {
             fp, consumed, total: Math.max(0, total), lastId, lastIdTokens,
-            toolCalls, agentCalls, skillCalls, firstTimestamp,
+            toolCalls, agentCalls, skillCalls, workflowRuns, firstTimestamp,
             unsettled, lastSettled,
         };
     }
@@ -411,6 +431,7 @@ export function tallyFile(filePath, size, memo) {
  * @property {number} toolCalls
  * @property {number} agentCalls
  * @property {number} skillCalls
+ * @property {number} workflowRuns
  * @property {Date|null} sessionStart Timestamp of the first row, or null when no row carries one.
  * @property {boolean} approximate True when a closed call's usage never settled, so the total is low.
  */
@@ -459,6 +480,7 @@ export function tallyLead(leadTranscriptPath, sessionKey) {
             toolCalls: next.toolCalls,
             agentCalls: next.agentCalls,
             skillCalls: next.skillCalls,
+            workflowRuns: next.workflowRuns,
             sessionStart: start && !Number.isNaN(start.getTime()) ? start : null,
             approximate: next.unsettled > 0,
         };

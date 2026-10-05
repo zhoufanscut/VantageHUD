@@ -16,6 +16,7 @@ export const DEFAULT_HUD_LABELS = {
     tool: 'T',
     agent: 'A',
     skill: 'S',
+    workflow: 'W',
     staged: '+',
     modified: '!',
     untracked: '?',
@@ -44,6 +45,7 @@ export const HUD_LOCALE_LABELS = {
         tool: '工具',
         agent: '智能体',
         skill: '技能',
+        workflow: '工作流',
         staged: '已暂存',
         modified: '已修改',
         untracked: '未跟踪',
@@ -114,7 +116,8 @@ export const DEFAULT_HUD_CONFIG = {
     elements: {
         // ── Display elements, in render order (mirrors DEFAULT_ELEMENT_ORDER.main);
         //    the sub-toggles `effort` (model), `spendLimit` / `otherModelWeekly`
-        //    (rateLimits) and `detachedHead` (gitBranch) are kept beside their element ──
+        //    (rateLimits), `workflowRuns` (callCounts) and `detachedHead` (gitBranch)
+        //    are kept beside their element ──
         pathLabel: true,
         model: true, // Show only when Claude Code statusline stdin provides a model
         effort: true, // Fold the thinking-effort level (high/medium/…) into the model element; set false to hide it
@@ -126,6 +129,7 @@ export const DEFAULT_HUD_CONFIG = {
         showTokens: true, // tokens element — On by default; users can disable in config.json
         sessionHealth: true, // session element
         showCallCounts: true, // callCounts element — tool/agent/skill counts (oh-my-claudecode#710)
+        workflowRuns: false, // callCounts sub-toggle — add 🔀2 / W:2, the Workflow-tool runs launched (resumes not counted); off by default
         gitRepo: true, // Show repository name by default
         gitBranch: true, // Show branch (and worktree suffix) by default
         detachedHead: false, // gitBranch sub-toggle — on a detached HEAD show branch:@v1.0 / @a1b2c3d (bisect) / feat (rebase 2/3) instead of hiding; off by default

@@ -119,7 +119,7 @@ async function main() {
         }
         // Resolve worktree-mismatched transcript paths (oh-my-claudecode#1094)
         const resolvedTranscriptPath = resolveTranscriptPath(typeof stdin.transcript_path === "string" ? stdin.transcript_path : undefined, cwd);
-        // Everything cumulative — the token total, the tool/agent/skill counts
+        // Everything cumulative — the token total, the tool/agent/skill/workflow counts
         // and the session start — comes from the incremental whole-file tally
         // (token-tally.js), memoized per session so each frame parses only the
         // bytes appended since the last one. A tail read cannot provide these:
@@ -224,6 +224,8 @@ async function main() {
             toolCallCount: lead?.toolCalls ?? 0,
             agentCallCount: lead?.agentCalls ?? 0,
             skillCallCount: lead?.skillCalls ?? 0,
+            // Shown only with `elements.workflowRuns` on.
+            workflowRunCount: lead?.workflowRuns ?? 0,
             promptCache: getPromptCache(stdin),
             // `rate_limits.spend_limit` (Claude apps gateway); shown only with
             // `elements.spendLimit` on. Read from the payload alone: the usage
