@@ -66,9 +66,12 @@ export function getCacheDir() {
     return join(getHudInstallRoot(), 'cache');
 }
 /**
- * Sanitize a session key for use as a cache folder name. Mirrors the shell's
- * `sed 's/[^A-Za-z0-9_.-]/_/g'` (statusline.sh) so Node and the shell agree on
- * the folder for the same session. Empty/missing keys — and a bare `.`/`..`,
+ * Sanitize a session key for use as a cache folder name. Same safe set as the
+ * shell's `tr -c 'A-Za-z0-9_.-' '_'` (statusline.sh, run only for a key with an
+ * unsafe byte), but the shell maps every *byte* and this every UTF-16 unit, so
+ * a raw non-ASCII id (`é`: `__` vs `_`) names different folders. They agree
+ * because the wrapper exports its already-sanitized key as HUD_SESSION_KEY and
+ * Node prefers it; re-sanitizing that key changes nothing. Empty/missing keys — and a bare `.`/`..`,
  * which would otherwise point the session dir at the cache root or its parent —
  * collapse to `default`.
  */
@@ -175,7 +178,8 @@ export function findSvnWorkingCopyRoot(directory) {
  * (`~/work/link` → `/data/proj`) showed `/data/proj`, and lost the `~` when
  * the target was outside $HOME, while a plain symlinked directory kept the
  * link path. The root is mapped back only when that is exact: the cwd *is* the
- * root, or the cwd's path below the root is also the tail of the given path.
+ * root, or the cwd's path below the root is also the tail of the given path
+ * *and* what precedes that tail resolves to the root.
  * A link pointing *into* the tree (`link` → `repo/a/b`) has no such spelling,
  * and a lexical `link/../..` would name the wrong directory, so it keeps the
  * canonical root.
@@ -202,9 +206,19 @@ function onGivenPath(given, root) {
     }
     const below = real.slice(prefix.length);
     const tail = `${sep}${below}`;
-    return given.endsWith(tail) && given.length > tail.length
-        ? given.slice(0, given.length - tail.length)
-        : root;
+    if (!given.endsWith(tail) || given.length <= tail.length) {
+        return root;
+    }
+    // A matching tail is only a hint: `~/srcdir` → `repo/srcdir` ends in the
+    // in-tree path too, yet stripping it names `~`, not the repo, and git then
+    // ran in a directory that is no repository. Keep it only if it is the root.
+    const candidate = given.slice(0, given.length - tail.length);
+    try {
+        return realpathSync(candidate) === root ? candidate : root;
+    }
+    catch {
+        return root;
+    }
 }
 /**
  * Resolve a directory path to its version-control root.
