@@ -122,10 +122,14 @@ const MAX_SVN_WALK_DEPTH = 64;
  * git disowned, and it is the gate in front of every `svn` subprocess — a
  * non-SVN directory must not pay for SVN support.
  *
- * Returns the *topmost* contiguous ancestor holding a `.svn`, which is the
- * working-copy root under both on-disk layouts: 1.7+ keeps a single `.svn` at
- * the root, while pre-1.7 checkouts put one in every directory (there the
- * nearest `.svn` is merely the subdirectory you happen to be standing in).
+ * Under 1.7+ the nearest `.svn` holding `wc.db` is the root, and the climb
+ * stops there. That `.svn` exists only at a working-copy root, and also at the
+ * root of each external and of a checkout nested in another, so climbing on
+ * past it reported the *outer* project for a cwd inside an external (`wc/lib`
+ * from `^/lib/trunk lib`). Pre-1.7 checkouts have no `wc.db` and put a `.svn`
+ * in every directory, so for them the walk returns the *topmost* contiguous
+ * ancestor holding one (the nearest is merely the subdirectory you happen to
+ * be standing in).
  *
  * @param directory - Any directory inside (or above) a working copy
  * @returns The working-copy root, or null when there is no `.svn` above it
@@ -153,6 +157,16 @@ export function findSvnWorkingCopyRoot(directory) {
         }
         if (hasSvnDir) {
             root = dir;
+            let hasWcDb = false;
+            try {
+                hasWcDb = statSync(join(dir, '.svn', 'wc.db')).isFile();
+            }
+            catch {
+                // Pre-1.7 layout: keep climbing the contiguous run.
+            }
+            if (hasWcDb) {
+                break;
+            }
         }
         else if (root) {
             // The contiguous run of `.svn` ancestors ended — `root` is the top.

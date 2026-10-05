@@ -127,7 +127,9 @@ skimming. Add a term back (or a new one) when it earns its place; keep this shor
 - **working copy** *(SVN)* — the SVN counterpart to a git worktree: the tree
   holding a `.svn` directory. `findSvnWorkingCopyRoot`
   (`src/lib/worktree-paths.js`) finds its root by filesystem walk, never by
-  running `svn`.
+  running `svn`: the nearest `.svn` holding `wc.db` (1.7+; an external or a
+  nested checkout is its own working copy), else the topmost contiguous `.svn`
+  (pre-1.7).
 - **safeMode** — default `true` on every platform (an explicit `false` disables
   it, Windows included): strips non-SGR ANSI and swaps
   Unicode bars for ASCII (`src/hud/sanitize.js`). Changes the output, so worth
