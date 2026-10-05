@@ -4,6 +4,11 @@
   "private": true,
   "type": "module",
   "description": "A small, self-contained statusline for Claude Code.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zhoufanscut/VantageHUD.git"
+  },
   "engines": {
     "node": ">=14.17"
   }

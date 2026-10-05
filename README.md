@@ -397,3 +397,14 @@ git -C ~/.claude/hud pull
   bypass the render cache and render this payload synchronously; set globally
   it would cost every frame a full Node render), `HUD_DEBUG=1` (verbose; the
   wrapper also names the path each frame took, as `[HUD sh] …` on stderr).
+
+## Credits
+VantageHUD started from, and still carries code derived from, two MIT-licensed
+projects:
+- [claude-hud](https://github.com/jarrodwatts/claude-hud) by Jarrod Watts
+- [oh-my-claudecode](https://github.com/Yeachan-Heo/oh-my-claudecode) by Yeachan Heo
+
+Their copyright notices are kept in [`LICENSE`](LICENSE).
+
+## License
+[MIT](LICENSE).
