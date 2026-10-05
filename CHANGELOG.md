@@ -43,15 +43,19 @@ default, and an MIT `LICENSE`.
   HEAD has not moved), `branch:@a1b2c3d` (first 7 sha digits),
   `branch:feat (rebase 2/3)` during a rebase, and `(am n/m)`, `(merge)`,
   `(cherry-pick)`, `(revert)` or `(bisect)` for the other operations. It reads
-  only files in the git dir — no extra `git` call, except one
-  `rev-parse --short HEAD` in a reftable repo. The markers show only on a
-  detached HEAD; a merge on a branch still reads `branch:main`. New label keys
+  only files in the git dir — no extra `git` call when the payload carries
+  `workspace.repo`; without it, one `rev-parse --git-dir --git-common-dir`
+  for the `(wt:)` suffix, and in a reftable repo one `rev-parse --short HEAD`.
+  The markers show only on a detached HEAD; a merge, cherry-pick, revert or
+  `git am` on a branch still reads `branch:main`, and so does a `git
+  symbolic-ref` that fails or times out on a branch (the slot hides, as with
+  the flag off). New label keys
   `gitRebase`, `gitAm`, `gitMerge`, `gitCherryPick`, `gitRevert`, `gitBisect`.
 - **Opt-in: workflow runs in the call counts** (`elements.workflowRuns`,
   default `false`): `🔧42 🤖7 🔀2 ⚡3` (`W:2` in ASCII). A session that starts
-  agents only through the Workflow tool used to show no `🤖`. A run starts
-  many agents, so it gets its own glyph; `🤖` still counts Agent/Task calls,
-  one agent each. Resuming a run does not count again. New label key
+  agents only through the Workflow tool showed no sign of them; with the flag
+  it shows `🔀`. A run starts many agents, so it gets its own glyph; `🤖` still
+  counts Agent/Task calls only, one agent each, so the flag never adds a `🤖`. Resuming a run does not count again. New label key
   `workflow` (`W` / 工作流). The tally memo gained a field, so each
   `lead-tokens.json` rescans its transcript once after the upgrade, flag on or
   off.
@@ -98,10 +102,15 @@ default, and an MIT `LICENSE`.
 - **256-color output uses the true nearest xterm index.** Every bundled theme
   looks slightly different at 256 colors, and a user color with a `255`
   channel no longer turns near-black (`#ff0000` was index 232).
-- **16 colors: the separator and gauge track are visible.** Near-gray colors
-  went to black (the darker ones) or white, so on a 16-color terminal ` | `
-  and `░` vanished on every dark theme, and `daylight`'s faint text vanished
-  on white. They now map by lightness to black, bright black or white.
+- **16 colors: the separator and gauge track are visible on the dark
+  themes.** Near-gray colors went to black (the darker ones) or white, so on a
+  16-color terminal ` | ` and `░` vanished on every dark theme, and
+  `daylight`'s faint text vanished on white. They now map by lightness to
+  black, bright black or white. `daylight`'s separator is light enough to stay
+  white, so it is still invisible on white at 16 colors. Faint text (and
+  `graphite`'s labels) is now bright black instead of white, which hides it on
+  the few schemes that use bright black as the background, such as Solarized
+  Dark; use `HUD_COLOR_DEPTH=1` there.
 - **Small palette nudges** (each a shade, CIEDE2000 ≤ 2.7) so tokens stay
   apart at 256 and 16 colors: `aurora` `gradLow` `#7fd4c4`→`#72d3c3`,
   `gradMid` `#e3c08a`→`#e6c38d`, `track` `#8fc4d8`→`#8dc2d6`; `ember`
@@ -109,7 +118,9 @@ default, and an MIT `LICENSE`.
   `graphite` `gradHigh` `#c76a6a`→`#cd6a6a`; `daylight` `gradMid`
   `#9a6d00`→`#966d00`. At 256 colors no bundled theme puts two tokens on one
   index any more, and each effort level gets its own color; at 16 colors
-  `ember`'s watch tier is no longer the same red as its alert tier. A user
+  `ember`'s watch tier is no longer the same red as its alert tier, but it is
+  now the same bright yellow as `ember`'s plain text (still apart from calm
+  and alert). A user
   theme gets these only for the tokens it inherits from a bundled one.
 - **`modelFormat: "versioned"`** reads the version after any family
   (`Mythos 5` → `mythos 5`, `anthropic/claude-opus-5.5` → `opus 5.5`), and a

@@ -109,8 +109,10 @@ export const THEMES = {
     },
     // Graphite — near-monochrome dark, for a HUD that recedes. Only the usage
     // ramp carries real hue; git counts are barely-tinted grays that stay
-    // legible by glyph. Trade-off: at 16 colors the non-ramp tokens collapse
-    // onto two grays (13 colliding pairs, by far the most of the five) —
+    // legible by glyph. Trade-off: at 16 colors every token but gradMid and
+    // gradHigh collapses onto two grays — gradLow too, being gray by design, so
+    // the calm tier is the white of plain text (13 colliding pairs, by far the
+    // most of the five) —
     // deliberate, since saturating them enough to survive `rgbTo16` would lose
     // the point of the theme, and the +/!/?/✗ glyphs still carry the meaning.
     graphite: {

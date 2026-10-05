@@ -112,6 +112,11 @@ function rgbTo16(r, g, b) {
     // on a light terminal, black on a dark one does not. A dim gray used to go
     // to black, which hid the ` | ` separator and the `░` track on every dark
     // theme, and a mid gray to white, which hid daylight's `faint` on white.
+    // daylight's `sep` (#d0d7de) is light enough to stay white, so on its white
+    // background ` | ` and `░` are still invisible at 16 colors. Known cost: a
+    // scheme whose bright black IS its background (Solarized Dark, color8 =
+    // base03) hides everything sent to 90 — `faint`, `sep`, graphite's `label`;
+    // HUD_COLOR_DEPTH=1 or a user theme with lighter grays avoids it.
     // 97 is left out on purpose: it would only make the light text tokens
     // brighter than they are in truecolor.
     if (max - min < 40 || key === 7) {

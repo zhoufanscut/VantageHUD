@@ -82,13 +82,14 @@
  * **Workflow runs are counted apart from agent calls** (`workflowRuns`), not
  * folded into `agentCalls`, because the two are different units. An Agent call
  * starts one agent: 10 Agent calls across 5 local leads left exactly 10 flat
- * `subagents/agent-*.jsonl`. A Workflow call starts a whole run: 4 Workflow
- * calls in one lead left 3 `subagents/workflows/wf_<id>/` dirs holding 8, 15
- * and 25 agents (48 in all), and the 4th call was a resume
- * (`input.resumeFromRunId`) that reused an existing run's dir. So a Workflow
- * call counts as a run only when it is not a resume, and stays a plain tool
- * call in `toolCalls` either way. A launch that fails still counts, as an
- * Agent call that fails does.
+ * `subagents/agent-*.jsonl`. A Workflow call starts a whole run: the only
+ * local lead with Workflow calls (one session, so n=1) had made 4 of them,
+ * which left 3 `subagents/workflows/wf_<id>/` dirs of 15 to 25 agents each
+ * (counted 2026-10-05 with one run still going, so a recount finds more), and
+ * the 4th call was a resume (`input.resumeFromRunId`) that reused an existing
+ * run's dir. So a Workflow call counts as a run only when it is not a resume,
+ * and stays a plain tool call in `toolCalls` either way. A launch that fails
+ * still counts, as an Agent call that fails does.
  *
  * Everything here fails to a null/zero total rather than throwing: the HUD must
  * never break on a transcript read.
