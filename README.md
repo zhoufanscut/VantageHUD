@@ -471,7 +471,7 @@ projects:
 - [claude-hud](https://github.com/jarrodwatts/claude-hud) by Jarrod Watts
 - [oh-my-claudecode](https://github.com/Yeachan-Heo/oh-my-claudecode) by Yeachan Heo
 
-Their copyright notices are kept in [`LICENSE`](LICENSE).
+Their copyright notices are kept in [`NOTICE`](NOTICE).
 
 ## License
 [MIT](LICENSE).

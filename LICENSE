@@ -2,15 +2,6 @@ MIT License
 
 Copyright (c) 2026 zhoufanscut
 
-Portions of this software are derived from the following MIT-licensed
-projects, whose copyright notices are kept as their licenses require:
-
-  claude-hud (https://github.com/jarrodwatts/claude-hud)
-  Copyright (c) 2026 Jarrod Watts
-
-  oh-my-claudecode (https://github.com/Yeachan-Heo/oh-my-claudecode)
-  Copyright (c) 2025 Yeachan Heo
-
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
 in the Software without restriction, including without limitation the rights
