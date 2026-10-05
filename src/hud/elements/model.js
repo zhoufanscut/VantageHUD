@@ -9,30 +9,29 @@
 import { paint, lerpRgb, paintLabel, PALETTE } from '../colors.js';
 import { truncateToWidth } from '../../lib/string-width.js';
 /**
- * Extract version from a model ID or display name.
- * E.g., 'claude-opus-4-7-20260416' -> '4.7'
+ * Extract the version that follows the model family in an ID or display name.
+ * `family` is what modelFamilyKey found, so a family that ships later needs no
+ * code change here either.
+ * E.g., 'claude-opus-4-7-20260416'  -> '4.7'
  *       'claude-haiku-4-5-20251001' -> '4.5'
  *       'claude-fable-5'            -> '5'
- *       'claude-3-5-sonnet-20241022' -> '3.5'
+ *       'anthropic/claude-opus-5.5' -> '5.5'
+ *       'Opus 4.7 (1M context)'     -> '4.7'
+ *       'claude-3-5-sonnet-20241022' -> '3.5'  (legacy: version before family)
  *       'claude-3-opus-20240229'    -> '3'
- *       'Opus 4.7'                  -> '4.7'
  */
-function extractVersion(modelId) {
-    // Match hyphenated ID patterns like opus-4-6, haiku-4-5, fable-5 (minor optional).
-    // Version groups are 1-2 digits; the `(?!\d)` guards reject the trailing
-    // release date (e.g. "sonnet-20241022") that would otherwise read as a version.
-    const idMatch = modelId.match(/(?:opus|sonnet|haiku|fable)-(\d{1,2})(?!\d)(?:-(\d{1,2})(?!\d))?/i);
+function extractVersion(modelId, family) {
+    const fam = family.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // Version groups are 1-2 digits, and the version must end at a non-word
+    // character: that rejects the trailing release date ("sonnet-20241022")
+    // and a suffixed token that is not a version ("gpt-4o").
+    const idMatch = modelId.match(new RegExp(`(?:^|[^a-z0-9])${fam}[-.\\s]+(\\d{1,2})(?:[-.](\\d{1,2}))?(?![\\w.])`, 'i'));
     if (idMatch)
         return idMatch[2] ? `${idMatch[1]}.${idMatch[2]}` : idMatch[1];
-    // Match legacy raw ID patterns like claude-3-5-sonnet-20241022 and claude-3-opus-20240229
-    const legacyIdMatch = modelId.match(/claude-(\d{1,2})(?:-(\d{1,2}))?-(?:opus|sonnet|haiku|fable)/i);
-    if (legacyIdMatch) {
-        return legacyIdMatch[2] ? `${legacyIdMatch[1]}.${legacyIdMatch[2]}` : legacyIdMatch[1];
-    }
-    // Match display name patterns like "Sonnet 4.5", "Opus 4.7", "Fable 5"
-    const displayMatch = modelId.match(/(?:opus|sonnet|haiku|fable)\s+(\d+(?:\.\d+)?)/i);
-    if (displayMatch)
-        return displayMatch[1];
+    // Legacy ids carry the version before the family: claude-3-5-sonnet-20241022.
+    const legacyMatch = modelId.match(new RegExp(`claude[-\\s](\\d{1,2})(?:[-.](\\d{1,2}))?[-\\s]${fam}`, 'i'));
+    if (legacyMatch)
+        return legacyMatch[2] ? `${legacyMatch[1]}.${legacyMatch[2]}` : legacyMatch[1];
     return null;
 }
 /**
@@ -63,6 +62,7 @@ function effortColor(level) {
  *
  * Claude models → family extracted generically, so future families
  * (opus / sonnet / haiku / fable / whatever ships next) work with no code change.
+ * An ARN → its service (`bedrock`): an application inference profile names no model.
  * Anything else (proxy/gateway models) → the leading token, which mirrors how
  * the Claude families read: gpt-4o → gpt, deepseek-chat → deepseek, qwen2.5-72b → qwen2.5.
  */
@@ -80,6 +80,9 @@ function modelFamilyKey(source) {
         if (legacy)
             return legacy[1];
     }
+    // An ARN (a Bedrock application inference profile names no model): its service.
+    if (s.startsWith('arn:'))
+        return s.split(':')[2] || 'arn';
     // Non-Claude (or unrecognized): the leading token.
     const token = s.split(/[\s\-_/]+/).filter(Boolean)[0] || s;
     return truncateToWidth(token, 14);
@@ -99,7 +102,7 @@ export function renderModel(modelId, format = 'short', effortLevel = null) {
         return null;
     let key = family;
     if (format === 'versioned') {
-        const version = extractVersion(String(modelId));
+        const version = extractVersion(String(modelId), family);
         if (version)
             key = `${family} ${version}`;
     }
