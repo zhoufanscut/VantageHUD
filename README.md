@@ -189,6 +189,24 @@ node preview-themes.mjs --ascii        # bar glyphs as safeMode renders them
 The sample values are made up so every theme shows identical content — it is a
 color comparison, not a live HUD. Your own themes from `config.json` show up too.
 
+### Color depth
+
+The HUD picks truecolor, 256 or 16 colors from the environment, first match wins:
+
+1. `HUD_COLOR_DEPTH` = `2` (truecolor), `1` (256), `0` (16) or `none`.
+2. `FORCE_COLOR` = `0` turns color off; `1`/`2`/`3` is a floor of 16 / 256 /
+   truecolor.
+3. `NO_COLOR` (any non-empty value) turns color off.
+4. `COLORTERM=truecolor` or `24bit`, `WT_SESSION` (Windows Terminal), or
+   `TERM_PROGRAM` = `iTerm.app` / `vscode` / `WezTerm` → truecolor.
+5. `TERM=dumb` → no color; a `TERM` with `256`, or a bare `xterm`/`screen`/`tmux`
+   → 256; anything else → 16.
+
+SSH does not forward `COLORTERM`, so a truecolor terminal reached over SSH gets
+256 colors. To get truecolor there, set `HUD_COLOR_DEPTH=2` (or
+`COLORTERM=truecolor`) under `env` in Claude Code's `settings.json`. With no
+color, bold and resets are still printed.
+
 ### What each color paints
 
 A palette is exactly these 10 **tokens**. Several do double duty, which is worth

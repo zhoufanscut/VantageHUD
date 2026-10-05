@@ -51,18 +51,12 @@ Available: ${listThemes().join(', ')}`);
 const depthFlag = args.find((a) => a.startsWith('--depth='));
 if (depthFlag) {
     const depth = depthFlag.slice('--depth='.length);
-    const env = { ...process.env };
-    delete env.COLORTERM;
-    if (depth === '2')
-        env.COLORTERM = 'truecolor';
-    else if (depth === '1')
-        env.TERM = 'xterm-256color';
-    else if (depth === '0')
-        env.TERM = 'dumb';
-    else {
+    if (!['0', '1', '2'].includes(depth)) {
         console.error(`unknown --depth=${depth} (expected 0, 1 or 2)`);
         process.exit(1);
     }
+    // HUD_COLOR_DEPTH beats every other variable colors.js reads.
+    const env = { ...process.env, HUD_COLOR_DEPTH: depth };
     // fileURLToPath, not URL.pathname: the latter keeps a leading slash on
     // Windows drive paths (/C:/…), which spawn cannot resolve.
     const rest = args.filter((a) => a !== depthFlag);

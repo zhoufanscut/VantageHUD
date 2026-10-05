@@ -67,6 +67,9 @@ skimming. Add a term back (or a new one) when it earns its place; keep this shor
   it shadows a bundled palette, else to `DEFAULT_THEME` — so `"themes": {"ember":
   {…}}` retints ember in place, and its `base` resolves to the *bundled* ember
   rather than looping.
+- **color depth** — how `fg()` writes a token: `2` truecolor, `1` 256-color,
+  `0` basic 16, `-1` no color. Detected once at import (`colors.js#detectColorDepth`);
+  `HUD_COLOR_DEPTH` overrides it. Not part of a theme.
 
 ## Runtime & state
 

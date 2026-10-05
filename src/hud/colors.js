@@ -18,16 +18,54 @@ export const RESET = '\x1b[0m';
 // there and surfaced here as `PALETTE`.
 /**
  * Detect terminal color depth once per process.
- *   2 → 24-bit truecolor   (COLORTERM=truecolor|24bit)
- *   1 → 256-color          (TERM contains "256")
- *   0 → basic 16-color     (fallback)
+ *   2 → 24-bit truecolor
+ *   1 → 256-color
+ *   0 → basic 16-color
+ *  -1 → no color (fg() emits nothing; bold and resets stay)
+ *
+ * First match wins:
+ *   1. HUD_COLOR_DEPTH = 0|1|2|none — the explicit override, for a terminal
+ *      the rest guesses wrong (SSH does not forward COLORTERM, and a hook's
+ *      environment can claim TERM=dumb while Claude Code renders ANSI itself).
+ *   2. FORCE_COLOR = 0|false → none; 1|2|3 (or empty/true = 1) is a floor of
+ *      16 / 256 / truecolor over the detection below. It beats NO_COLOR, as in
+ *      Node and supports-color.
+ *   3. NO_COLOR set and non-empty → none (no-color.org).
+ *   4. COLORTERM = truecolor|24bit → 2.
+ *   5. WT_SESSION (Windows Terminal) or TERM_PROGRAM = iTerm.app|vscode|WezTerm → 2.
+ *   6. TERM = dumb → none; TERM containing "256", or a bare xterm/screen/tmux → 1.
+ *   7. Anything else → 0.
  */
 function detectColorDepth() {
-    const colorterm = (process.env.COLORTERM || '').toLowerCase();
+    const env = process.env;
+    const override = String(env.HUD_COLOR_DEPTH || '').trim().toLowerCase();
+    if (override === 'none')
+        return -1;
+    if (override === '0' || override === '1' || override === '2')
+        return Number(override);
+    let floor = null;
+    if (env.FORCE_COLOR !== undefined) {
+        const force = String(env.FORCE_COLOR).trim().toLowerCase();
+        if (force === '0' || force === 'false')
+            return -1;
+        floor = force === '2' ? 1 : force === '3' ? 2 : 0;
+    }
+    const detected = detectFromTerminal(env);
+    return floor === null ? detected : Math.max(floor, detected);
+}
+function detectFromTerminal(env) {
+    if (env.NO_COLOR)
+        return -1;
+    const colorterm = (env.COLORTERM || '').toLowerCase();
     if (colorterm.includes('truecolor') || colorterm.includes('24bit')) {
         return 2;
     }
-    const term = (process.env.TERM || '').toLowerCase();
+    if (env.WT_SESSION || ['iTerm.app', 'vscode', 'WezTerm'].includes(env.TERM_PROGRAM || '')) {
+        return 2;
+    }
+    const term = (env.TERM || '').toLowerCase();
+    if (term === 'dumb')
+        return -1;
     if (term.includes('256')) {
         return 1;
     }
@@ -82,6 +120,8 @@ function rgbTo16(r, g, b) {
  */
 export function fg(rgb) {
     const [r, g, b] = rgb;
+    if (COLOR_DEPTH < 0)
+        return '';
     if (COLOR_DEPTH === 2)
         return `\x1b[38;2;${r};${g};${b}m`;
     if (COLOR_DEPTH === 1)
@@ -90,6 +130,7 @@ export function fg(rgb) {
 }
 /** Wrap text in a truecolor foreground color (with reset). */
 export function paint(rgb, text) {
+    // The reset stays even without color: it also ends the path's bold.
     return `${fg(rgb)}${text}${RESET}`;
 }
 /** Linear interpolation between two scalars. */
