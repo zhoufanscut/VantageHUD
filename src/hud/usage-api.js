@@ -171,8 +171,12 @@ function writeCache(opts) {
             rejectedToken: opts.rejectedToken,
         };
         // Atomic write: this file is shared across sessions and read on an
-        // unlocked fast path, so a torn read must never be possible.
-        atomicWriteJsonSync(cachePath, cache);
+        // unlocked fast path, so a torn read must never be possible. Durable
+        // too, unlike the per-session caches: it carries the 429/auth backoff
+        // (rateLimitedUntil, rejectedToken), and losing that to a crash would
+        // cost an extra API call, not just a rebuild. Written about once per
+        // poll interval, so the fsyncs cost nothing per frame.
+        atomicWriteJsonSync(cachePath, cache, { durable: true });
     }
     catch {
         // Ignore cache write errors

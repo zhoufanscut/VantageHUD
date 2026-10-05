@@ -80,7 +80,10 @@ function writeMemo(file, record) {
         return;
     }
     try {
-        atomicWriteJsonSync(file, record);
+        // Durable: the record can be a failed walk's backoff (`failedAt`), and
+        // a crash that rolled it back would let a slow tree walk again with the
+        // long timeout. Written only around a walk, so the fsyncs are rare.
+        atomicWriteJsonSync(file, record, { durable: true });
     }
     catch {
         // Best-effort: a missed memo only costs the next frame a rescan.
