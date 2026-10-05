@@ -103,9 +103,17 @@ skimming. Add a term back (or a new one) when it earns its place; keep this shor
   payload, shown next to the model.
 - **ctx** / **context bar** — context-window usage %, the `contextBar` element.
 - **rate limits** / **buckets** — usage windows: five-hour (`5h`), seven-day
-  (`7d`), and the per-model weekly ones (`op` Opus, `sn` Sonnet, and any other
-  model the usage API's `limits[]` names, labelled by `modelWeeklyLabel` —
-  `fb` for Fable). From the payload + the usage API (`src/hud/usage-api.js`).
+  (`7d`), and the per-model weekly ones (`op` Opus, `sn` Sonnet, and — only
+  with the opt-in `otherModelWeekly` flag — any other model the usage API's
+  `limits[]` names, labelled by `modelWeeklyLabel`: `fb` for Fable). From the
+  payload + the usage API (`src/hud/usage-api.js`).
+- **spend** / **spend limit** — the opt-in `spend:` part of the rate-limits
+  element (flag `spendLimit`, off by default): the payload's
+  `rate_limits.spend_limit`, sent only behind a Claude apps gateway that caps
+  your spend. `spend:63%($314.12/$500.00)(25d3h)` — share of the cap used
+  (not clamped: `104%` once over), estimated spend / cap in USD (once Claude
+  Code has fetched them), time to the period's reset. Not `extra:`, which is
+  a Claude.ai subscription's paid overage from the usage API.
 - **token** / **subagents dir** / **teammate tokens** — the `token:` element's
   session token total (`sessionTotalTokens`) / `<lead-transcript>/subagents/` where
   Claude Code stores each subagent's own `agent-*.jsonl` transcript — flat for

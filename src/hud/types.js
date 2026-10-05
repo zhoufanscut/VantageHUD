@@ -10,6 +10,7 @@ export const DEFAULT_HUD_LABELS = {
     promptCache: 'cache',
     cacheWarm: 'warm',
     cacheCold: 'cold',
+    spendLimit: 'spend',
     critical: 'CRITICAL',
     compress: 'COMPRESS?',
     tool: 'T',
@@ -31,6 +32,7 @@ export const HUD_LOCALE_LABELS = {
         promptCache: '缓存',
         cacheWarm: '热',
         cacheCold: '冷',
+        spendLimit: '支出',
         critical: '危急',
         compress: '建议压缩',
         tool: '工具',
@@ -99,11 +101,14 @@ export const DEFAULT_HUD_CONFIG = {
     labels: DEFAULT_HUD_LABELS,
     elements: {
         // ── Display elements, in render order (mirrors DEFAULT_ELEMENT_ORDER.main);
-        //    `effort` is a model sub-toggle kept beside `model` ──
+        //    the sub-toggles `effort` (model) and `spendLimit` / `otherModelWeekly`
+        //    (rateLimits) are kept beside their element ──
         pathLabel: true,
         model: true, // Show only when Claude Code statusline stdin provides a model
         effort: true, // Fold the thinking-effort level (high/medium/…) into the model element; set false to hide it
         rateLimits: true, // Show rate limits by default
+        spendLimit: false, // rateLimits sub-toggle — spend:63%($314.12/$500.00)(25d3h), the payload's Claude apps gateway spend limit; off by default
+        otherModelWeekly: false, // rateLimits sub-toggle — per-model weekly buckets for models other than Sonnet/Opus (fb: = Fable), from the usage API's limits[]; off by default
         contextBar: true,
         promptCache: false, // cache: element — prompt cache warm until HH:MM / cold (re-cache size); off by default
         showTokens: true, // tokens element — On by default; users can disable in config.json
@@ -123,7 +128,7 @@ export const DEFAULT_HUD_CONFIG = {
         contextWarning: 70,
         contextCompactSuggestion: 80,
         contextCritical: 85,
-        sonnetWeeklyVisibility: 80, // Hide the Sonnet weekly (sn) bucket, and any other per-model weekly bucket but op (fb = Fable, …), until its usage % reaches this (0 = always show)
+        sonnetWeeklyVisibility: 80, // Hide the Sonnet weekly (sn) bucket, and with otherModelWeekly on any other per-model weekly bucket but op (fb = Fable, …), until its usage % reaches this (0 = always show)
     },
     usageApiPollIntervalMs: DEFAULT_HUD_USAGE_POLL_INTERVAL_MS,
     wrapMode: 'truncate',

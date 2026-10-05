@@ -7,7 +7,7 @@ import { DEFAULT_HUD_CONFIG, DEFAULT_ELEMENT_ORDER, DEFAULT_HUD_LABELS } from ".
 import { paint, paintWarn, PALETTE } from "./colors.js";
 import { stringWidth, getCharWidth } from "../lib/string-width.js";
 import { renderContext, renderContextWithBar } from "./elements/context.js";
-import { renderRateLimits, renderRateLimitsWithBar, renderRateLimitsError } from "./elements/limits.js";
+import { renderRateLimits, renderRateLimitsWithBar, renderRateLimitsError, renderSpendLimit } from "./elements/limits.js";
 import { renderSession } from "./elements/session.js";
 import { renderTokenUsage } from "./elements/token-usage.js";
 import { renderGitRepo, renderGitBranch, renderGitStatus } from "./elements/git.js";
@@ -298,16 +298,29 @@ export async function render(context, config) {
         put("pathLabel", () => `\x1b[1m${paint(PALETTE.text, cleanText(shortenHomePath(context.cwd, home)))}`);
     }
     // Rate limits (5h and weekly) - data takes priority over error indicator.
-    if (enabledElements.rateLimits && context.rateLimitsResult) {
+    // Two opt-in additions, both off by default: `otherModelWeekly` (per-model
+    // weekly buckets beyond sn:/op:, from the usage API) and `spendLimit` (the
+    // payload's Claude apps gateway spend limit, appended as `spend:`). Behind
+    // a gateway the usage API is skipped, so `spend:` can be the whole element.
+    const spendLimit = enabledElements.spendLimit === true ? context.spendLimit : null;
+    if (enabledElements.rateLimits && (context.rateLimitsResult || spendLimit)) {
         put("rateLimits", () => {
-            if (context.rateLimitsResult.rateLimits) {
+            let limitsPart = null;
+            if (context.rateLimitsResult?.rateLimits) {
                 const stale = context.rateLimitsResult.stale;
                 const snThreshold = config.thresholds?.sonnetWeeklyVisibility ?? 80;
-                return enabledElements.useBars
-                    ? renderRateLimitsWithBar(context.rateLimitsResult.rateLimits, undefined, stale, snThreshold)
-                    : renderRateLimits(context.rateLimitsResult.rateLimits, stale, snThreshold);
+                const showOtherModels = enabledElements.otherModelWeekly === true;
+                limitsPart = enabledElements.useBars
+                    ? renderRateLimitsWithBar(context.rateLimitsResult.rateLimits, undefined, stale, snThreshold, showOtherModels)
+                    : renderRateLimits(context.rateLimitsResult.rateLimits, stale, snThreshold, showOtherModels);
             }
-            return renderRateLimitsError(context.rateLimitsResult);
+            else if (context.rateLimitsResult) {
+                limitsPart = renderRateLimitsError(context.rateLimitsResult);
+            }
+            const spendPart = spendLimit
+                ? renderSpendLimit(spendLimit, hudLabels.spendLimit, enabledElements.useBars === true)
+                : null;
+            return [limitsPart, spendPart].filter(Boolean).join(" ") || null;
         });
     }
     if (enabledElements.sessionHealth && context.sessionHealth) {

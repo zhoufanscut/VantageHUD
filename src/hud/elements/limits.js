@@ -43,11 +43,13 @@ function hasReset(date) {
 }
 /**
  * The other per-model weekly buckets (`fb:` for Fable, say), from the usage
- * API's `limits[]`. Gated like `sn:`: a model the user barely touches would
- * otherwise sit at 0% on every line. Labels are letters only (parser).
+ * API's `limits[]`. Opt-in (`elements.otherModelWeekly`, default off: they
+ * are new to the line), then gated like `sn:`: a model the user barely
+ * touches would otherwise sit at 0% on every line. Labels are letters only
+ * (parser).
  */
-function pushModelWeekly(parts, fmt, buckets, threshold) {
-    if (!Array.isArray(buckets))
+function pushModelWeekly(parts, fmt, buckets, threshold, show) {
+    if (!show || !Array.isArray(buckets))
         return;
     for (const b of buckets) {
         if (b && typeof b.label === 'string' && typeof b.percent === 'number' && Math.round(b.percent) >= threshold) {
@@ -60,7 +62,7 @@ function pushModelWeekly(parts, fmt, buckets, threshold) {
  *
  * Format: 5h:45%(3h42m) 7d:12%(2d5h) sn:20%(1d2h) op:5%(1d2h) fb:90%(1d2h)
  */
-export function renderRateLimits(limits, stale, sonnetThreshold = 0) {
+export function renderRateLimits(limits, stale, sonnetThreshold = 0, showOtherModels = false) {
     if (!limits)
         return null;
     const staleMarker = stale ? paintFaint('*') : '';
@@ -92,7 +94,7 @@ export function renderRateLimits(limits, stale, sonnetThreshold = 0) {
     if (limits.opusWeeklyPercent != null) {
         parts.push(fmt('op', limits.opusWeeklyPercent, limits.opusWeeklyResetsAt));
     }
-    pushModelWeekly(parts, fmt, limits.modelWeekly, sonnetThreshold);
+    pushModelWeekly(parts, fmt, limits.modelWeekly, sonnetThreshold, showOtherModels);
     if (limits.extraUsagePercent != null && limits.extraUsageLimitUsd != null && !hasReset(limits.extraUsageResetsAt)) {
         const extra = Math.min(100, Math.max(0, Math.round(limits.extraUsagePercent)));
         const extraReset = formatResetTime(limits.extraUsageResetsAt);
@@ -108,7 +110,7 @@ export function renderRateLimits(limits, stale, sonnetThreshold = 0) {
  *
  * Format: 5h:[████░░░░]45%(3h42m) 7d:[█░░░░░░░]12%(2d5h) ...
  */
-export function renderRateLimitsWithBar(limits, barWidth = 8, stale, sonnetThreshold = 0) {
+export function renderRateLimitsWithBar(limits, barWidth = 8, stale, sonnetThreshold = 0, showOtherModels = false) {
     if (!limits)
         return null;
     const staleMarker = stale ? paintFaint('*') : '';
@@ -141,7 +143,7 @@ export function renderRateLimitsWithBar(limits, barWidth = 8, stale, sonnetThres
     if (limits.opusWeeklyPercent != null) {
         parts.push(fmt('op', limits.opusWeeklyPercent, limits.opusWeeklyResetsAt));
     }
-    pushModelWeekly(parts, fmt, limits.modelWeekly, sonnetThreshold);
+    pushModelWeekly(parts, fmt, limits.modelWeekly, sonnetThreshold, showOtherModels);
     if (limits.extraUsagePercent != null && limits.extraUsageLimitUsd != null && !hasReset(limits.extraUsageResetsAt)) {
         const extra = Math.min(100, Math.max(0, Math.round(limits.extraUsagePercent)));
         const color = getColor(extra);
@@ -155,6 +157,37 @@ export function renderRateLimitsWithBar(limits, barWidth = 8, stale, sonnetThres
     }
     const shown = parts.filter(Boolean);
     return shown.length > 0 ? shown.join(' ') : null;
+}
+/**
+ * Render the Claude apps gateway spend limit (`getSpendLimitFromStdin`), the
+ * opt-in `spend:` part of the rate-limits element (`elements.spendLimit`).
+ *
+ * Format: spend:63%($314.12/$500.00)(25d3h), or spend:63%(25d3h) until the
+ * dollar amounts arrive. Laid out like `extra:`, with one difference: the
+ * percent is not clamped, so an exceeded limit reads `spend:104%` (the bar
+ * and the color stop at 100). The payload is live, so there is no stale
+ * marker; a period whose reset time has passed is hidden, as Claude Code
+ * itself drops it.
+ */
+export function renderSpendLimit(spend, label = 'spend', useBars = false, barWidth = 8) {
+    if (!spend || typeof spend.percent !== 'number' || !Number.isFinite(spend.percent))
+        return null;
+    if (hasReset(spend.resetsAt))
+        return null;
+    const pct = Math.max(0, Math.round(spend.percent));
+    const capped = Math.min(100, pct);
+    const color = getColor(capped);
+    let gauge = '';
+    if (useBars) {
+        const filled = Math.round((capped / 100) * barWidth);
+        gauge = `[${color}${'█'.repeat(filled)}${TRACK}${'░'.repeat(barWidth - filled)}${RESET}]`;
+    }
+    const dollarPart = spend.usedUsd != null && spend.limitUsd != null
+        ? `${FAINT}($${spend.usedUsd.toFixed(2)}/$${spend.limitUsd.toFixed(2)})${RESET}`
+        : '';
+    const reset = formatResetTime(spend.resetsAt);
+    const head = `${LABEL}${label}:${RESET}${gauge}${color}${pct}%${RESET}${dollarPart}`;
+    return reset ? `${head}${LABEL}(${reset})${RESET}` : head;
 }
 /**
  * Render an error indicator when the built-in rate limit API call fails.

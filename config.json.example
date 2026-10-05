@@ -22,6 +22,8 @@
     "model": true,
     "effort": true,
     "rateLimits": true,
+    "spendLimit": false,
+    "otherModelWeekly": false,
     "contextBar": true,
     "promptCache": false,
     "showTokens": true,

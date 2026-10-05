@@ -255,6 +255,38 @@ export function getRateLimitsFromStdin(stdin) {
     return result;
 }
 /**
+ * The payload's `rate_limits.spend_limit` (behind a Claude apps gateway that
+ * sets a spend limit; Claude Code v2.1.251+) reduced to what the `spend:`
+ * part of the rate-limits element shows, or null when it is absent or has no
+ * usable `used_percentage`. The percent is NOT clamped: it runs past 100 once
+ * the limit is exceeded, and the gateway then blocks requests (429) until
+ * `resets_at`. The dollar amounts (v2.1.284+ on both Claude Code and the
+ * gateway) arrive by a separate request about every five minutes and stay
+ * absent under CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC, so they are kept
+ * only as a pair of finite, non-negative numbers; `period` (daily | weekly |
+ * monthly) is not shown — the reset countdown already says when it ends.
+ */
+export function getSpendLimitFromStdin(stdin) {
+    const spend = stdin?.rate_limits?.spend_limit;
+    if (!spend || typeof spend !== 'object' || Array.isArray(spend)) {
+        return null;
+    }
+    const used = spend.used_percentage;
+    if (typeof used !== 'number' || !Number.isFinite(used)) {
+        return null;
+    }
+    const usd = (value) => (typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null);
+    const usedUsd = usd(spend.used_usd);
+    const limitUsd = usd(spend.limit_usd);
+    const hasDollars = usedUsd != null && limitUsd != null;
+    return {
+        percent: Math.max(0, used),
+        resetsAt: parseResetDate(spend.resets_at),
+        usedUsd: hasDollars ? usedUsd : null,
+        limitUsd: hasDollars ? limitUsd : null,
+    };
+}
+/**
  * The earliest moment after `nowMs` at which Claude Code re-runs the statusLine
  * command on its own: a rate-limit window in this payload reaching its
  * `resets_at`, or a warm prompt cache reaching its `expires_at` (both

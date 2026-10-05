@@ -135,7 +135,7 @@ cp ~/.claude/hud/config.json.example ~/.claude/hud/config.json
   | --- | --- |
   | `pathLabel` | `pathLabel` |
   | `model` | `model` (plus `effort` for the `:high` suffix) |
-  | `rateLimits` | `rateLimits` |
+  | `rateLimits` | `rateLimits` (plus `spendLimit` and `otherModelWeekly`, both off by default — see below) |
   | `contextBar` | `contextBar` |
   | `promptCache` | `promptCache` (off by default — see below) |
   | `tokens` | `showTokens` |
@@ -147,7 +147,8 @@ cp ~/.claude/hud/config.json.example ~/.claude/hud/config.json
 - `labels` (top level) renames the fragment labels over the `locale`'s, e.g.
   `"labels": { "context": "ctx", "tokens": "tok" }`. Keys: `context`,
   `tokens`, `session`, `promptCache`, `cacheWarm`, `cacheCold` (the
-  `cache:` / `warm` / `cold` words), `critical` and `compress` (the `CRITICAL` / `COMPRESS?`
+  `cache:` / `warm` / `cold` words), `spendLimit` (the `spend:` word),
+  `critical` and `compress` (the `CRITICAL` / `COMPRESS?`
   text after `ctx:`), `tool`, `agent`, `skill`, `staged`, `modified`,
   `untracked`, `conflict`, `ahead`, `behind`.
 - `usageApiPollIntervalMs` (default `90000`, minimum `30000`): how often the
@@ -156,9 +157,9 @@ cp ~/.claude/hud/config.json.example ~/.claude/hud/config.json
   (default `70` / `80` / `85`): `ctx:` turns amber at the first, adds
   `COMPRESS?` at the second, and turns rose with `CRITICAL` at the third.
 - `thresholds.sonnetWeeklyVisibility` (default `80`, `0` = always): the
-  per-model weekly buckets — `sn:` (Sonnet) and any other model the usage API
-  reports, such as `fb:` (Fable) — stay hidden until their usage reaches this
-  percent. `op:` (Opus) always shows.
+  per-model weekly buckets — `sn:` (Sonnet) and, with `otherModelWeekly` on,
+  any other model the usage API reports, such as `fb:` (Fable) — stay hidden
+  until their usage reaches this percent. `op:` (Opus) always shows.
 - **Colors** are set by `theme`, and you can define your own palettes under
   `themes` — see [Themes](#themes) below.
 - `maxWidth` / `wrapMode`: the line is cut to `maxWidth` columns with `...`
@@ -183,6 +184,23 @@ cp ~/.claude/hud/config.json.example ~/.claude/hud/config.json
   The expiry is a clock time, not a countdown, so it stays right while the
   session is idle. Claude Code re-runs the status line when the cache expires,
   so it turns `cold` then without a `refreshInterval`.
+- `spendLimit` (inside `elements`, default `false`): set it to `true` to add a
+  `spend:` part to the rate limits when you work behind a Claude apps gateway
+  that sets a spend limit for you. It reads the payload's
+  `rate_limits.spend_limit` (Claude Code 2.1.251 or later):
+  `spend:63%($314.12/$500.00)(25d3h)` is the share of your limit used, your
+  estimated spend and the limit in US dollars, and the time until the limit's
+  period resets. The dollar amounts need 2.1.284 or later on both Claude Code
+  and the gateway, can lag the percent by about five minutes, and are left out
+  until they arrive (always, under `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`).
+  Past the limit the percent keeps counting (`spend:104%`); the gateway then
+  refuses requests until the reset. Hidden with `rateLimits` off.
+- `otherModelWeekly` (inside `elements`, default `false`): set it to `true` to
+  show the weekly buckets of models other than Sonnet and Opus, such as `fb:`
+  for Fable, which the usage API now reports only in its `limits[]` list. The
+  label is the model name's first letter plus the first consonant after it.
+  Each one is hidden until it reaches `thresholds.sonnetWeeklyVisibility`, like
+  `sn:`. `sn:` and `op:` show without this flag.
 - `modelFormat` (inside `elements`) sets how the model name reads: `short`
   (`opus`, the default), `versioned` (`opus 5.5`), or `full` (raw id,
   `claude-opus-5-5[1m]`). The `:effort` suffix is a separate `effort` toggle.
@@ -333,13 +351,16 @@ with all 10 tokens spelled out if you would rather start from a full palette.
 ## Where the rate limits come from
 `5h:` and `7d:` come from the payload's `rate_limits`, which current Claude
 Code sends when you are logged in with a Claude.ai subscription. Everything
-else in that fragment — the per-model weekly buckets (`op:`, `sn:`, `fb:`, …),
-`extra:`, and `5h`/`7d` on a Claude Code too old to send them — comes from
+else in that fragment — the per-model weekly buckets (`op:`, `sn:`, and with
+`otherModelWeekly` on `fb:`, …), `extra:`, and `5h`/`7d` on a Claude Code too
+old to send them — comes from
 Anthropic's usage API, called with the same Claude.ai login, read-only (the HUD
 never refreshes a token). The API is skipped with an API key and no
 Claude.ai login, with `ANTHROPIC_BASE_URL` pointing at another host, and under
 `CLAUDE_CODE_USE_BEDROCK` / `_VERTEX` / `_FOUNDRY`; you then see only what the
-payload carries, often no rate-limit fragment at all.
+payload carries, often no rate-limit fragment at all. Behind a Claude apps
+gateway with a spend limit, that is the opt-in `spend:` part (`spendLimit`
+above).
 
 ## Behind a proxy
 ```sh

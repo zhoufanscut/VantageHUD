@@ -5,7 +5,7 @@
  * Statusline command that renders the VantageHUD status line.
  * Receives stdin JSON from Claude Code and outputs formatted statusline.
  */
-import { readStdin, writeStdinCache, readStdinCache, getContextPercent, getContextPercentFromUsage, getModelId, getModelName, getEffortLevel, getRateLimitsFromStdin, getNextTimedTrigger, getPromptCache, stabilizeContextPercent, } from "./stdin.js";
+import { readStdin, writeStdinCache, readStdinCache, getContextPercent, getContextPercentFromUsage, getModelId, getModelName, getEffortLevel, getRateLimitsFromStdin, getSpendLimitFromStdin, getNextTimedTrigger, getPromptCache, stabilizeContextPercent, } from "./stdin.js";
 import { parseTranscript } from "./transcript.js";
 import { sumSubagentTokens } from "./subagents.js";
 import { tallyLead } from "./token-tally.js";
@@ -225,6 +225,10 @@ async function main() {
             agentCallCount: lead?.agentCalls ?? 0,
             skillCallCount: lead?.skillCalls ?? 0,
             promptCache: getPromptCache(stdin),
+            // `rate_limits.spend_limit` (Claude apps gateway); shown only with
+            // `elements.spendLimit` on. Read from the payload alone: the usage
+            // API is skipped behind a gateway.
+            spendLimit: getSpendLimitFromStdin(stdin),
         };
         // Debug: log data if HUD_DEBUG is set
         if (process.env.HUD_DEBUG) {
