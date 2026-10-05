@@ -280,10 +280,13 @@ git -C ~/.claude/hud pull
   `branches/<name>`, `tags/<name>`) and carries the working-copy revision, e.g.
   `branch:2.1@12345`. Both `svn` calls are local — nothing contacts the server,
   which is why SVN shows no `⇡`/`⇣` ahead/behind — and the working-copy scan is
-  cached for 30s so a large checkout is not re-walked every frame.
+  cached for up to 30s (sooner after `svn add`/`delete`/`revert`) so a large
+  checkout is not re-walked every frame. A git repository whose `git status`
+  takes 300 ms or more is cached the same way (sooner after staging or a
+  commit); a faster one is re-read every frame.
 - All runtime files live in a per-session subfolder of `cache/`, i.e.
   `cache/<session>/<name>.json` (the render cache, the token/call-count tally
-  memos, and the context-stabilization snapshot grouped per session). Centralized under the HUD
+  memos, the git/SVN status memo, and the context-stabilization snapshot grouped per session). Centralized under the HUD
   install dir, never inside your project; safe to delete anytime. Session folders
   idle for roughly two weeks are pruned automatically (14 days on macOS, 15 on
   Linux, where `find` counts whole days). If the install's `cache/` is not

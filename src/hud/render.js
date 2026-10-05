@@ -278,7 +278,7 @@ export async function render(context, config) {
     if (enabledElements.gitStatus && vcs) {
         put("gitStatus", () => vcs === "svn"
             ? renderSvnStatus(context.cwd, hudLabels, context.sessionKey, context.syncRender)
-            : renderGitStatus(context.cwd, hudLabels));
+            : renderGitStatus(context.cwd, hudLabels, context.sessionKey, context.syncRender));
     }
     const modelSource = enabledElements.modelFormat === 'full'
         ? context.modelId ?? context.modelName

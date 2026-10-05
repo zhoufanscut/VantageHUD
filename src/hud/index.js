@@ -205,10 +205,12 @@ async function main() {
             contextPercent,
             repoName,
             worktreeHint,
-            // Threaded through so elements can memoize across renders (the SVN
-            // status walk does; one process per render kills in-memory caches).
+            // Threaded through so elements can memoize across renders (the git
+            // and SVN status walks do; one process per render kills in-memory
+            // caches).
             sessionKey,
-            // A synchronous render serves the SVN status memo instead of walking.
+            // A synchronous render serves the status memo instead of walking
+            // (git still walks a repository not yet known to be slow).
             syncRender,
             modelName: getModelName(stdin),
             modelId: getModelId(stdin),

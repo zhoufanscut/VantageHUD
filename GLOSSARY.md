@@ -130,6 +130,11 @@ skimming. Add a term back (or a new one) when it earns its place; keep this shor
   running `svn`: the nearest `.svn` holding `wc.db` (1.7+; an external or a
   nested checkout is its own working copy), else the topmost contiguous `.svn`
   (pre-1.7).
+- **status memo** — the on-disk cache of a working-tree status walk
+  (`cache/<session>/svn-status.json`, `git-status.json`), shared policy in
+  `src/lib/status-memo.js`: TTL plus a change stamp (`wc.db`, or the git
+  index + HEAD), a failure backoff, and no walk on a synchronous render once
+  the tree is known. Git memoizes only a repo whose walk takes 300 ms or more.
 - **safeMode** — default `true` on every platform (an explicit `false` disables
   it, Windows included): strips non-SGR ANSI and swaps
   Unicode bars for ASCII (`src/hud/sanitize.js`). Changes the output, so worth

@@ -16,10 +16,10 @@
  * the locale-dependent text output.
  */
 import { execFileSync } from 'node:child_process';
-import { readFileSync, statSync } from 'node:fs';
+import { statSync } from 'node:fs';
 import { resolve, basename, join } from 'node:path';
-import { findSvnWorkingCopyRoot, sessionCacheFile } from '../../lib/worktree-paths.js';
-import { atomicWriteJsonSync } from '../../lib/atomic-write.js';
+import { findSvnWorkingCopyRoot } from '../../lib/worktree-paths.js';
+import { memoizedStatus } from '../../lib/status-memo.js';
 import { paint, paintLabel, paintWarn, PALETTE } from '../colors.js';
 import { DEFAULT_HUD_LABELS } from '../types.js';
 import { cleanText } from '../sanitize.js';
@@ -27,12 +27,11 @@ import { cleanText } from '../sanitize.js';
  * Intra-render de-duplication only — the HUD runs one process per render, so
  * these Maps never survive a frame. They exist because `renderSvnRepo` and
  * `renderSvnBranch` both want `svn info` in the same frame; anything that must
- * outlive the process goes to disk instead (see `readStatusMemo`).
+ * outlive the process goes to disk instead (the status memo, status-memo.js).
  */
 const CACHE_TTL_MS = 30_000;
 const workingCopyCache = new Map();
 const infoCache = new Map();
-const statusCache = new Map();
 /**
  * Run one `svn` command and return its stdout.
  *
@@ -55,66 +54,14 @@ function svn(args, cwd, timeout) {
 }
 /** `svn info` reads a single file; a slow one is a broken one. */
 const INFO_TIMEOUT_MS = 1000;
-/** `svn status` walks the working copy — a large one legitimately takes seconds. */
+/**
+ * `svn status` walks the working copy — a large one legitimately takes
+ * seconds. The first walk gets the short timeout; once the working copy is
+ * known (status-memo.js), background walks get the long one, so a checkout
+ * slower than 3 s still shows counts.
+ */
 const STATUS_TIMEOUT_MS = 3000;
-/** How long a memoized status stays authoritative before a rescan. */
-const STATUS_MEMO_TTL_MS = 30_000;
-/**
- * How long a failed rescan (timeout, `svn` missing) suppresses the next one.
- * Without it a working copy whose walk outlasts STATUS_TIMEOUT_MS never gets a
- * memo written, so once the TTL lapses *every* frame pays the full timeout and
- * fails again — a 28 s walk on a Windows checkout cost each render ~3 s.
- */
-const STATUS_FAILURE_BACKOFF_MS = 5 * 60_000;
-/**
- * Read the memoized status counts for `cwd`, at any age.
- *
- * The memo lives on disk (`cache/<session>/svn-status.json`) because the HUD
- * runs one process per render: the module-level Maps below de-duplicate calls
- * *within* a frame and are gone by the next one, so without this every frame
- * would re-walk the working copy. Same reason `subagents.js` memoizes its
- * tallies. Holds one entry — a session works in one directory — and a
- * different `cwd` simply reads as a miss.
- */
-function readStatusMemo(sessionKey, cwdKey) {
-    if (!sessionKey) {
-        return null;
-    }
-    try {
-        const memo = JSON.parse(readFileSync(sessionCacheFile('svn-status', sessionKey), 'utf-8'));
-        if (memo?.cwd !== cwdKey || typeof memo.at !== 'number') {
-            return null;
-        }
-        // Counts may be null only on a failure record (`failedAt`): a working
-        // copy that has never been walked successfully still needs its backoff.
-        if (!memo.counts && typeof memo.failedAt !== 'number') {
-            return null;
-        }
-        // A memo written before the stamp existed has no `wcDb`; it compares
-        // unequal to any real stamp and so costs one rescan, then self-heals.
-        return memo;
-    }
-    catch {
-        // No memo yet, or it is unreadable/torn — treat as a cold start.
-        return null;
-    }
-}
-function writeStatusMemo(sessionKey, cwdKey, counts, wcDb) {
-    if (!sessionKey) {
-        return;
-    }
-    try {
-        atomicWriteJsonSync(sessionCacheFile('svn-status', sessionKey), {
-            cwd: cwdKey,
-            counts,
-            wcDb,
-            at: Date.now(),
-        });
-    }
-    catch {
-        // Best-effort: a missed memo only costs the next frame a rescan.
-    }
-}
+const STATUS_LONG_TIMEOUT_MS = 30_000;
 /**
  * Decode the predefined XML entities.
  *
@@ -183,7 +130,7 @@ export function isSvnWorkingCopy(cwd) {
  * Cheap change stamp for the working copy's metadata store.
  *
  * `svn status` walks the whole tree (measured: ~510 ms on a 96k-file checkout),
- * so it can only run behind a memo — but a memo on a clock alone means a
+ * so it can only run behind a memo (status-memo.js) — but a memo on a clock alone means a
  * `svn delete` stays invisible for the rest of the TTL, which is what made the
  * status element look broken. Every metadata operation commits a SQLite
  * transaction to `.svn/wc.db`, so its mtime is a ~µs proxy for "the schedule
@@ -403,15 +350,14 @@ export function getSvnInfo(cwd) {
  * Read working-copy status counts, memoized across renders.
  *
  * `svn status` walks the whole working copy, so on the large checkouts SVN is
- * typically used for it is the expensive part of the frame. The disk memo keeps
- * that to at most one walk per `STATUS_MEMO_TTL_MS`; a rescan that fails or
- * times out falls back to the last good counts rather than blanking the
- * element, since stale counts beat a fragment that vanishes.
- *
- * A failed rescan is recorded in the memo and not retried for
- * `STATUS_FAILURE_BACKOFF_MS`. With `noScan` (a synchronous render, which
- * Claude Code is waiting on) the walk never runs: the memo is served at any
- * age, or nothing — the background refreshes do the walking.
+ * typically used for it is the expensive part of the frame. Every walk is
+ * memoized to `cache/<session>/svn-status.json` (status-memo.js holds the
+ * policy: TTL plus `wc.db` stamp, failure backoff, longer background
+ * timeout); a rescan that fails or times out falls back to the last good
+ * counts rather than blanking the element, since stale counts beat a fragment
+ * that vanishes. With `noScan` (a synchronous render, which Claude Code is
+ * waiting on) the walk never runs: the memo is served at any age, or nothing —
+ * the background refreshes do the walking.
  *
  * @param cwd - Working directory
  * @param sessionKey - Session key naming the cache folder (no memo without it)
@@ -423,57 +369,18 @@ export function getSvnStatusCounts(cwd, sessionKey, noScan = false) {
     if (!root) {
         return null;
     }
-    const key = cwd ? resolve(cwd) : process.cwd();
-    // Keyed by session too: one render only ever carries one session key, but a
-    // process that rendered several would otherwise serve the first session's
-    // counts to the rest from this Map.
-    const cacheKey = `${sessionKey ?? ''}::${key}`;
-    const cached = statusCache.get(cacheKey);
-    if (cached && Date.now() < cached.expiresAt) {
-        return cached.value;
-    }
-    const memo = readStatusMemo(sessionKey, key);
-    let result;
-    // Two independent triggers, ORed because each covers what the other misses:
-    // the stamp catches a schedule change (`svn delete`/`add`/`revert`) on the
-    // very next frame, and the clock catches the working-file changes the stamp
-    // cannot see (an edit, a plain `rm`, a new unversioned file).
-    if (memo && memo.counts && Date.now() - memo.at < STATUS_MEMO_TTL_MS && memo.wcDb === readWcDbStamp(root)) {
-        result = memo.counts;
-    }
-    else if (noScan || (memo && Date.now() - (memo.failedAt ?? 0) < STATUS_FAILURE_BACKOFF_MS)) {
-        result = memo ? memo.counts : null;
-    }
-    else {
-        try {
-            result = parseSvnStatusXml(svn(['status', '--xml', '--non-interactive'], cwd, STATUS_TIMEOUT_MS));
-            // Stamped *after* the walk, not before: should some future `svn`
-            // ever write wc.db while reporting status, storing the pre-walk
-            // value would make every frame re-trigger a ~510 ms rescan.
-            writeStatusMemo(sessionKey, key, result, readWcDbStamp(root));
-        }
-        catch {
-            // Keep the last good counts — and their `at`/`wcDb`, so the memo
-            // still reads as stale — and start the backoff.
-            result = memo ? memo.counts : null;
-            if (sessionKey) {
-                try {
-                    atomicWriteJsonSync(sessionCacheFile('svn-status', sessionKey), {
-                        cwd: key,
-                        counts: result,
-                        wcDb: memo?.wcDb ?? null,
-                        at: memo?.at ?? 0,
-                        failedAt: Date.now(),
-                    });
-                }
-                catch {
-                    // Best-effort, as in writeStatusMemo.
-                }
-            }
-        }
-    }
-    statusCache.set(cacheKey, { value: result, expiresAt: Date.now() + CACHE_TTL_MS });
-    return result;
+    return memoizedStatus({
+        name: 'svn-status',
+        sessionKey,
+        cwdKey: cwd ? resolve(cwd) : process.cwd(),
+        readStamp: () => readWcDbStamp(root),
+        scan: (timeoutMs) => parseSvnStatusXml(svn(['status', '--xml', '--non-interactive'], cwd, timeoutMs)),
+        syncRender: noScan,
+        syncScan: false,
+        memoMinMs: 0,
+        shortTimeoutMs: STATUS_TIMEOUT_MS,
+        longTimeoutMs: STATUS_LONG_TIMEOUT_MS,
+    });
 }
 /**
  * Render the SVN project name element.

@@ -3,9 +3,11 @@
  *
  * Renders git repository name and branch information.
  */
-import { realpathSync } from 'node:fs';
-import { resolve, basename } from 'node:path';
+import { readFileSync, realpathSync, statSync } from 'node:fs';
+import { resolve, basename, join } from 'node:path';
 import { runGit as git } from '../../lib/git-exec.js';
+import { getWorktreeRoot } from '../../lib/worktree-paths.js';
+import { memoizedStatus } from '../../lib/status-memo.js';
 import { paint, paintLabel, paintWarn, PALETTE } from '../colors.js';
 import { DEFAULT_HUD_LABELS } from '../types.js';
 import { cleanText } from '../sanitize.js';
@@ -147,59 +149,129 @@ function isUnmergedStatus(idx, wt) {
     return (idx === 'A' && wt === 'A') || (idx === 'D' && wt === 'D');
 }
 /**
- * Get git working tree status counts.
- * Parses `git status --porcelain -b` (optional locks off, see git-exec.js) for staged, modified, untracked,
- * conflicted, ahead, and behind counts.
- *
- * @param cwd - Working directory
- * @returns Status counts or null if not in a git repo
+ * Parse `git status --porcelain -b` into staged, modified, untracked,
+ * conflicted, ahead and behind counts.
  */
-export function getGitStatusCounts(cwd) {
-    let result = null;
-    try {
-        const output = git(['status', '--porcelain', '-b'], cwd);
-        let staged = 0, modified = 0, untracked = 0, conflicted = 0, ahead = 0, behind = 0;
-        if (output) {
-            const lines = output.split('\n');
-            // Parse branch line for ahead/behind: ## main...origin/main [ahead 3, behind 1]
-            const branchLine = lines[0];
-            const aheadMatch = branchLine.match(/\bahead (\d+)/);
-            const behindMatch = branchLine.match(/\bbehind (\d+)/);
-            if (aheadMatch)
-                ahead = parseInt(aheadMatch[1], 10);
-            if (behindMatch)
-                behind = parseInt(behindMatch[1], 10);
-            for (let i = 1; i < lines.length; i++) {
-                const line = lines[i];
-                if (!line || line.length < 2)
-                    continue;
-                const idx = line[0];
-                const wt = line[1];
-                if (idx === '?') {
-                    untracked++;
-                }
-                else if (isUnmergedStatus(idx, wt)) {
-                    conflicted++;
-                }
-                else {
-                    if (idx !== ' ' && idx !== '?')
-                        staged++;
-                    // Any worktree change counts, not only M/D: a typechange
-                    // (` T`, a file replaced by a symlink) and an intent-to-add
-                    // (` A`, `git add -N`) read as a clean tree otherwise. `?`
-                    // and the unmerged pairs were taken above, and `!` needs
-                    // --ignored, which is never passed.
-                    if (wt !== ' ')
-                        modified++;
-                }
+export function parseGitStatus(output) {
+    let staged = 0, modified = 0, untracked = 0, conflicted = 0, ahead = 0, behind = 0;
+    if (output) {
+        const lines = output.split('\n');
+        // Parse branch line for ahead/behind: ## main...origin/main [ahead 3, behind 1]
+        const branchLine = lines[0];
+        const aheadMatch = branchLine.match(/\bahead (\d+)/);
+        const behindMatch = branchLine.match(/\bbehind (\d+)/);
+        if (aheadMatch)
+            ahead = parseInt(aheadMatch[1], 10);
+        if (behindMatch)
+            behind = parseInt(behindMatch[1], 10);
+        for (let i = 1; i < lines.length; i++) {
+            const line = lines[i];
+            if (!line || line.length < 2)
+                continue;
+            const idx = line[0];
+            const wt = line[1];
+            if (idx === '?') {
+                untracked++;
+            }
+            else if (isUnmergedStatus(idx, wt)) {
+                conflicted++;
+            }
+            else {
+                if (idx !== ' ' && idx !== '?')
+                    staged++;
+                // Any worktree change counts, not only M/D: a typechange
+                // (` T`, a file replaced by a symlink) and an intent-to-add
+                // (` A`, `git add -N`) read as a clean tree otherwise. `?`
+                // and the unmerged pairs were taken above, and `!` needs
+                // --ignored, which is never passed.
+                if (wt !== ' ')
+                    modified++;
             }
         }
-        result = { staged, modified, untracked, conflicted, ahead, behind };
+    }
+    return { staged, modified, untracked, conflicted, ahead, behind };
+}
+/** First `git status` of a session, and any synchronous one: as before the memo. */
+const STATUS_TIMEOUT_MS = 1000;
+/** A background walk of a repository already known to be slow. */
+const STATUS_LONG_TIMEOUT_MS = 30_000;
+/**
+ * A walk faster than this is not memoized, so a small repository shows an
+ * edit on the very next frame, exactly as before the memo existed.
+ */
+const STATUS_MEMO_MIN_MS = 300;
+/**
+ * Change stamp for the git status memo: the index and HEAD of this worktree's
+ * own git dir (`.git`, or the `gitdir:` a linked worktree's or submodule's
+ * `.git` file points at — a linked worktree's index is not `<root>/.git/index`).
+ *
+ * The index moves for `add`, `commit`, `reset`, `checkout` and `stash`, and
+ * not for `git status` itself (optional locks are off, git-exec.js), so a read
+ * never invalidates its own memo. Like svn's `wc.db`, it does **not** move for
+ * a plain edit or a new untracked file; the memo's TTL catches those.
+ *
+ * @param root - Worktree root
+ * @returns `"<mtimeMs>:<size>|<mtimeMs>:<size>"`, or null when unreadable
+ */
+function readIndexStamp(root) {
+    if (!root) {
+        return null;
+    }
+    try {
+        let gitDir = join(root, '.git');
+        if (!statSync(gitDir).isDirectory()) {
+            const match = /^gitdir:\s*(.+?)\s*$/m.exec(readFileSync(gitDir, 'utf-8'));
+            if (!match) {
+                return null;
+            }
+            gitDir = resolve(root, match[1]);
+        }
+        return ['index', 'HEAD'].map((name) => {
+            try {
+                const st = statSync(join(gitDir, name));
+                return `${st.mtimeMs}:${st.size}`;
+            }
+            catch {
+                return '-';
+            }
+        }).join('|');
     }
     catch {
-        result = null;
+        return null;
     }
-    return result;
+}
+/**
+ * Get git working tree status counts.
+ *
+ * Runs `git status --porcelain -b` (optional locks off, see git-exec.js) behind
+ * the same cross-render memo `svn status` uses (status-memo.js,
+ * `cache/<session>/git-status.json`), but only for a repository whose walk
+ * takes `STATUS_MEMO_MIN_MS` or more: such a walk used to cost every frame, the
+ * synchronous one included, and one slower than the 1 s timeout never showed
+ * counts at all. Once a repository is known to be slow, a synchronous render
+ * serves the memo instead of walking, a failure backs off, and background
+ * walks get a 30 s timeout. That memo also covers a branch far off its
+ * upstream, whose ahead/behind count is part of the same walk.
+ *
+ * @param cwd - Working directory
+ * @param sessionKey - Session key naming the cache folder (no memo without it)
+ * @param syncRender - A synchronous render (see status-memo.js)
+ * @returns Status counts or null if not in a git repo
+ */
+export function getGitStatusCounts(cwd, sessionKey, syncRender = false) {
+    const cwdKey = cwd ? resolve(cwd) : process.cwd();
+    return memoizedStatus({
+        name: 'git-status',
+        sessionKey,
+        cwdKey,
+        readStamp: () => readIndexStamp(getWorktreeRoot(cwdKey)),
+        scan: (timeoutMs) => parseGitStatus(git(['status', '--porcelain', '-b'], cwd, timeoutMs)),
+        syncRender,
+        syncScan: true,
+        memoMinMs: STATUS_MEMO_MIN_MS,
+        shortTimeoutMs: STATUS_TIMEOUT_MS,
+        longTimeoutMs: STATUS_LONG_TIMEOUT_MS,
+    });
 }
 /**
  * Render git working tree status element.
@@ -209,10 +281,13 @@ export function getGitStatusCounts(cwd) {
  * is the one state here you must clear before anything else lands.
  *
  * @param cwd - Working directory
+ * @param labels - Resolved HUD labels
+ * @param sessionKey - Session key, for the cross-render status memo
+ * @param syncRender - A synchronous render (see getGitStatusCounts)
  * @returns Formatted status or null if clean or not in a git repo
  */
-export function renderGitStatus(cwd, labels = DEFAULT_HUD_LABELS) {
-    const counts = getGitStatusCounts(cwd);
+export function renderGitStatus(cwd, labels = DEFAULT_HUD_LABELS, sessionKey, syncRender = false) {
+    const counts = getGitStatusCounts(cwd, sessionKey, syncRender);
     if (!counts)
         return null;
     const { staged, modified, untracked, conflicted = 0, ahead, behind } = counts;
