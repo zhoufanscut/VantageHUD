@@ -116,9 +116,9 @@ export function lerpRgb(c1, c2, t) {
 export const PALETTE = ACTIVE_PALETTE;
 /** The resolved theme name for this process (handy under HUD_DEBUG). */
 export const THEME_NAME = ACTIVE_THEME_NAME;
-// Three usage tiers share the palette's gauge tokens; the default cut points
-// mirror the context thresholds (warning 70 / critical 85), so an element's
-// color and its threshold-driven text (e.g. ctx's COMPRESS?/CRITICAL) agree.
+// Three usage tiers share the palette's gauge tokens. The default cut points
+// match the default context thresholds (warning 70 / critical 85); ctx passes
+// the configured ones as `bounds`, so its color and its CRITICAL text agree.
 const TIER_STOPS = [PALETTE.gradLow, PALETTE.gradMid, PALETTE.gradHigh];
 const TIER_BOUNDS = [70, 85];
 /**

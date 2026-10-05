@@ -117,6 +117,9 @@ cp ~/.claude/hud/config.json.example ~/.claude/hud/config.json
   `conflict`, `ahead`, `behind`.
 - `usageApiPollIntervalMs` (default `90000`, minimum `30000`): how often the
   usage API is polled for the buckets the payload does not carry.
+- `thresholds.contextWarning` / `contextCompactSuggestion` / `contextCritical`
+  (default `70` / `80` / `85`): `ctx:` turns amber at the first, adds
+  `COMPRESS?` at the second, and turns rose with `CRITICAL` at the third.
 - `thresholds.sonnetWeeklyVisibility` (default `80`, `0` = always): the
   per-model weekly buckets — `sn:` (Sonnet) and any other model the usage API
   reports, such as `fb:` (Fable) — stay hidden until their usage reaches this
@@ -246,9 +249,9 @@ with all 10 tokens spelled out if you would rather start from a full palette.
   `"themes": { "ember": { "label": "#ff0000" } }` is ember with red labels, since
   `base` defaults to the bundled palette of the same name.
 - **Names and keys are case-insensitive**; `base` chains up to 16 deep.
-- **Colors only.** Glyphs, the ` \| ` separator and the 70/85 thresholds are not
-  part of a theme (thresholds live under `thresholds`), so a color can never
-  disagree with the `COMPRESS?` text beside it.
+- **Colors only.** Glyphs, the ` \| ` separator and the 70/85 cut points are not
+  part of a theme. The `ctx:` cut points live under `thresholds`, so its color
+  can never disagree with the `CRITICAL` text beside it.
 - A value that isn't `#` plus exactly 6 hex digits keeps the inherited color
   rather than breaking the line. Run with `HUD_DEBUG=1` to see what was rejected
   and why.
