@@ -244,30 +244,39 @@ export async function render(context, config) {
     // project while `branch:` stayed on git, and a *clean* git tree (null
     // status) would fall through to `svn status`, which reports that whole
     // directory as unversioned. Git wins ties; SVN answers only when the
-    // directory is not a git worktree at all.
+    // directory is not a git worktree at all, and neither answers in a plain
+    // directory.
     const wantsVcs = enabledElements.gitRepo || enabledElements.gitBranch || enabledElements.gitStatus;
-    // Cheap by construction: one `git rev-parse` for the decision, and the SVN
-    // side is a filesystem walk for `.svn`, so a git checkout never spawns `svn`
-    // and an SVN checkout never spawns the git element commands. The repo name
-    // and worktree suffix come from the payload's `workspace` when Claude Code
-    // supplies them (index.js), which spares three more git spawns per frame.
-    let useSvn = false;
+    // Cheap by construction: one `git rev-parse` for the decision (cached, and
+    // already paid by index.js's resolveToWorktreeRoot), and the SVN side is a
+    // filesystem walk for `.svn`, so a git checkout never spawns `svn` and an
+    // SVN checkout never spawns the git element commands. Outside both, no
+    // element command runs at all: three spawns that could only fail. The repo
+    // name and worktree suffix come from the payload's `workspace` when Claude
+    // Code supplies them (index.js), which spares three more git spawns per
+    // frame.
+    let vcs = null;
     try {
-        useSvn = wantsVcs
-            && getWorktreeRoot(context.cwd) === null
-            && isSvnWorkingCopy(context.cwd);
+        if (wantsVcs) {
+            vcs = getWorktreeRoot(context.cwd) !== null ? "git"
+                : isSvnWorkingCopy(context.cwd) ? "svn" : null;
+        }
     }
     catch {
         // Undecidable: the git slots answer (and hide themselves) as before.
+        vcs = "git";
     }
     if (enabledElements.gitRepo) {
-        put("gitRepo", () => useSvn ? renderSvnRepo(context.cwd) : renderGitRepo(context.cwd, context.repoName));
+        // The payload's repo name renders even when rev-parse failed (no git on
+        // PATH, a safe.directory refusal): it costs no spawn and was right.
+        put("gitRepo", () => vcs === "svn" ? renderSvnRepo(context.cwd)
+            : vcs === "git" || context.repoName ? renderGitRepo(context.cwd, context.repoName) : null);
     }
-    if (enabledElements.gitBranch) {
-        put("gitBranch", () => useSvn ? renderSvnBranch(context.cwd) : renderGitBranch(context.cwd, context.worktreeHint));
+    if (enabledElements.gitBranch && vcs) {
+        put("gitBranch", () => vcs === "svn" ? renderSvnBranch(context.cwd) : renderGitBranch(context.cwd, context.worktreeHint));
     }
-    if (enabledElements.gitStatus) {
-        put("gitStatus", () => useSvn
+    if (enabledElements.gitStatus && vcs) {
+        put("gitStatus", () => vcs === "svn"
             ? renderSvnStatus(context.cwd, hudLabels, context.sessionKey, context.syncRender)
             : renderGitStatus(context.cwd, hudLabels));
     }

@@ -116,7 +116,7 @@ skimming. Add a term back (or a new one) when it earns its place; keep this shor
   means the total includes such calls and is therefore a lower bound
   (`sessionTokensApproximate`).
 - **`gitRepo` / `gitBranch` / `gitStatus`** — the three **VCS slots**, not
-  git-only elements. `render.js` picks the VCS **once** per render (`useSvn`):
+  git-only elements. `render.js` picks the VCS **once** per render (`vcs`):
   git (`src/hud/elements/git.js`) unless the directory is not a git worktree
   at all *and* is an SVN working copy, in which case Subversion
   (`src/hud/elements/svn.js`) fills all three — never a per-slot fallback, so

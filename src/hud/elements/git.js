@@ -3,33 +3,14 @@
  *
  * Renders git repository name and branch information.
  */
-import { execFileSync } from 'node:child_process';
 import { realpathSync } from 'node:fs';
 import { resolve, basename } from 'node:path';
+import { runGit as git } from '../../lib/git-exec.js';
 import { paint, paintLabel, paintWarn, PALETTE } from '../colors.js';
 import { DEFAULT_HUD_LABELS } from '../types.js';
 import { cleanText } from '../sanitize.js';
-const CACHE_TTL_MS = 30_000;
-const repoCache = new Map();
-const branchCache = new Map();
-const worktreeCache = new Map();
-const statusCache = new Map();
-/**
- * `maxBuffer` is raised above execFileSync's 1 MiB default because overflow
- * throws (ENOBUFS) rather than truncating: `git status --porcelain` spends
- * ~70 bytes per untracked path, so a large unignored tree (measured: 16,000
- * files → 1.2 MB) silently deleted the status fragment. Same fix as svn.js.
- */
-function git(args, cwd) {
-    return execFileSync('git', args, {
-        cwd,
-        encoding: 'utf-8',
-        timeout: 1000,
-        maxBuffer: 16 * 1024 * 1024,
-        stdio: ['pipe', 'pipe', 'pipe'],
-        windowsHide: true,
-    }).trim();
-}
+// No in-process caches: the HUD runs one process per render and each getter
+// below is called at most once per render, so a Map could never hit.
 /**
  * Get git repository name from remote URL.
  * Extracts the repo name from URLs like:
@@ -40,11 +21,6 @@ function git(args, cwd) {
  * @returns Repository name or null if not available
  */
 export function getGitRepoName(cwd) {
-    const key = cwd ? resolve(cwd) : process.cwd();
-    const cached = repoCache.get(key);
-    if (cached && Date.now() < cached.expiresAt) {
-        return cached.value;
-    }
     let result = null;
     try {
         const url = git(['remote', 'get-url', 'origin'], cwd);
@@ -64,7 +40,6 @@ export function getGitRepoName(cwd) {
     catch {
         result = null;
     }
-    repoCache.set(key, { value: result, expiresAt: Date.now() + CACHE_TTL_MS });
     return result;
 }
 /**
@@ -74,21 +49,15 @@ export function getGitRepoName(cwd) {
  * @returns Branch name or null if not available
  */
 export function getGitBranch(cwd) {
-    const key = cwd ? resolve(cwd) : process.cwd();
-    const cached = branchCache.get(key);
-    if (cached && Date.now() < cached.expiresAt) {
-        return cached.value;
-    }
-    let result = null;
     try {
-        const branch = git(['branch', '--show-current'], cwd);
-        result = branch || null;
+        // `symbolic-ref`, not `branch --show-current` (git >= 2.22): it works
+        // on any git, prints an unborn branch's name too, and exits non-zero
+        // on a detached HEAD, which lands in the catch as "no branch".
+        return git(['symbolic-ref', '--short', '-q', 'HEAD'], cwd) || null;
     }
     catch {
-        result = null;
+        return null;
     }
-    branchCache.set(key, { value: result, expiresAt: Date.now() + CACHE_TTL_MS });
-    return result;
 }
 /**
  * Detect if the current directory is inside a git linked worktree.
@@ -96,18 +65,13 @@ export function getGitBranch(cwd) {
  * When in a worktree, extracts the worktree name from the git-dir path.
  *
  * @param cwd - Working directory
- * @returns Worktree detection result (cached for CACHE_TTL_MS)
+ * @returns Worktree detection result
  */
 export function getWorktreeInfo(cwd) {
     const key = cwd ? resolve(cwd) : process.cwd();
-    const cached = worktreeCache.get(key);
-    if (cached && Date.now() < cached.expiresAt) {
-        return cached.value;
-    }
     let result = { isWorktree: false, worktreeName: null };
     try {
-        const gitDir = git(['rev-parse', '--git-dir'], cwd);
-        const gitCommonDir = git(['rev-parse', '--git-common-dir'], cwd);
+        const [gitDir, gitCommonDir] = git(['rev-parse', '--git-dir', '--git-common-dir'], cwd).split(/\r?\n/);
         // Canonicalize via realpathSync to handle symlinked repo paths
         let resolvedGitDir = resolve(key, gitDir);
         let resolvedCommonDir = resolve(key, gitCommonDir);
@@ -127,7 +91,6 @@ export function getWorktreeInfo(cwd) {
     catch {
         // Not in a git repo or command failed
     }
-    worktreeCache.set(key, { value: result, expiresAt: Date.now() + CACHE_TTL_MS });
     return result;
 }
 /**
@@ -185,21 +148,16 @@ function isUnmergedStatus(idx, wt) {
 }
 /**
  * Get git working tree status counts.
- * Parses `git --no-optional-locks status --porcelain -b` for staged, modified, untracked,
+ * Parses `git status --porcelain -b` (optional locks off, see git-exec.js) for staged, modified, untracked,
  * conflicted, ahead, and behind counts.
  *
  * @param cwd - Working directory
  * @returns Status counts or null if not in a git repo
  */
 export function getGitStatusCounts(cwd) {
-    const key = cwd ? resolve(cwd) : process.cwd();
-    const cached = statusCache.get(key);
-    if (cached && Date.now() < cached.expiresAt) {
-        return cached.value;
-    }
     let result = null;
     try {
-        const output = git(['--no-optional-locks', 'status', '--porcelain', '-b'], cwd);
+        const output = git(['status', '--porcelain', '-b'], cwd);
         let staged = 0, modified = 0, untracked = 0, conflicted = 0, ahead = 0, behind = 0;
         if (output) {
             const lines = output.split('\n');
@@ -241,7 +199,6 @@ export function getGitStatusCounts(cwd) {
     catch {
         result = null;
     }
-    statusCache.set(key, { value: result, expiresAt: Date.now() + CACHE_TTL_MS });
     return result;
 }
 /**

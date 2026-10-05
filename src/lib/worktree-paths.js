@@ -10,54 +10,41 @@
  * project, and the globally-unique session id names the folder, so unrelated
  * sessions (and projects sharing one install) never collide.
  */
-import { execSync } from 'child_process';
 import { existsSync, realpathSync, statSync } from 'fs';
 import { resolve, sep, join, dirname } from 'path';
 import { getClaudeConfigDir } from './config-dir.js';
 import { getHudInstallRoot } from './install-paths.js';
+import { runGit } from './git-exec.js';
 /**
- * LRU cache for worktree root lookups to avoid repeated git subprocess calls.
- * Bounded to MAX_WORKTREE_CACHE_SIZE entries to prevent memory growth when
- * alternating between many different cwds (cache thrashing).
+ * `git rev-parse --show-toplevel` results for this process, misses included.
+ * One process renders one frame, so a directory cannot become a repository
+ * between two lookups, and the same answer is asked for up to three times per
+ * frame (resolveToWorktreeRoot, resolveTranscriptPath, render.js's VCS choice).
+ * A root found is also stored under the root itself, because render.js asks
+ * again with the resolved root rather than the session's own cwd.
  */
-const MAX_WORKTREE_CACHE_SIZE = 8;
-const worktreeCacheMap = new Map();
+const worktreeRootCache = new Map();
 /**
  * Get the git worktree root for the current or specified directory.
  * Returns null if not in a git repository.
  */
 export function getWorktreeRoot(cwd) {
     const effectiveCwd = cwd || process.cwd();
-    // Return cached value if present (LRU: move to end on access)
-    if (worktreeCacheMap.has(effectiveCwd)) {
-        const root = worktreeCacheMap.get(effectiveCwd);
-        // Refresh insertion order for LRU eviction
-        worktreeCacheMap.delete(effectiveCwd);
-        worktreeCacheMap.set(effectiveCwd, root);
-        return root || null;
+    if (worktreeRootCache.has(effectiveCwd)) {
+        return worktreeRootCache.get(effectiveCwd);
     }
+    let root = null;
     try {
-        const root = execSync('git rev-parse --show-toplevel', {
-            cwd: effectiveCwd,
-            encoding: 'utf-8',
-            stdio: ['pipe', 'pipe', 'pipe'],
-            timeout: 5000,
-        }).trim();
-        // Evict oldest entry when at capacity
-        if (worktreeCacheMap.size >= MAX_WORKTREE_CACHE_SIZE) {
-            const oldest = worktreeCacheMap.keys().next().value;
-            if (oldest !== undefined) {
-                worktreeCacheMap.delete(oldest);
-            }
-        }
-        worktreeCacheMap.set(effectiveCwd, root);
-        return root;
+        root = runGit(['rev-parse', '--show-toplevel'], effectiveCwd, 5000) || null;
     }
     catch {
-        // Not in a git repository - do NOT cache fallback
-        // so that if directory becomes a git repo later, we re-detect
-        return null;
+        // Not in a git repository, or git is missing/too slow.
     }
+    worktreeRootCache.set(effectiveCwd, root);
+    if (root) {
+        worktreeRootCache.set(root, root);
+    }
+    return root;
 }
 // ============================================================================
 // SESSION CACHE PATHS (<cacheDir>/<session>/<name>.json) — matches statusline.sh
@@ -283,48 +270,41 @@ export function resolveTranscriptPath(transcriptPath, cwd) {
     // Strategy 3: Detect native git worktree via git-common-dir.
     // When CWD is a linked worktree (created by `git worktree add`), the
     // transcript path encodes the worktree CWD, but the file lives under
-    // the main repo's encoded path. Use `git rev-parse --git-common-dir`
-    // to find the main repo root and re-encode.
-    try {
-        const gitCommonDir = execSync('git rev-parse --git-common-dir', {
-            cwd: effectiveCwd,
-            encoding: 'utf-8',
-            stdio: ['pipe', 'pipe', 'pipe'],
-        }).trim();
-        const absoluteCommonDir = resolve(effectiveCwd, gitCommonDir);
-        // For linked worktrees, git-common-dir is <repo>/.git/worktrees/<name>
-        // so dirname gives <repo>/.git/worktrees — navigate up to the actual repo root
-        let mainRepoRoot = dirname(absoluteCommonDir);
-        if (mainRepoRoot.endsWith(join('.git', 'worktrees'))) {
-            mainRepoRoot = dirname(dirname(mainRepoRoot));
-        }
-        // Resolve symlinks for consistent comparison (e.g. /tmp -> /private/tmp on macOS,
-        // ecryptfs $HOME on Linux, autofs /home, etc.)
+    // the main repo's encoded path. In a linked worktree `--git-dir` is
+    // `<repo>/.git/worktrees/<name>` while `--git-common-dir` is `<repo>/.git`,
+    // so the two differ and the common dir's parent is the main repo root;
+    // anywhere else they are the same directory and there is nothing to do.
+    // getWorktreeRoot is cached, so outside git this costs no spawn at all.
+    if (getWorktreeRoot(effectiveCwd) !== null) {
         try {
-            mainRepoRoot = realpathSync(mainRepoRoot);
-        }
-        catch { /* keep as-is */ }
-        const worktreeTop = execSync('git rev-parse --show-toplevel', {
-            cwd: effectiveCwd,
-            encoding: 'utf-8',
-            stdio: ['pipe', 'pipe', 'pipe'],
-        }).trim();
-        if (mainRepoRoot !== worktreeTop) {
-            const lastSep = transcriptPath.lastIndexOf('/');
-            const sessionFile = lastSep !== -1 ? transcriptPath.substring(lastSep + 1) : '';
-            if (sessionFile) {
-                const projectsDir = join(getClaudeConfigDir(), 'projects');
-                if (existsSync(projectsDir)) {
-                    const encodedMain = mainRepoRoot.replace(/[/\\.]/g, '-');
-                    const resolvedPath = join(projectsDir, encodedMain, sessionFile);
-                    if (existsSync(resolvedPath))
-                        return resolvedPath;
+            const [gitDir, gitCommonDir] = runGit(['rev-parse', '--git-dir', '--git-common-dir'], effectiveCwd)
+                .split(/\r?\n/);
+            const absoluteGitDir = resolve(effectiveCwd, gitDir);
+            const absoluteCommonDir = resolve(effectiveCwd, gitCommonDir);
+            if (absoluteGitDir !== absoluteCommonDir) {
+                let mainRepoRoot = dirname(absoluteCommonDir);
+                // Resolve symlinks for consistent comparison (e.g. /tmp -> /private/tmp on macOS,
+                // ecryptfs $HOME on Linux, autofs /home, etc.)
+                try {
+                    mainRepoRoot = realpathSync(mainRepoRoot);
+                }
+                catch { /* keep as-is */ }
+                const lastSep = transcriptPath.lastIndexOf('/');
+                const sessionFile = lastSep !== -1 ? transcriptPath.substring(lastSep + 1) : '';
+                if (sessionFile) {
+                    const projectsDir = join(getClaudeConfigDir(), 'projects');
+                    if (existsSync(projectsDir)) {
+                        const encodedMain = mainRepoRoot.replace(/[/\\.]/g, '-');
+                        const resolvedPath = join(projectsDir, encodedMain, sessionFile);
+                        if (existsSync(resolvedPath))
+                            return resolvedPath;
+                    }
                 }
             }
         }
-    }
-    catch {
-        // Not in a git repo or git not available — skip
+        catch {
+            // git failed or timed out — skip
+        }
     }
     // No resolution found — return original path.
     // Callers should handle non-existent paths gracefully.
