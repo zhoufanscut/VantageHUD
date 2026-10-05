@@ -142,7 +142,7 @@ cp ~/.claude/hud/config.json.example ~/.claude/hud/config.json
   | `session` | `sessionHealth` |
   | `callCounts` | `showCallCounts` |
   | `gitRepo` | `gitRepo` |
-  | `gitBranch` | `gitBranch` |
+  | `gitBranch` | `gitBranch` (plus `detachedHead`, off by default — see below) |
   | `gitStatus` | `gitStatus` |
 - `labels` (top level) renames the fragment labels over the `locale`'s, e.g.
   `"labels": { "context": "ctx", "tokens": "tok" }`. Keys: `context`,
@@ -150,7 +150,9 @@ cp ~/.claude/hud/config.json.example ~/.claude/hud/config.json
   `cache:` / `warm` / `cold` words), `spendLimit` (the `spend:` word),
   `critical` and `compress` (the `CRITICAL` / `COMPRESS?`
   text after `ctx:`), `tool`, `agent`, `skill`, `staged`, `modified`,
-  `untracked`, `conflict`, `ahead`, `behind`.
+  `untracked`, `conflict`, `ahead`, `behind`, and the `detachedHead` words
+  `gitRebase`, `gitAm`, `gitMerge`, `gitCherryPick`, `gitRevert`,
+  `gitBisect`.
 - `usageApiPollIntervalMs` (default `90000`, minimum `30000`): how often the
   usage API is polled for the buckets the payload does not carry.
 - `thresholds.contextWarning` / `contextCompactSuggestion` / `contextCritical`
@@ -201,6 +203,18 @@ cp ~/.claude/hud/config.json.example ~/.claude/hud/config.json
   label is the model name's first letter plus the first consonant after it.
   Each one is hidden until it reaches `thresholds.sonnetWeeklyVisibility`, like
   `sn:`. `sn:` and `op:` show without this flag.
+- `detachedHead` (inside `elements`, default `false`): set it to `true` to
+  keep the `branch:` fragment when git's HEAD is detached — during a rebase,
+  a bisect, or after checking out a tag or a commit — where it is otherwise
+  hidden. `branch:@v1.0` names the tag (or branch, or remote-tracking branch)
+  you checked out, as long as HEAD has not moved since; otherwise
+  `branch:@a1b2c3d` shows the commit's first 7 sha digits. During a rebase it
+  names the branch being rebased and the step, `branch:feat (rebase 2/3)`;
+  `(am 1/2)`, `(bisect)`, `(merge)`, `(cherry-pick)` and `(revert)` mark the
+  other operations git can stop in. It reads files in the `.git` directory and
+  costs no extra `git` call (one, `rev-parse --short HEAD`, in a reftable
+  repository, which then shows the sha rather than a tag name). SVN checkouts
+  are not affected.
 - `modelFormat` (inside `elements`) sets how the model name reads: `short`
   (`opus`, the default), `versioned` (`opus 5.5`), or `full` (raw id,
   `claude-opus-5-5[1m]`). The `:effort` suffix is a separate `effort` toggle.

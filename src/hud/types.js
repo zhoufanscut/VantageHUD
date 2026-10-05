@@ -22,6 +22,12 @@ export const DEFAULT_HUD_LABELS = {
     conflict: '✗',
     ahead: '⇡',
     behind: '⇣',
+    gitRebase: 'rebase',
+    gitAm: 'am',
+    gitMerge: 'merge',
+    gitCherryPick: 'cherry-pick',
+    gitRevert: 'revert',
+    gitBisect: 'bisect',
 };
 export const HUD_LOCALE_LABELS = {
     en: DEFAULT_HUD_LABELS,
@@ -44,6 +50,12 @@ export const HUD_LOCALE_LABELS = {
         conflict: '冲突',
         ahead: '领先',
         behind: '落后',
+        gitRebase: '变基',
+        gitAm: '应用补丁',
+        gitMerge: '合并',
+        gitCherryPick: '拣选',
+        gitRevert: '还原',
+        gitBisect: '二分查找',
     },
 };
 export const HUD_LABEL_KEYS = Object.freeze(Object.keys(DEFAULT_HUD_LABELS));
@@ -101,8 +113,8 @@ export const DEFAULT_HUD_CONFIG = {
     labels: DEFAULT_HUD_LABELS,
     elements: {
         // ── Display elements, in render order (mirrors DEFAULT_ELEMENT_ORDER.main);
-        //    the sub-toggles `effort` (model) and `spendLimit` / `otherModelWeekly`
-        //    (rateLimits) are kept beside their element ──
+        //    the sub-toggles `effort` (model), `spendLimit` / `otherModelWeekly`
+        //    (rateLimits) and `detachedHead` (gitBranch) are kept beside their element ──
         pathLabel: true,
         model: true, // Show only when Claude Code statusline stdin provides a model
         effort: true, // Fold the thinking-effort level (high/medium/…) into the model element; set false to hide it
@@ -116,6 +128,7 @@ export const DEFAULT_HUD_CONFIG = {
         showCallCounts: true, // callCounts element — tool/agent/skill counts (oh-my-claudecode#710)
         gitRepo: true, // Show repository name by default
         gitBranch: true, // Show branch (and worktree suffix) by default
+        detachedHead: false, // gitBranch sub-toggle — on a detached HEAD show branch:@v1.0 / @a1b2c3d (bisect) / feat (rebase 2/3) instead of hiding; off by default
         gitStatus: true, // Show working-tree status by default
         // ── Behavioral options / sub-toggles (not standalone display elements) ──
         modelFormat: 'short', // model element label: 'short' (opus) | 'versioned' (opus 5.5) | 'full' (raw id)

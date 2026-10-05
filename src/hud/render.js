@@ -274,7 +274,10 @@ export async function render(context, config) {
             : vcs === "git" || context.repoName ? renderGitRepo(context.cwd, context.repoName) : null);
     }
     if (enabledElements.gitBranch && vcs) {
-        put("gitBranch", () => vcs === "svn" ? renderSvnBranch(context.cwd) : renderGitBranch(context.cwd, context.worktreeHint));
+        // `detachedHead` (opt-in, default off): a detached HEAD — rebase,
+        // bisect, a checked-out tag — names its commit instead of hiding.
+        const branchOptions = { detachedHead: enabledElements.detachedHead === true, labels: hudLabels };
+        put("gitBranch", () => vcs === "svn" ? renderSvnBranch(context.cwd) : renderGitBranch(context.cwd, context.worktreeHint, branchOptions));
     }
     if (enabledElements.gitStatus && vcs) {
         put("gitStatus", () => vcs === "svn"

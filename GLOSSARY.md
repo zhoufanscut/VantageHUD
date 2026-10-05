@@ -145,6 +145,17 @@ skimming. Add a term back (or a new one) when it earns its place; keep this shor
   name and worktree suffix come from the payload's `workspace` when Claude Code
   supplies them, git otherwise. The config keys
   keep their `git*` names.
+- **detached HEAD** / **`detachedHead`** — git's HEAD naming a commit rather
+  than a branch: mid-rebase, mid-bisect, or after checking out a tag or sha.
+  `git symbolic-ref` then fails and the `branch:` slot hides — unless the
+  opt-in `detachedHead` flag (off by default) is on, when `getDetachedHead`
+  (`src/hud/elements/git.js`) describes it from files in the git dir:
+  `branch:@v1.0` (the ref it was checked out at, via `logs/HEAD`),
+  `branch:@a1b2c3d` (sha), `branch:feat (rebase 2/3)` (`rebase-merge/` or
+  `rebase-apply/` `head-name`), or `(am)`, `(merge)`, `(cherry-pick)`,
+  `(revert)`, `(bisect)` from `rebase-apply/`, `MERGE_HEAD`,
+  `CHERRY_PICK_HEAD`, `REVERT_HEAD`, `BISECT_LOG`. The `@` marks a commit, not
+  a branch.
 - **working copy** *(SVN)* — the SVN counterpart to a git worktree: the tree
   holding a `.svn` directory. `findSvnWorkingCopyRoot`
   (`src/lib/worktree-paths.js`) finds its root by filesystem walk, never by
