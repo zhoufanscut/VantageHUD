@@ -4,7 +4,7 @@ Notable changes to this project. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.6.0] - 2026-10-05
 
 The fixes from a full review: per-model weekly caps that render again, a
 `token:` that says when it is a lower bound, a wrapper that cannot delete your
@@ -15,9 +15,6 @@ default, and an MIT `LICENSE`.
 
 ### Added
 
-- **Per-model weekly caps from the usage API's `limits[]`.** The API now
-  reports them only there, so `sn:`/`op:` had stopped rendering; they show
-  again. `limits[]` also fills an absent `5h`/`7d`.
 - **Opt-in: weekly caps for other models** (`elements.otherModelWeekly`,
   default `false`). With it on, a model other than Sonnet/Opus in `limits[]`
   gets a bucket, labelled by its first letter and the first consonant after
@@ -56,9 +53,9 @@ default, and an MIT `LICENSE`.
   agents only through the Workflow tool showed no sign of them; with the flag
   it shows `🔀`. A run starts many agents, so it gets its own glyph; `🤖` still
   counts Agent/Task calls only, one agent each, so the flag never adds a `🤖`. Resuming a run does not count again. New label key
-  `workflow` (`W` / 工作流). The tally memo gained a field, so each
-  `lead-tokens.json` rescans its transcript once after the upgrade, flag on or
-  off.
+  `workflow` (`W` / 工作流). The tally memo gained fields, so each
+  session rescans its transcripts once after the upgrade, the lead and every
+  subagent file, flag on or off.
 - **`LICENSE`** (MIT), keeping the copyright notices of
   [claude-hud](https://github.com/jarrodwatts/claude-hud) and
   [oh-my-claudecode](https://github.com/Yeachan-Heo/oh-my-claudecode), which
@@ -152,7 +149,8 @@ default, and an MIT `LICENSE`.
   target (losing `~` when it was outside `$HOME`); it now keeps the session's
   spelling, unless the link points into the tree.
 - An unwritable install `cache/` falls back to
-  `${XDG_CACHE_HOME:-~/.cache}/vantagehud`.
+  `${XDG_CACHE_HOME:-~/.cache}/vantagehud`; with no writable dir at all the
+  line is rendered without the cache instead of staying at `[HUD] Starting...`.
 - **The wrapper's cache files are private** (`umask 077`), like the Node
   side's 0600 writes: `stdin.json` is the whole payload. This matters if you
   share one cache dir between users.
@@ -179,9 +177,13 @@ default, and an MIT `LICENSE`.
   a cache dir carrying a `.vantagehud-cache` marker, which the wrapper writes
   only in a dir it created and in the install's own `cache/`. A pre-existing
   `HUD_CACHE_DIR` is never swept unless you create that file in it.
+- **`sn:`/`op:` stopped rendering.** The usage API now reports per-model
+  weekly caps only in `limits[]`; they are read from there, and `limits[]`
+  also fills an absent `5h`/`7d`.
 - **A killed wrapper lost the cached line.** A Windows session showed
-  `[HUD] Starting...` for minutes: every frame took the slow synchronous path
-  and was killed the same way. Node now writes the line to the cache itself as
+  `[HUD] Starting...` for minutes: every frame took the slow synchronous path,
+  where it could die the same way (the cause there is unconfirmed; killing the
+  wrapper after its render reproduces the shape). Node now writes the line to the cache itself as
   soon as it has one. A synchronous render never runs `svn status` (it serves
   the memo), a failed walk backs off 5 minutes, and orphaned `.tmp` files are
   swept by one `find` off the hot path.
@@ -396,7 +398,7 @@ counter that is finally correct.
 First public release — a small, self-contained statusline for Claude Code that
 shows the model, thinking effort, context, rate limits, and git at a glance.
 
-[Unreleased]: https://github.com/zhoufanscut/VantageHUD/compare/v0.5.0...HEAD
+[0.6.0]: https://github.com/zhoufanscut/VantageHUD/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/zhoufanscut/VantageHUD/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/zhoufanscut/VantageHUD/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/zhoufanscut/VantageHUD/releases/tag/v0.3.0
