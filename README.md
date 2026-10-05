@@ -111,7 +111,8 @@ cp ~/.claude/hud/config.json.example ~/.claude/hud/config.json
   gitignored, so `git pull` never clobbers your settings.
 - **Edits apply on the next status-line refresh** — no Claude Code restart
   needed. The HUD notices `config.json` changed (its mtime, size or inode
-  differs from the render it cached) and re-renders.
+  differs from the render it cached; a symlinked config is checked through
+  to its target) and re-renders.
 - Common knobs: `theme`, `locale` (`en` | `zh-CN`), and the
   `elements` toggles (e.g. `gitBranch`, `contextBar`, `rateLimits`, `showTokens`).
   See `config.json.example` for the full list.

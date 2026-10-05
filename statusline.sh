@@ -95,8 +95,12 @@ use_cache_dir() {
 # HUD_CACHE_DIR, else the install's own cache/. When that default is not
 # writable (a read-only or shared install), the user's cache dir instead —
 # exported, so Node keeps its state in the same place.
+# USING_DEFAULT: the install's own cache/ is in use. A flag, not a comparison
+# with "$SCRIPT_DIR/cache": CACHE_DIR is the physical path, so a symlinked
+# cache/ never matched and was never marked (every sweep skipped).
+USING_DEFAULT=
 if use_cache_dir "${HUD_CACHE_DIR:-"$SCRIPT_DIR/cache"}"; then
-  :
+  [ -n "${HUD_CACHE_DIR:-}" ] || USING_DEFAULT=1
 elif [ -z "${HUD_CACHE_DIR:-}" ] && [ -n "${HOME:-}" ] \
   && use_cache_dir "${XDG_CACHE_HOME:-"$HOME/.cache"}/vantagehud"; then
   dbg "install cache not writable; using $CACHE_DIR"
@@ -111,7 +115,7 @@ CACHE_MARKER="$CACHE_DIR/$CACHE_MARKER_NAME"
 # A HUD_CACHE_DIR that already existed is never adopted: the sweeps skip it
 # until the user creates the marker there.
 if [ ! -f "$CACHE_MARKER" ] \
-  && { [ -n "$CACHE_CREATED" ] || [ "$CACHE_DIR" = "$SCRIPT_DIR/cache" ]; }; then
+  && { [ -n "$CACHE_CREATED" ] || [ -n "$USING_DEFAULT" ]; }; then
   : > "$CACHE_MARKER" 2>/dev/null || :
 fi
 INPUT_TMP="$CACHE_DIR/stdin.$$.tmp"
@@ -138,7 +142,8 @@ path_age() {
 }
 
 # Sets CFG_STAMP to the config's mtime:size:inode, empty when there is no
-# config; fails when it exists but cannot be stat'ed. Compared for *inequality*
+# config; fails when it exists but cannot be stat'ed. -L: a config symlinked
+# into a dotfiles repo is stamped by its target, which is what an edit changes. Compared for *inequality*
 # with the stamp recorded when the cached line was rendered, so a config dated
 # in the future (clock skew, a copy that kept its times) cannot force a render
 # on every frame, and an edit in the same second as that render still shows
@@ -146,8 +151,8 @@ path_age() {
 config_stamp() {
   CFG_STAMP=
   [ -f "$HUD_CONFIG_FILE" ] || return 0
-  CFG_STAMP=$(stat -c '%Y:%s:%i' "$HUD_CONFIG_FILE" 2>/dev/null) \
-    || CFG_STAMP=$(stat -f '%m:%z:%i' "$HUD_CONFIG_FILE" 2>/dev/null) || CFG_STAMP=
+  CFG_STAMP=$(stat -L -c '%Y:%s:%i' "$HUD_CONFIG_FILE" 2>/dev/null) \
+    || CFG_STAMP=$(stat -L -f '%m:%z:%i' "$HUD_CONFIG_FILE" 2>/dev/null) || CFG_STAMP=
   case $CFG_STAMP in
     '' | *[!0-9:]*) CFG_STAMP=; return 1 ;;
   esac
@@ -268,13 +273,16 @@ PRUNE_MARKER="$CACHE_DIR/.last-prune"
 PRUNE_INTERVAL_SECONDS=86400
 CACHE_MAX_AGE_DAYS=${HUD_CACHE_MAX_AGE_DAYS:-14}
 
+# True when the daily prune is due: no marker, or one older than the interval.
+prune_due() {
+  ! { [ -f "$PRUNE_MARKER" ] && path_age "$PRUNE_MARKER" \
+    && [ "$AGE" -lt "$PRUNE_INTERVAL_SECONDS" ]; }
+}
+
 # Evict abandoned cache state. Runs from the background refresh (never the hot
 # path) and at most once per PRUNE_INTERVAL_SECONDS via the marker file.
 prune_old_cache() {
-  if [ -f "$PRUNE_MARKER" ] && path_age "$PRUNE_MARKER" \
-    && [ "$AGE" -lt "$PRUNE_INTERVAL_SECONDS" ]; then
-    return
-  fi
+  prune_due || return 0
   touch "$PRUNE_MARKER" 2>/dev/null || :
   # Legacy flat files from the pre-subfolder layout (<name>.<session>.json at
   # the cache root) — dead since sessions moved into subfolders; remove.
@@ -382,9 +390,6 @@ NODE_STDOUT_TMP="$SESSION_DIR/statusline.$$.tmp"
 NODE_STDERR_TMP="$SESSION_DIR/statusline.$$.err"
 SYNC_RENDER=
 USAGE_BUDGET_MS=
-# At most this many renders per background refresh: the first, then one per
-# payload that arrived while it held the lock.
-REFRESH_MAX_PASSES=3
 
 if [ -s "$INPUT_TMP" ]; then
   mv "$INPUT_TMP" "$INPUT_FILE" 2>/dev/null || cp "$INPUT_TMP" "$INPUT_FILE" 2>/dev/null || :
@@ -488,7 +493,7 @@ refresh_cache() {
   fi
 
   # Never while Claude Code waits on a synchronous render: the next background
-  # refresh does it.
+  # refresh does it, or the sync path backgrounds it once the prune is due.
   if [ -z "$SYNC_RENDER" ] && [ -z "$HOUSEKEEPING_DONE" ]; then
     HOUSEKEEPING_DONE=1
     housekeeping
@@ -500,23 +505,25 @@ refresh_cache() {
 }
 
 # The background refresh: render, then again while payloads arrived during the
-# previous render (acquire_or_flag), up to REFRESH_MAX_PASSES renders — so a
-# burst of triggers ends on its last payload, not its first. Runs in a
-# `( ... ) &` subshell, holding the lock its parent took.
+# previous render (acquire_or_flag) — so a burst of triggers ends on its last
+# payload, not its first. No cap on the passes: one process renders at a time
+# and Claude Code debounces triggers 300 ms, and a cap dropped the tail of a
+# sustained stream (left render.dirty set) until a trigger that may never come.
+# Runs in a `( ... ) &` subshell, holding the lock its parent took.
 background_refresh() {
   # Unbudgeted, even when a synchronous render spawned it.
   SYNC_RENDER=
   USAGE_BUDGET_MS=
-  SELF_PID=$(sh -c 'echo "$PPID"' 2>/dev/null) || SELF_PID=
+  # `exec`: bash (macOS /bin/sh, Git Bash) forks the command substitution
+  # inside a function, so a plain `sh -c` reported that short-lived fork, and
+  # the lock named a dead PID while this render still ran.
+  SELF_PID=$(exec sh -c 'echo "$PPID"' 2>/dev/null) || SELF_PID=
   case $SELF_PID in
     '' | *[!0-9]*) SELF_PID=$$ ;;
   esac
   claim_lock
-  refresh_passes=0
   while :; do
     refresh_cache
-    refresh_passes=$((refresh_passes + 1))
-    [ "$refresh_passes" -lt "$REFRESH_MAX_PASSES" ] || break
     [ -f "$DIRTY_FILE" ] || break
     try_acquire_lock || break
   done
@@ -569,6 +576,12 @@ if [ -s "$INPUT_FILE" ] && acquire_or_flag; then
     # A payload that arrived during this render gets a background one.
     if [ -f "$DIRTY_FILE" ] && try_acquire_lock; then
       ( background_refresh ) >/dev/null 2>&1 &
+    elif [ -f "$CACHE_MARKER" ] && prune_due; then
+      # A session whose every frame is synchronous (HUD_SYNC_REFRESH=1 left in
+      # the command, a line that never lands) has no background refresh to
+      # sweep for it, so the sweeps run here, at most daily, off Claude Code's
+      # wait.
+      ( housekeeping ) >/dev/null 2>&1 &
     fi
     exit 0
   fi
