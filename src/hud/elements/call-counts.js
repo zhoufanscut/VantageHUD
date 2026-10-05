@@ -1,8 +1,9 @@
 /**
  * HUD - Call Counts Element
  *
- * Renders real-time counts of tool calls, agent invocations, and skill usages
- * on the right side of the HUD status line. (Issue #710)
+ * Renders the session's counts of tool calls, agent invocations, and skill
+ * usages; by default it sits just before the repo/branch/status fragments.
+ * (Issue #710)
  *
  * Format: 🔧42 🤖7 ⚡3  (emoji)
  * Format: T:42 A:7 S:3   (ASCII fallback / explicit override)
