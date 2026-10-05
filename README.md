@@ -75,7 +75,7 @@ keep your existing keys (`model`, `permissions`, …) and just add this one:
   re-runs it only on its own events — session start, a new assistant message,
   `/compact`, a permission-mode or vim-mode change — so the session timer and
   the limit countdowns freeze between turns. Each tick is served from the render
-  cache in tens of milliseconds, with a full re-render (~150 ms of Node) behind it.
+  cache in tens of milliseconds, with a full re-render (~100 ms of Node) behind it.
 - Prefer a tool? Merge it with `jq`:
   ```sh
   f="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json"; tmp=$(mktemp)

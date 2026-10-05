@@ -177,7 +177,7 @@ deadline_passed() {
 # Orphans of a wrapper that died mid-render (killed, or a failed fork). A
 # stdin/statusline .tmp goes whatever its size: a killed render leaves a
 # complete line in it that nothing will ever promote. So does a Node
-# atomic-write temp (`.<name>.tmp.<uuid>`, renamed into place milliseconds
+# atomic-write temp (`.<name>.tmp.<token>`, renamed into place milliseconds
 # after it is opened). A .err is kept while non-empty — it is the only record
 # of why that render died. One `find`, not a per-file loop costing ~6 forks a
 # file: forks are exactly what is scarce when orphans pile up (a Windows/Git

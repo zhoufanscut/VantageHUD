@@ -20,7 +20,8 @@ skimming. Add a term back (or a new one) when it earns its place; keep this shor
   render (`session_id`, `cwd`, `model`, `effort`, `context_window`, …). The sole
   live input (`src/hud/stdin.js`).
 - **transcript** — the conversation log (`.jsonl`); tail-read
-  (`src/hud/transcript.js`) for the last request's token usage, and scanned
+  (`src/hud/transcript.js`) for the last request's token usage when the
+  payload's context % is 0, and scanned
   incrementally (`src/hud/token-tally.js`) for the token total, the
   tool/agent/skill counts and the session start. A *second* input, distinct
   from the payload.
