@@ -39,19 +39,25 @@ function detectColorDepth() {
     return 0;
 }
 const COLOR_DEPTH = detectColorDepth();
-/** Convert an [r,g,b] triple to the nearest xterm-256 cube/grayscale index. */
+/** xterm-256 cube channel levels (index 0..5). */
+const CUBE_LEVELS = [0, 95, 135, 175, 215, 255];
+/**
+ * Convert an [r,g,b] triple to the nearest xterm-256 cube/grayscale index.
+ * The cube levels are uneven (0, 95, then steps of 40), so the cut points are
+ * the midpoints 48 / 115 / 155 / 195 / 235 — `floor`, not `round`: rounding
+ * biased every channel half a step up and sent 255 to a 7th level that carried
+ * into the next digit (#ff0000 came out as 232, near-black). The nearest of
+ * the cube color and the grey ramp (232-255: 8, 18, … 238) wins.
+ */
 function rgbTo256(r, g, b) {
-    // Grayscale ramp (232-255) when the channels are close to neutral.
-    if (Math.abs(r - g) < 12 && Math.abs(g - b) < 12 && Math.abs(r - b) < 12) {
-        const gray = Math.round((r + g + b) / 3);
-        if (gray < 8)
-            return 16;
-        if (gray > 248)
-            return 231;
-        return 232 + Math.round(((gray - 8) / 247) * 23);
-    }
-    const c = (v) => (v < 48 ? 0 : v < 115 ? 1 : Math.round((v - 35) / 40));
-    return 16 + 36 * c(r) + 6 * c(g) + c(b);
+    const q = (v) => (v < 48 ? 0 : v < 115 ? 1 : Math.min(5, Math.floor((v - 35) / 40)));
+    const cr = q(r), cg = q(g), cb = q(b);
+    const cube = 16 + 36 * cr + 6 * cg + cb;
+    const avg = (r + g + b) / 3;
+    const gi = Math.min(23, Math.max(0, Math.round((avg - 8) / 10)));
+    const gv = 8 + 10 * gi;
+    const dist = (x, y, z) => (r - x) ** 2 + (g - y) ** 2 + (b - z) ** 2;
+    return dist(gv, gv, gv) < dist(CUBE_LEVELS[cr], CUBE_LEVELS[cg], CUBE_LEVELS[cb]) ? 232 + gi : cube;
 }
 /** Map an [r,g,b] triple to the closest basic-16 SGR foreground code. */
 function rgbTo16(r, g, b) {
