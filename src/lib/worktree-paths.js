@@ -10,7 +10,7 @@
  * project, and the globally-unique session id names the folder, so unrelated
  * sessions (and projects sharing one install) never collide.
  */
-import { existsSync, realpathSync, statSync } from 'fs';
+import { existsSync, readdirSync, realpathSync, statSync } from 'fs';
 import { resolve, sep, join, dirname } from 'path';
 import { getClaudeConfigDir } from './config-dir.js';
 import { getHudInstallRoot } from './install-paths.js';
@@ -204,6 +204,42 @@ export function resolveToWorktreeRoot(directory) {
 // ============================================================================
 // TRANSCRIPT PATH RESOLUTION (Issue #1094)
 // ============================================================================
+/** Claude Code's cap on an encoded project-dir name before it adds a hash. */
+const MAX_PROJECT_DIR_NAME = 200;
+/**
+ * Find `<config>/projects/<encoded projectRoot>/<sessionFile>`.
+ *
+ * The encoding mirrors Claude Code's (2.1.289): every character outside
+ * `[a-zA-Z0-9]` becomes `-`, so `_`, spaces and a Windows drive's `:` do too —
+ * not just `/`, `\` and `.`, which is all this used to replace. A name longer
+ * than 200 characters is cut there and given a `-<hash>` suffix of the full
+ * path; that hash cannot be recomputed here, so such a directory is found by
+ * its prefix instead.
+ *
+ * @returns The transcript path, or null when it is not there
+ */
+function findProjectTranscript(projectRoot, sessionFile) {
+    const projectsDir = join(getClaudeConfigDir(), 'projects');
+    const encoded = projectRoot.replace(/[^a-zA-Z0-9]/g, '-');
+    if (encoded.length <= MAX_PROJECT_DIR_NAME) {
+        const candidate = join(projectsDir, encoded, sessionFile);
+        return existsSync(candidate) ? candidate : null;
+    }
+    const prefix = `${encoded.slice(0, MAX_PROJECT_DIR_NAME)}-`;
+    try {
+        for (const name of readdirSync(projectsDir)) {
+            if (name.indexOf(prefix) === 0) {
+                const candidate = join(projectsDir, name, sessionFile);
+                if (existsSync(candidate))
+                    return candidate;
+            }
+        }
+    }
+    catch {
+        // No projects directory, or unreadable.
+    }
+    return null;
+}
 /**
  * Resolve a Claude Code transcript path that may be mismatched in worktree sessions.
  *
@@ -214,7 +250,8 @@ export function resolveToWorktreeRoot(directory) {
  * But the actual transcript lives at the original project's path:
  *   ~/.claude/projects/-path-to-project/<session>.jsonl
  *
- * Claude Code encodes `/` and `.` as `-`. The `.claude/worktrees/`
+ * Claude Code encodes every non-alphanumeric character as `-` (see
+ * findProjectTranscript). The `.claude/worktrees/`
  * segment becomes `-claude-worktrees-`, preceded by a `-` from the path
  * separator, yielding the distinctive `--claude-worktrees-` pattern in the
  * encoded directory name.
@@ -255,16 +292,9 @@ export function resolveTranscriptPath(transcriptPath, cwd) {
         const lastSep = transcriptPath.lastIndexOf('/');
         const sessionFile = lastSep !== -1 ? transcriptPath.substring(lastSep + 1) : '';
         if (sessionFile) {
-            // The projects directory is under the Claude config dir
-            const projectsDir = join(getClaudeConfigDir(), 'projects');
-            if (existsSync(projectsDir)) {
-                // Encode the main project root the same way Claude Code does:
-                // replace path separators with `-`, replace dots with `-`.
-                const encodedMain = mainProjectRoot.replace(/[/\\.]/g, '-');
-                const resolvedPath = join(projectsDir, encodedMain, sessionFile);
-                if (existsSync(resolvedPath))
-                    return resolvedPath;
-            }
+            const resolvedPath = findProjectTranscript(mainProjectRoot, sessionFile);
+            if (resolvedPath)
+                return resolvedPath;
         }
     }
     // Strategy 3: Detect native git worktree via git-common-dir.
@@ -292,13 +322,9 @@ export function resolveTranscriptPath(transcriptPath, cwd) {
                 const lastSep = transcriptPath.lastIndexOf('/');
                 const sessionFile = lastSep !== -1 ? transcriptPath.substring(lastSep + 1) : '';
                 if (sessionFile) {
-                    const projectsDir = join(getClaudeConfigDir(), 'projects');
-                    if (existsSync(projectsDir)) {
-                        const encodedMain = mainRepoRoot.replace(/[/\\.]/g, '-');
-                        const resolvedPath = join(projectsDir, encodedMain, sessionFile);
-                        if (existsSync(resolvedPath))
-                            return resolvedPath;
-                    }
+                    const resolvedPath = findProjectTranscript(mainRepoRoot, sessionFile);
+                    if (resolvedPath)
+                        return resolvedPath;
                 }
             }
         }
