@@ -168,6 +168,45 @@ export function findSvnWorkingCopyRoot(directory) {
     return root;
 }
 /**
+ * Spell a canonical VCS root the way the session's own cwd spells it.
+ *
+ * Both roots come back canonical — git's `--show-toplevel` always, and
+ * findSvnWorkingCopyRoot realpaths first — so a session started in a symlink
+ * (`~/work/link` → `/data/proj`) showed `/data/proj`, and lost the `~` when
+ * the target was outside $HOME, while a plain symlinked directory kept the
+ * link path. The root is mapped back only when that is exact: the cwd *is* the
+ * root, or the cwd's path below the root is also the tail of the given path.
+ * A link pointing *into* the tree (`link` → `repo/a/b`) has no such spelling,
+ * and a lexical `link/../..` would name the wrong directory, so it keeps the
+ * canonical root.
+ *
+ * @param given - The cwd as given (resolved, not canonicalized)
+ * @param root - The canonical root containing it
+ * @returns The root under the given spelling, or `root` itself
+ */
+function onGivenPath(given, root) {
+    let real;
+    try {
+        real = realpathSync(given);
+    }
+    catch {
+        return root;
+    }
+    if (real === root) {
+        return given;
+    }
+    const prefix = root.endsWith(sep) ? root : `${root}${sep}`;
+    if (real.indexOf(prefix) !== 0) {
+        // Includes Windows, where git prints `C:/x` and realpath `C:\x`.
+        return root;
+    }
+    const below = real.slice(prefix.length);
+    const tail = `${sep}${below}`;
+    return given.endsWith(tail) && given.length > tail.length
+        ? given.slice(0, given.length - tail.length)
+        : root;
+}
+/**
  * Resolve a directory path to its version-control root.
  *
  * Walks up from `directory` using `git rev-parse --show-toplevel`, then falls
@@ -180,17 +219,23 @@ export function findSvnWorkingCopyRoot(directory) {
  * not for state location (runtime files live under getCacheDir()/<session>/).
  *
  * @param directory - Any directory inside a git worktree or SVN checkout (optional)
- * @returns The repository/working-copy root (never a subdirectory), else the directory itself
+ * @returns The repository/working-copy root (never a subdirectory; spelled as
+ *   the given path spells it when that is exact, see onGivenPath), else the
+ *   directory itself
  */
 export function resolveToWorktreeRoot(directory) {
     if (directory) {
         const resolved = resolve(directory);
         const root = getWorktreeRoot(resolved);
-        if (root)
-            return root;
+        if (root) {
+            const shown = onGivenPath(resolved, root);
+            // render.js asks getWorktreeRoot again with what this returns.
+            worktreeRootCache.set(shown, root);
+            return shown;
+        }
         const svnRoot = findSvnWorkingCopyRoot(resolved);
         if (svnRoot)
-            return svnRoot;
+            return onGivenPath(resolved, svnRoot);
         if (process.env.HUD_DEBUG) {
             console.error('[worktree] neither a git worktree nor an svn checkout, using it as given', {
                 directory: resolved,
