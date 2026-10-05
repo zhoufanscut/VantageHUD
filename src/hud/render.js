@@ -16,6 +16,7 @@ import { getWorktreeRoot } from "../lib/worktree-paths.js";
 import { cleanText } from "./sanitize.js";
 import { renderModel } from "./elements/model.js";
 import { renderCallCounts } from "./elements/call-counts.js";
+import { renderPromptCache } from "./elements/prompt-cache.js";
 /**
  * ANSI escape sequence regex (matches SGR and other CSI sequences).
  * Used to skip escape codes when measuring/truncating visible width.
@@ -319,6 +320,11 @@ export async function render(context, config) {
         put("contextBar", () => enabledElements.useBars
             ? renderContextWithBar(context.contextPercent, config.thresholds, 10, hudLabels)
             : renderContext(context.contextPercent, config.thresholds, hudLabels));
+    }
+    // Opt-in (`elements.promptCache`, default false); hidden while the payload
+    // has no `prompt_cache` (before the first API response, or caching off).
+    if (enabledElements.promptCache === true && context.promptCache) {
+        put("promptCache", () => renderPromptCache(context.promptCache, hudLabels));
     }
     const showCounts = enabledElements.showCallCounts ?? true;
     if (showCounts) {

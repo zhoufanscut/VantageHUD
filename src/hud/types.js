@@ -7,6 +7,9 @@ export const DEFAULT_HUD_LABELS = {
     context: 'ctx',
     tokens: 'token',
     session: 'session',
+    promptCache: 'cache',
+    cacheWarm: 'warm',
+    cacheCold: 'cold',
     critical: 'CRITICAL',
     compress: 'COMPRESS?',
     tool: 'T',
@@ -25,6 +28,9 @@ export const HUD_LOCALE_LABELS = {
         context: '上下文',
         tokens: '令牌',
         session: '会话',
+        promptCache: '缓存',
+        cacheWarm: '热',
+        cacheCold: '冷',
         critical: '危急',
         compress: '建议压缩',
         tool: '工具',
@@ -68,7 +74,7 @@ export function resolveHudLabels(locale, labels) {
 export const DEFAULT_ELEMENT_ORDER = {
     main: [
         'pathLabel', 'model', 'rateLimits',
-        'contextBar', 'tokens', 'session',
+        'contextBar', 'promptCache', 'tokens', 'session',
         'callCounts', 'gitRepo', 'gitBranch', 'gitStatus',
     ],
 };
@@ -99,6 +105,7 @@ export const DEFAULT_HUD_CONFIG = {
         effort: true, // Fold the thinking-effort level (high/medium/…) into the model element; set false to hide it
         rateLimits: true, // Show rate limits by default
         contextBar: true,
+        promptCache: false, // cache: element — prompt cache warm until HH:MM / cold (re-cache size); off by default
         showTokens: true, // tokens element — On by default; users can disable in config.json
         sessionHealth: true, // session element
         showCallCounts: true, // callCounts element — tool/agent/skill counts (oh-my-claudecode#710)

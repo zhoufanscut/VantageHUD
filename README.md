@@ -74,7 +74,8 @@ keep your existing keys (`model`, `permissions`, …) and just add this one:
   want the bar to keep moving while the session is idle. Claude Code otherwise
   re-runs it only on its own events — session start, a new assistant message,
   `/compact`, a permission-mode or vim-mode change — so the session timer and
-  the limit countdowns freeze between turns. Each tick is served from the render
+  the limit countdowns freeze between turns (the `cache:` element shows a clock
+  time instead, so it does not). Each tick is served from the render
   cache in tens of milliseconds, with a full re-render (~100 ms of Node) behind it.
 - Prefer a tool? Merge it with `jq`:
   ```sh
@@ -136,6 +137,7 @@ cp ~/.claude/hud/config.json.example ~/.claude/hud/config.json
   | `model` | `model` (plus `effort` for the `:high` suffix) |
   | `rateLimits` | `rateLimits` |
   | `contextBar` | `contextBar` |
+  | `promptCache` | `promptCache` (off by default — see below) |
   | `tokens` | `showTokens` |
   | `session` | `sessionHealth` |
   | `callCounts` | `showCallCounts` |
@@ -144,7 +146,8 @@ cp ~/.claude/hud/config.json.example ~/.claude/hud/config.json
   | `gitStatus` | `gitStatus` |
 - `labels` (top level) renames the fragment labels over the `locale`'s, e.g.
   `"labels": { "context": "ctx", "tokens": "tok" }`. Keys: `context`,
-  `tokens`, `session`, `critical` and `compress` (the `CRITICAL` / `COMPRESS?`
+  `tokens`, `session`, `promptCache`, `cacheWarm`, `cacheCold` (the
+  `cache:` / `warm` / `cold` words), `critical` and `compress` (the `CRITICAL` / `COMPRESS?`
   text after `ctx:`), `tool`, `agent`, `skill`, `staged`, `modified`,
   `untracked`, `conflict`, `ahead`, `behind`.
 - `usageApiPollIntervalMs` (default `90000`, minimum `30000`): how often the
@@ -170,6 +173,16 @@ cp ~/.claude/hud/config.json.example ~/.claude/hud/config.json
   `safeMode` (default `true`) strips terminal control sequences and draws the
   gauges in ASCII; `maxOutputLines` (default `4`) caps the lines
   `wrapMode: "wrap"` may produce.
+- `promptCache` (inside `elements`, default `false`): set it to `true` to add a
+  `cache:` fragment after `ctx:` for the main conversation's prompt cache, from
+  the payload's `prompt_cache`. `cache:warm(14:30)` means the cache stays warm
+  until 14:30 local time; `cache:cold(161.8k)` means it has expired and the
+  next request writes those 161.8k tokens to the cache again (the number is
+  left out when Claude Code does not report it). It is hidden until the first
+  response of a session, and when Claude Code reports that caching is off.
+  The expiry is a clock time, not a countdown, so it stays right while the
+  session is idle. Claude Code re-runs the status line when the cache expires,
+  so it turns `cold` then without a `refreshInterval`.
 - `modelFormat` (inside `elements`) sets how the model name reads: `short`
   (`opus`, the default), `versioned` (`opus 5.5`), or `full` (raw id,
   `claude-opus-5-5[1m]`). The `:effort` suffix is a separate `effort` toggle.
@@ -257,8 +270,8 @@ knowing before you change them:
 | `label` | every `xxx:` prefix, `(reset)` tails, the `callCounts` numbers |
 | `faint` | `($spent/$limit)`, the stale `*`, the approximate `~` of `token:~1.20M`, `[API 429]` |
 | `sep` | the ` \| ` separator **and** the empty gauge track (`░`) |
-| `gradLow` | usage under 70%, **and** the `repo:` / `branch:` / `token:` values, and effort `max` |
-| `gradMid` | usage 70–84%, `[API auth]` / `[API err]`, effort `high` |
+| `gradLow` | usage under 70%, **and** the `repo:` / `branch:` / `token:` values, effort `max`, and `cache:warm` |
+| `gradMid` | usage 70–84%, `[API auth]` / `[API err]`, effort `high`, `cache:cold` |
 | `gradHigh` | usage 85% and over, conflict counts, effort `low` |
 | `add` | staged / ahead counts |
 | `del` | modified / behind counts |

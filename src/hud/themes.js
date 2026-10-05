@@ -43,8 +43,10 @@
  *   sep      the ` | ` separator and the empty gauge-bar track (`░`)
  *   gradLow  usage tier "calm" (< 70%) — ALSO the static value tone for
  *            repo: / branch: / token: (so the calm-tier and identity-value
- *            colors cannot diverge) AND the effort ramp's calm (max) end
- *   gradMid  usage tier "watch" (70–84%) — also `[API auth]` / `[API err]`
+ *            colors cannot diverge) AND the effort ramp's calm (max) end,
+ *            AND `cache:warm`
+ *   gradMid  usage tier "watch" (70–84%) — also `[API auth]` / `[API err]`,
+ *            and `cache:cold`
  *   gradHigh usage tier "alert" (≥ 85%) — also conflict counts, effort `low`
  *   add      git: staged / ahead — glyph + number (positive)
  *   del      git: modified / behind — glyph + number (negative)

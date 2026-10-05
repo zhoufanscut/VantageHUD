@@ -113,6 +113,15 @@ skimming. Add a term back (or a new one) when it earns its place; keep this shor
   ("ultracode") agents, which is why `src/hud/subagents.js` walks it recursively /
   the tokens those subagents spend, which that module folds into
   `token:` so it reflects the whole run, not just the lead thread.
+- **cache** / **prompt cache** — the opt-in `cache:` element (enable flag
+  `promptCache`, off by default; `src/hud/elements/prompt-cache.js`), from the
+  payload's `prompt_cache` (`getPromptCache` in `src/hud/stdin.js`).
+  `cache:warm(14:30)` — the main conversation's cached prefix is warm until
+  that local time (`expires_at`); `cache:cold(161.8k)` — it has gone cold and
+  the next request re-caches that many tokens (`recache_tokens_if_cold`).
+  Hidden while the payload has no `prompt_cache` or reports
+  `caching_observed: false`. Not the HUD's own **render cache** or **status
+  memo**.
 - **unsettled group** / **`~` on `token:`** — an API call (`message.id` group)
   whose last transcript row still has `stop_reason: null`, so it holds only
   the streaming placeholder count. Most subagent calls stay that way from

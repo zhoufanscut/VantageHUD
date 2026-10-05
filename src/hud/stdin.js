@@ -285,6 +285,32 @@ export function getNextTimedTrigger(stdin, nowMs) {
     return next;
 }
 /**
+ * The payload's `prompt_cache` reduced to what the `cache:` element shows, or
+ * null to hide it: absent (Claude Code writes it only after the main
+ * conversation's first API response, v2.1.251+), not an object, without a
+ * boolean `warm`, or `caching_observed: false` — caching is off or the
+ * provider does not report it, so "cold" would be a false alarm.
+ * `expires_at` is epoch seconds; `recache_tokens_if_cold` is null right after
+ * a compaction, until the next request measures the rewritten conversation.
+ */
+export function getPromptCache(stdin) {
+    const cache = stdin?.prompt_cache;
+    if (!cache || typeof cache !== 'object' || Array.isArray(cache)) {
+        return null;
+    }
+    if (typeof cache.warm !== 'boolean' || cache.caching_observed === false) {
+        return null;
+    }
+    const recache = cache.recache_tokens_if_cold;
+    return {
+        warm: cache.warm,
+        expiresAt: parseResetDate(cache.expires_at),
+        recacheTokens: typeof recache === 'number' && Number.isFinite(recache) && recache > 0
+            ? Math.round(recache)
+            : null,
+    };
+}
+/**
  * Get model display name from stdin.
  * Prefer the official display name field, then fall back to the raw model id.
  * Returns null when Claude Code does not provide model metadata so the HUD

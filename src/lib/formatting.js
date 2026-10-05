@@ -13,6 +13,17 @@ export function formatDuration(totalMinutes) {
     return `${minutes}m`;
 }
 /**
+ * Local wall-clock time as `HH:MM` (24-hour, zero-padded), built by hand so
+ * the output never depends on the ICU data or locale Node was built with.
+ * Used where a moment must stay right on a frame that stops refreshing — an
+ * absolute time does, a countdown freezes (the `cache:` element).
+ */
+export function formatClockTime(epochMs) {
+    const date = new Date(epochMs);
+    const pad = (n) => (n < 10 ? `0${n}` : `${n}`);
+    return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+/**
  * Compact token count: raw under 1k, `12.3k` under 1M, `1.23M` beyond. The k/M
  * switch sits at 999,950, where `toFixed(1)` would round up to `1000.0k`.
  */

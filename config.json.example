@@ -23,6 +23,7 @@
     "effort": true,
     "rateLimits": true,
     "contextBar": true,
+    "promptCache": false,
     "showTokens": true,
     "sessionHealth": true,
     "showCallCounts": true,
