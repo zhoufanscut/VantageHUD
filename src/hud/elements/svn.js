@@ -22,6 +22,7 @@ import { findSvnWorkingCopyRoot, sessionCacheFile } from '../../lib/worktree-pat
 import { atomicWriteJsonSync } from '../../lib/atomic-write.js';
 import { paint, paintLabel, paintWarn, PALETTE } from '../colors.js';
 import { DEFAULT_HUD_LABELS } from '../types.js';
+import { cleanText } from '../sanitize.js';
 /**
  * Intra-render de-duplication only — the HUD runs one process per render, so
  * these Maps never survive a frame. They exist because `renderSvnRepo` and
@@ -122,7 +123,8 @@ function writeStatusMemo(sessionKey, cwdKey, counts, wcDb) {
  * references for control characters (`&#13;` and friends). Only the named ones
  * are decoded here: the values this module reads are URLs, which cannot carry a
  * raw control character — `svn` percent-encodes them — so a numeric reference
- * never reaches this function. `&amp;` is decoded last so `&amp;lt;` survives
+ * never reaches this function (percent-decoding can still produce one; see
+ * decodeUrl). `&amp;` is decoded last so `&amp;lt;` survives
  * as the literal text `&lt;`.
  */
 function decodeXml(value) {
@@ -136,6 +138,9 @@ function decodeXml(value) {
 /**
  * Percent-decode a repository URL for display, keeping the raw text when it is
  * not valid UTF-8 percent-encoding (decodeURIComponent throws on `%zz`).
+ * The result can hold control characters (`%1B`, `%0A`; svn checks paths
+ * inside a repository but not the repository root's own directory name), so
+ * the renderers below pass every decoded name through `cleanText`.
  */
 function decodeUrl(value) {
     try {
@@ -483,7 +488,7 @@ export function renderSvnRepo(cwd) {
     if (!info?.project) {
         return null;
     }
-    return `${paintLabel('repo:')}${paint(PALETTE.gradLow, info.project)}`;
+    return `${paintLabel('repo:')}${paint(PALETTE.gradLow, cleanText(info.project))}`;
 }
 /**
  * Render the SVN branch element, with the working-copy revision.
@@ -502,7 +507,7 @@ export function renderSvnBranch(cwd) {
     if (!info?.branch) {
         return null;
     }
-    const branch = `${paintLabel('branch:')}${paint(PALETTE.gradLow, info.branch)}`;
+    const branch = `${paintLabel('branch:')}${paint(PALETTE.gradLow, cleanText(info.branch))}`;
     if (!info.revision) {
         return branch;
     }

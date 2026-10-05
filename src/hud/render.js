@@ -13,6 +13,7 @@ import { renderTokenUsage } from "./elements/token-usage.js";
 import { renderGitRepo, renderGitBranch, renderGitStatus } from "./elements/git.js";
 import { renderSvnRepo, renderSvnBranch, renderSvnStatus, isSvnWorkingCopy } from "./elements/svn.js";
 import { getWorktreeRoot } from "../lib/worktree-paths.js";
+import { cleanText } from "./sanitize.js";
 import { renderModel } from "./elements/model.js";
 import { renderCallCounts } from "./elements/call-counts.js";
 /**
@@ -25,12 +26,9 @@ const PLAIN_SEPARATOR = " | ";
 // else: a newline, CR or BEL from a directory, model or repo name would split
 // the single line or move the cursor, and width math counts each as a column.
 const FRAGMENT_CONTROLS = /[\x00-\x1a\x1c-\x1f\x7f-\x9f]/g;
-// Payload text painted as-is (path, model name) loses ESC too: a raw escape
-// there would be the payload's, not ours.
-const TEXT_CONTROLS = /[\x00-\x1f\x7f-\x9f]/g;
-function cleanText(text) {
-    return String(text).replace(TEXT_CONTROLS, "?");
-}
+// Payload text painted as-is (path, model name) goes through cleanText
+// (sanitize.js), which replaces ESC too: a raw escape there would be the
+// payload's, not ours.
 /**
  * Shorten a `home` prefix of `cwd` to `~`. Separators are compared as `/`
  * either way round (Windows paths arrive as `C:\Users\x` from the payload and

@@ -8,6 +8,7 @@ import { realpathSync } from 'node:fs';
 import { resolve, basename } from 'node:path';
 import { paint, paintLabel, paintWarn, PALETTE } from '../colors.js';
 import { DEFAULT_HUD_LABELS } from '../types.js';
+import { cleanText } from '../sanitize.js';
 const CACHE_TTL_MS = 30_000;
 const repoCache = new Map();
 const branchCache = new Map();
@@ -142,7 +143,7 @@ export function renderGitRepo(cwd, knownName = null) {
     const repo = knownName || getGitRepoName(cwd);
     if (!repo)
         return null;
-    return `${paintLabel('repo:')}${paint(PALETTE.gradLow, repo)}`;
+    return `${paintLabel('repo:')}${paint(PALETTE.gradLow, cleanText(repo))}`;
 }
 /**
  * Render git branch element.
@@ -164,9 +165,9 @@ export function renderGitBranch(cwd, worktreeHint = null) {
         ? { isWorktree: Boolean(worktreeHint.name), worktreeName: worktreeHint.name }
         : getWorktreeInfo(cwd);
     if (wtInfo.isWorktree && wtInfo.worktreeName) {
-        return `${paintLabel('branch:')}${paint(PALETTE.gradLow, branch)} ${paintLabel('(wt:')}${paint(PALETTE.gradLow, wtInfo.worktreeName)}${paintLabel(')')}`;
+        return `${paintLabel('branch:')}${paint(PALETTE.gradLow, cleanText(branch))} ${paintLabel('(wt:')}${paint(PALETTE.gradLow, cleanText(wtInfo.worktreeName))}${paintLabel(')')}`;
     }
-    return `${paintLabel('branch:')}${paint(PALETTE.gradLow, branch)}`;
+    return `${paintLabel('branch:')}${paint(PALETTE.gradLow, cleanText(branch))}`;
 }
 /**
  * Test a porcelain-v1 status pair for an unmerged (conflicted) path.

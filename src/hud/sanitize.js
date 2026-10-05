@@ -45,6 +45,19 @@ export function stripControlSequences(text) {
         .replace(OSC_REGEX, '') // Strip OSC sequences
         .replace(SIMPLE_ESC_REGEX, ''); // Strip simple escape sequences
 }
+const TEXT_CONTROLS = /[\x00-\x1f\x7f-\x9f]/g;
+/**
+ * Replace every C0/C1 control character, ESC included, with `?`.
+ *
+ * For outside text painted into a fragment: the path and model name from the
+ * payload, and repository names, branches and worktree names read from git or
+ * svn. A percent-decoded SVN URL can carry `%1B`, `%07` or `%0A`, and render.js
+ * keeps ESC in fragments (its own SGR codes need it), so without this an OSC
+ * or a newline from a repository name reached the terminal.
+ */
+export function cleanText(text) {
+    return String(text).replace(TEXT_CONTROLS, '?');
+}
 /**
  * Replace variable-width Unicode block characters with fixed-width ASCII equivalents.
  * Targets characters commonly used in progress bars that have inconsistent
