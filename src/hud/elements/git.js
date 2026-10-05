@@ -53,7 +53,10 @@ export function getGitRepoName(cwd) {
         else {
             // Extract repo name from URL
             // Handles: https://github.com/user/repo.git, git@github.com:user/repo.git
-            const match = url.match(/\/([^/]+?)(?:\.git)?$/) || url.match(/:([^/]+?)(?:\.git)?$/);
+            // A trailing slash (`.../proj/`, `.../proj.git/`) is valid for git
+            // and would otherwise defeat both patterns.
+            const trimmed = url.replace(/\/+$/, '');
+            const match = trimmed.match(/\/([^/]+?)(?:\.git)?$/) || trimmed.match(/:([^/]+?)(?:\.git)?$/);
             result = match ? match[1].replace(/\.git$/, '') : null;
         }
     }
@@ -166,14 +169,6 @@ export function renderGitBranch(cwd, worktreeHint = null) {
     return `${paintLabel('branch:')}${paint(PALETTE.gradLow, branch)}`;
 }
 /**
- * Get git working tree status counts.
- * Parses `git --no-optional-locks status --porcelain -b` for staged, modified, untracked,
- * conflicted, ahead, and behind counts.
- *
- * @param cwd - Working directory
- * @returns Status counts or null if not in a git repo
- */
-/**
  * Test a porcelain-v1 status pair for an unmerged (conflicted) path.
  *
  * The seven unmerged pairs are DD, AU, UD, UA, DU, AA, UU: a `U` on either
@@ -187,6 +182,14 @@ function isUnmergedStatus(idx, wt) {
     }
     return (idx === 'A' && wt === 'A') || (idx === 'D' && wt === 'D');
 }
+/**
+ * Get git working tree status counts.
+ * Parses `git --no-optional-locks status --porcelain -b` for staged, modified, untracked,
+ * conflicted, ahead, and behind counts.
+ *
+ * @param cwd - Working directory
+ * @returns Status counts or null if not in a git repo
+ */
 export function getGitStatusCounts(cwd) {
     const key = cwd ? resolve(cwd) : process.cwd();
     const cached = statusCache.get(key);
@@ -222,7 +225,12 @@ export function getGitStatusCounts(cwd) {
                 else {
                     if (idx !== ' ' && idx !== '?')
                         staged++;
-                    if (wt === 'M' || wt === 'D')
+                    // Any worktree change counts, not only M/D: a typechange
+                    // (` T`, a file replaced by a symlink) and an intent-to-add
+                    // (` A`, `git add -N`) read as a clean tree otherwise. `?`
+                    // and the unmerged pairs were taken above, and `!` needs
+                    // --ignored, which is never passed.
+                    if (wt !== ' ')
                         modified++;
                 }
             }
