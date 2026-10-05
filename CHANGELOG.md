@@ -8,16 +8,57 @@ Notable changes to this project. The format follows
 
 The fixes from a full review: per-model weekly caps that render again, a
 `token:` that says when it is a lower bound, a wrapper that cannot delete your
-folders or lose its cached line, and a faster frame.
+folders or lose its cached line, and a faster frame. Plus five opt-in
+additions — `cache:`, `spend:`, weekly caps for other models, a named detached
+HEAD and workflow-run counts — each behind its own `elements` flag, off by
+default, and an MIT `LICENSE`.
 
 ### Added
 
 - **Per-model weekly caps from the usage API's `limits[]`.** The API now
-  reports them only there, so `sn:`/`op:` had stopped rendering and other
-  models never showed. Any model now gets a bucket, labelled by its first
-  letter and the first consonant after it — `fb:91%(21h8m)` for Fable — and
-  hidden below `thresholds.sonnetWeeklyVisibility` like `sn:` (`op:` still
-  always shows). `limits[]` also fills an absent `5h`/`7d`.
+  reports them only there, so `sn:`/`op:` had stopped rendering; they show
+  again. `limits[]` also fills an absent `5h`/`7d`.
+- **Opt-in: weekly caps for other models** (`elements.otherModelWeekly`,
+  default `false`). With it on, a model other than Sonnet/Opus in `limits[]`
+  gets a bucket, labelled by its first letter and the first consonant after
+  it — `fb:91%(21h8m)` for Fable — and hidden below
+  `thresholds.sonnetWeeklyVisibility` like `sn:` (`op:` always shows).
+- **Opt-in: `cache:` element** for the prompt cache (`elements.promptCache`,
+  default `false`), after `ctx:`. `cache:warm(14:30)` until the cache's
+  expiry, `cache:cold(161.8k)` after it, with the tokens the next request
+  re-caches (left out when Claude Code does not report them). The expiry is a
+  clock time, not a countdown, so it stays right while the session is idle.
+  Hidden before the first response and when Claude Code reports caching off.
+  New label keys `promptCache`, `cacheWarm`, `cacheCold`.
+- **Opt-in: `spend:` for a Claude apps gateway spend limit**
+  (`elements.spendLimit`, default `false`), a part of the rate-limits
+  fragment, from the payload's `rate_limits.spend_limit` (Claude Code
+  2.1.251+): `spend:63%($314.12/$500.00)(25d3h)`. The dollar amounts need
+  2.1.284+ on both Claude Code and the gateway, and show only once they
+  arrive; until then it is the percent alone. The percent is not clamped past
+  100% (`spend:104%`). New label key `spendLimit`.
+- **Opt-in: a named detached HEAD** (`elements.detachedHead`, default
+  `false`). `branch:` used to hide on a detached HEAD, mid-rebase included;
+  with the flag on it reads `branch:@v1.0` (the tag or ref checked out, while
+  HEAD has not moved), `branch:@a1b2c3d` (first 7 sha digits),
+  `branch:feat (rebase 2/3)` during a rebase, and `(am n/m)`, `(merge)`,
+  `(cherry-pick)`, `(revert)` or `(bisect)` for the other operations. It reads
+  only files in the git dir — no extra `git` call, except one
+  `rev-parse --short HEAD` in a reftable repo. The markers show only on a
+  detached HEAD; a merge on a branch still reads `branch:main`. New label keys
+  `gitRebase`, `gitAm`, `gitMerge`, `gitCherryPick`, `gitRevert`, `gitBisect`.
+- **Opt-in: workflow runs in the call counts** (`elements.workflowRuns`,
+  default `false`): `🔧42 🤖7 🔀2 ⚡3` (`W:2` in ASCII). A session that starts
+  agents only through the Workflow tool used to show no `🤖`. A run starts
+  many agents, so it gets its own glyph; `🤖` still counts Agent/Task calls,
+  one agent each. Resuming a run does not count again. New label key
+  `workflow` (`W` / 工作流). The tally memo gained a field, so each
+  `lead-tokens.json` rescans its transcript once after the upgrade, flag on or
+  off.
+- **`LICENSE`** (MIT), keeping the copyright notices of
+  [claude-hud](https://github.com/jarrodwatts/claude-hud) and
+  [oh-my-claudecode](https://github.com/Yeachan-Heo/oh-my-claudecode), which
+  VantageHUD derives from; the README gains a Credits section.
 - **`token:~1.20M`**: a faint `~` marks the total as a lower bound. From Claude
   Code 2.1.283 most subagent calls never write their final usage row, and the
   real count is on disk nowhere, so nearly every multi-agent session on
@@ -57,6 +98,19 @@ folders or lose its cached line, and a faster frame.
 - **256-color output uses the true nearest xterm index.** Every bundled theme
   looks slightly different at 256 colors, and a user color with a `255`
   channel no longer turns near-black (`#ff0000` was index 232).
+- **16 colors: the separator and gauge track are visible.** Near-gray colors
+  went to black (the darker ones) or white, so on a 16-color terminal ` | `
+  and `░` vanished on every dark theme, and `daylight`'s faint text vanished
+  on white. They now map by lightness to black, bright black or white.
+- **Small palette nudges** (each a shade, CIEDE2000 ≤ 2.7) so tokens stay
+  apart at 256 and 16 colors: `aurora` `gradLow` `#7fd4c4`→`#72d3c3`,
+  `gradMid` `#e3c08a`→`#e6c38d`, `track` `#8fc4d8`→`#8dc2d6`; `ember`
+  `gradMid` `#fabd2f`→`#f1bf3c`, `gradLow`/`add` `#98971a`→`#969619`;
+  `graphite` `gradHigh` `#c76a6a`→`#cd6a6a`; `daylight` `gradMid`
+  `#9a6d00`→`#966d00`. At 256 colors no bundled theme puts two tokens on one
+  index any more, and each effort level gets its own color; at 16 colors
+  `ember`'s watch tier is no longer the same red as its alert tier. A user
+  theme gets these only for the tokens it inherits from a bundled one.
 - **`modelFormat: "versioned"`** reads the version after any family
   (`Mythos 5` → `mythos 5`, `anthropic/claude-opus-5.5` → `opus 5.5`), and a
   Bedrock inference-profile ARN renders as `bedrock`.
@@ -101,6 +155,11 @@ folders or lose its cached line, and a faster frame.
   `ctx:` needs it, and backwards (5.5 MB transcript: ~28 → ~2 ms); the
   wrapper's hot path runs ~12 processes instead of ~32 (21.8 → 12.9 ms); and a
   directory outside any repo spawns 1 git process instead of 5.
+- **Cache writes no longer `fsync`.** A write is still atomic (a reader sees
+  the old file or the new one, never part of one); `fsync` only guarded
+  against a power loss, and every per-frame file is a cache that is rebuilt
+  when missing. Only the usage cache and the git/SVN status memo still
+  `fsync`. Frame p50 is 13–22 ms lower on ext4; the output is unchanged.
 
 ### Fixed
 
@@ -178,6 +237,11 @@ folders or lose its cached line, and a faster frame.
 
 ### Removed
 
+- **`contextLimitWarning`** (`threshold`, `autoCompact`). It only wrote
+  `cache/<session>/compact-requested.json` for a companion hook that never
+  shipped; nothing read it. A config that still sets it keeps working (the
+  block is ignored), and `HUD_DEBUG=1` names it as removed. Leftover files are
+  still pruned.
 - The `labels.thinking` and `labels.model` keys: nothing read them. A config
   that sets them is ignored, and `HUD_DEBUG=1` names them.
 - The `mo:` (monthly) bucket, unset since the z.ai provider was removed, and
