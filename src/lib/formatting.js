@@ -12,10 +12,14 @@ export function formatDuration(totalMinutes) {
         return `${hours}h${minutes % 60}m`;
     return `${minutes}m`;
 }
+/**
+ * Compact token count: raw under 1k, `12.3k` under 1M, `1.23M` beyond. The k/M
+ * switch sits at 999,950, where `toFixed(1)` would round up to `1000.0k`.
+ */
 export function formatTokenCount(tokens) {
     if (tokens < 1000)
         return `${tokens}`;
-    if (tokens < 1000000)
+    if (tokens < 999950)
         return `${(tokens / 1000).toFixed(1)}k`;
     return `${(tokens / 1000000).toFixed(2)}M`;
 }
