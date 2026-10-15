@@ -4,10 +4,14 @@ Notable changes to this project. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.6.1] - 2026-10-15
+
+The last release: the project is archived. Its successor is
+[VArgus](https://github.com/zhoufanscut/VArgus).
 
 ### Changed
 
+- The README says the project is archived and points to VArgus.
 - The upstream copyright notices moved from `LICENSE` to a new `NOTICE` file,
   so `LICENSE` is the plain MIT text and GitHub detects it as MIT (it listed
   the 0.6.0 file as "Other").
@@ -406,7 +410,7 @@ counter that is finally correct.
 First public release — a small, self-contained statusline for Claude Code that
 shows the model, thinking effort, context, rate limits, and git at a glance.
 
-[Unreleased]: https://github.com/zhoufanscut/VantageHUD/compare/v0.6.0...HEAD
+[0.6.1]: https://github.com/zhoufanscut/VantageHUD/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/zhoufanscut/VantageHUD/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/zhoufanscut/VantageHUD/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/zhoufanscut/VantageHUD/compare/v0.3.0...v0.4.0

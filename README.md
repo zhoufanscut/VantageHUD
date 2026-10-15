@@ -1,5 +1,9 @@
 # VantageHUD
 
+> **Archived — no longer maintained.** 0.6.1 is the last release. Its successor is
+> [VArgus](https://github.com/zhoufanscut/VArgus), a Claude Code status line
+> fed by a mod and refreshed every second.
+
 A small, self-contained [Claude Code](https://claude.com/claude-code) statusline
 (HUD). From the JSON Claude Code pipes to the `statusLine` command it renders the
 project folder, the model with thinking effort (`opus:max`), context %,
